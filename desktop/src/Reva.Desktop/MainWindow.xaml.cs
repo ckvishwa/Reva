@@ -14,11 +14,14 @@ public sealed partial class MainWindow : Window
 
     public AssistantViewModel Assistant { get; }
 
+    public MemoryViewModel Memory { get; }
+
     public MainWindow(IRevaCoreClient coreClient)
     {
         InitializeComponent();
         Shell = new ShellViewModel(coreClient);
         Assistant = new AssistantViewModel(coreClient);
+        Memory = new MemoryViewModel(coreClient);
         Shell.PropertyChanged += OnShellPropertyChanged;
 
         // Deliberately not gated on the Activated event: confirmed via
@@ -69,5 +72,18 @@ public sealed partial class MainWindow : Window
     private void SyncComposerTextFromTextBox()
     {
         Assistant.ComposerText = ComposerBox.Text;
+    }
+
+    private async void RememberButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Same LostFocus-commit gap as ComposerBox — read the live control
+        // value directly rather than trusting the TwoWay-bound property.
+        Memory.MemoryText = MemoryBox.Text;
+        await Memory.RememberAsync();
+    }
+
+    private async void SearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        await Memory.SearchAsync(MemoryBox.Text);
     }
 }
