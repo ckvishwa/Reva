@@ -10,6 +10,18 @@
     <Grid Padding="24">
         <StackPanel Spacing="8" VerticalAlignment="Top" HorizontalAlignment="Left">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <!--
+                    No {StaticResource}-based IValueConverter here: combining
+                    an x:Bind Converter with a Window root (rather than a
+                    Page/UserControl) triggers a WinUI 3 XAML-compiler codegen
+                    bug (SetConverterLookupRoot expects a FrameworkElement,
+                    Window isn't one — CS1503 at build time). The status dot
+                    color is set imperatively in code-behind instead.
+                -->
+                <Ellipse x:Name="StatusDot" Width="10" Height="10" />
+                <TextBlock Text="{x:Bind ViewModel.CoreStatusText, Mode=OneWay}" />
+            </StackPanel>
         </StackPanel>
     </Grid>
 
