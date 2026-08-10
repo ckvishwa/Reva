@@ -77,4 +77,48 @@ public class DesktopConfigurationTests
             Environment.SetEnvironmentVariable("REVA_DESKTOP_CORE_URL", null);
         }
     }
+
+    [Fact]
+    public void CreateDefault_UsesTenSecondTimeout_WhenNoEnvironmentOverride()
+    {
+        var configuration = DesktopConfiguration.CreateDefault();
+
+        Assert.Equal(TimeSpan.FromSeconds(10), configuration.RequestTimeout);
+    }
+
+    [Fact]
+    public void CreateDefault_RespectsRequestTimeoutEnvironmentOverride()
+    {
+        Environment.SetEnvironmentVariable("REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS", "120");
+        try
+        {
+            var configuration = DesktopConfiguration.CreateDefault();
+
+            Assert.Equal(TimeSpan.FromSeconds(120), configuration.RequestTimeout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS", null);
+        }
+    }
+
+    [Theory]
+    [InlineData("not-a-number")]
+    [InlineData("-5")]
+    [InlineData("0")]
+    [InlineData("")]
+    public void CreateDefault_FallsBackToTenSecondTimeout_OnInvalidEnvironmentOverride(string badValue)
+    {
+        Environment.SetEnvironmentVariable("REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS", badValue);
+        try
+        {
+            var configuration = DesktopConfiguration.CreateDefault();
+
+            Assert.Equal(TimeSpan.FromSeconds(10), configuration.RequestTimeout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS", null);
+        }
+    }
 }
