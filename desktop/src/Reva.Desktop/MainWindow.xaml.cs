@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
     {
+        SyncComposerTextFromTextBox();
         await Assistant.SendMessageAsync();
     }
 
@@ -48,7 +49,25 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Enter)
         {
             e.Handled = true;
+            SyncComposerTextFromTextBox();
             await Assistant.SendMessageAsync();
         }
+    }
+
+    /// <summary>
+    /// x:Bind's TwoWay binding for TextBox.Text only commits to the
+    /// ViewModel on LostFocus, not on every keystroke. Neither send path
+    /// reliably causes that: pressing Enter never blurs the box at all,
+    /// and a real click's focus shift happens on a timeline that isn't
+    /// guaranteed to land before this handler runs. Reading ComposerBox.Text
+    /// directly here (code-behind is allowed to touch WinUI types;
+    /// ViewModels are not) guarantees Assistant.ComposerText reflects
+    /// exactly what's on screen before Send acts on it — confirmed via
+    /// manual UI-Automation reproduction that omitting this silently
+    /// drops the last-typed content often enough to matter.
+    /// </summary>
+    private void SyncComposerTextFromTextBox()
+    {
+        Assistant.ComposerText = ComposerBox.Text;
     }
 }

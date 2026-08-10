@@ -14,7 +14,9 @@
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Ellipse x:Name="StatusDot" Width="10" Height="10" />
-                <TextBlock Text="{x:Bind Shell.CoreStatusText, Mode=OneWay}" />
+                <TextBlock
+                    AutomationProperties.AutomationId="CoreStatusText"
+                    Text="{x:Bind Shell.CoreStatusText, Mode=OneWay}" />
             </StackPanel>
         </StackPanel>
 
@@ -46,6 +48,7 @@
 
         <TextBlock
             Grid.Row="3" Margin="0,4,0,4"
+            AutomationProperties.AutomationId="ErrorMessageText"
             Text="{x:Bind Assistant.ErrorMessage, Mode=OneWay}"
             Foreground="IndianRed" TextWrapping="Wrap" />
 
