@@ -37,7 +37,14 @@ public sealed class ShellViewModel : ObservableObject
 
     public async Task RefreshCoreStatusAsync(CancellationToken cancellationToken = default)
     {
-        var result = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(false);
+        // No ConfigureAwait(false): this method mutates UI-bound state
+        // afterward (IsCoreConnected/CoreStatusText), so it must resume on
+        // the calling (UI) SynchronizationContext. ConfigureAwait(false)
+        // here was a real bug found via manual smoke testing — the status
+        // update silently never reached the UI because it landed on a
+        // thread-pool thread instead of the UI thread; no exception, no
+        // crash, just a status stuck on its initial value forever.
+        var result = await _coreClient.GetHealthAsync(cancellationToken);
         if (result.IsSuccess)
         {
             IsCoreConnected = true;
