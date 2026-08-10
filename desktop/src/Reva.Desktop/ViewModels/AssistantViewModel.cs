@@ -33,8 +33,19 @@ public sealed class AssistantViewModel : ObservableObject
     public bool IsPending
     {
         get => _isPending;
-        private set => SetProperty(ref _isPending, value);
+        private set
+        {
+            if (SetProperty(ref _isPending, value))
+            {
+                RaisePropertyChanged(nameof(IsNotPending));
+            }
+        }
     }
+
+    /// <summary>Plain bool (not a WinUI Visibility) so this stays bindable
+    /// from XAML without a converter, and the ViewModel stays free of
+    /// WinUI types.</summary>
+    public bool IsNotPending => !IsPending;
 
     /// <summary>Safe, display-ready text only — never a raw exception,
     /// response body, or internal detail. Null when there is no error to
