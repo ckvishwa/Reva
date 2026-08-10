@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reva-core"
+version = "0.1.0"
+description = "REVA Core - local-first, Python-first personal intelligence runtime (Phase 0 foundation)"
+requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "Proprietary" }
+dependencies = [
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.3,<3",
+    "fastapi>=0.111,<1",
+    "uvicorn>=0.30,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2,<9",
+    "pytest-asyncio>=0.23,<1",
+    "pytest-cov>=5.0,<6",
+    "httpx>=0.27,<1",
+    "ruff>=0.5,<1",
+    "mypy>=1.10,<2",
+    "pre-commit>=3.7,<4",
+]
+
+[tool.setuptools.packages.find]
+include = ["reva_core*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+    "contract: contract tests",
+    "security: security tests",
+]
+
+[tool.coverage.run]
+source = ["reva_core"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["useful_sites"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101: assert is the point of a test. S105/S106: test fixtures use
+# obviously-fake literal secrets. S104: these tests assert that a
+# non-loopback bind address is REJECTED — the literal is the input
+# under test, not a real bind call.
+"tests/**" = ["S101", "S105", "S106", "S104"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["reva_core"]
+plugins = ["pydantic.mypy"]
+strict = true
+warn_unused_ignores = true
+exclude = "useful_sites"
+
+[[tool.mypy.overrides]]
+module = "uvicorn.*"
+ignore_missing_imports = true

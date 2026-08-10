@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# REVA local data (never commit user data, secrets, or local DB files)
+.env
+*.db
+*.db-wal
+*.db-shm
+/data/
+/logs/
+local_auth_token
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Unrelated third-party content vendored under this checkout root
+useful_sites/
