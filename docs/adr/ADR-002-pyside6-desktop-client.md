@@ -1,6 +1,8 @@
 # ADR-002: PySide6 for the Windows Desktop Client
 
-**Status:** Accepted (client not yet implemented — Phase 1+)
+**Status:** Superseded by ADR-016 (Phase 1B). The Windows desktop
+client is C#/WinUI 3, not PySide6. Kept for historical record —
+PySide6 was never implemented, so nothing needs migrating.
 
 ## Context
 
