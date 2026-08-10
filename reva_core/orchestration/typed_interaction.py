@@ -2,12 +2,16 @@
 
 Supports exactly three things: acknowledging a typed message (with an
 optional `remember:` command), explicit memory creation, and exact/
-keyword memory query. No freeform conversational intelligence, no
-prompt chains, no tool calls — see docs/architecture/data-flow.md.
+keyword memory query — see docs/architecture/data-flow.md.
 
 Durable memory is created only through `create_explicit_memory` (or the
 `remember:` command routed to the same code path) — never inferred
-from an ordinary typed message (ADR-006).
+from an ordinary typed message (ADR-006). This holds regardless of how
+the reply itself is generated: Phase 1A's deterministic `LLMProvider`
+echo, or (Slice 5, opt-in) an `AssistantOrchestrator` — e.g.
+`AdkAssistantOrchestrator`, which may use a read-only memory *search*
+tool internally, but has no tool capable of a write. See
+docs/adr/ADR-017-google-adk-orchestration-dependency.md.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
 from reva_core.models.llm import LLMProvider, LLMRequest
 from reva_core.shared.contracts.conversation import Conversation, Message, MessageRole
@@ -62,10 +67,12 @@ class TypedInteractionService:
         conn: sqlite3.Connection,
         origin_device_id: str,
         llm_provider: LLMProvider | None = None,
+        orchestrator: AssistantOrchestrator | None = None,
     ) -> None:
         self._conn = conn
         self._origin_device_id = origin_device_id
         self._llm = llm_provider if llm_provider is not None else _default_llm_provider()
+        self._orchestrator = orchestrator
         self._conversations = ConversationRepository(conn)
         self._messages = MessageRepository(conn)
         self._memories = MemoryRepository(conn)
@@ -131,12 +138,21 @@ class TypedInteractionService:
                 memory_id = memory.id
 
         # Deliberately outside the transaction: never hold a SQLite write
-        # transaction open across an async provider call.
+        # transaction open across an async provider/orchestrator call.
         try:
-            response = await self._llm.complete(
-                LLMRequest(prompt=stripped, correlation_id=correlation_id)
-            )
-            reply = response.content
+            if self._orchestrator is not None:
+                assistant_response = await self._orchestrator.respond(
+                    user_id=self._origin_device_id,
+                    conversation_id=conversation.id,
+                    message=stripped,
+                    correlation_id=correlation_id,
+                )
+                reply = assistant_response.reply
+            else:
+                response = await self._llm.complete(
+                    LLMRequest(prompt=stripped, correlation_id=correlation_id)
+                )
+                reply = response.content
         except ProviderError:
             reply = _UNAVAILABLE_REPLY
 
