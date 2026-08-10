@@ -8,6 +8,12 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
 
     public HttpRequestMessage? LastRequest { get; private set; }
 
+    /// <summary>Request body captured while the request is still alive —
+    /// the real client disposes its HttpRequestMessage (and Content) right
+    /// after SendAsync returns, so reading LastRequest.Content afterward
+    /// throws ObjectDisposedException.</summary>
+    public string? LastRequestBody { get; private set; }
+
     public FakeHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responder)
     {
         _responder = responder;
@@ -29,6 +35,11 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         LastRequest = request;
+        if (request.Content is not null)
+        {
+            LastRequestBody = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         return await _responder(request, cancellationToken).ConfigureAwait(false);
     }
 }
