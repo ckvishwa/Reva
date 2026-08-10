@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Reva.Desktop.Contracts;
 
@@ -27,6 +28,13 @@ public sealed class RevaCoreClient : IRevaCoreClient
 
     public Task<CoreResult<VersionInfo>> GetVersionAsync(CancellationToken cancellationToken = default) =>
         SendAsync<VersionInfo>(HttpMethod.Get, "version", requiresAuth: false, cancellationToken);
+
+    public Task<CoreResult<TypedMessageResponse>> SendMessageAsync(
+        string content, CancellationToken cancellationToken = default)
+    {
+        var body = JsonContent.Create(new TypedMessageRequest(content), options: JsonOptions);
+        return SendAsync<TypedMessageResponse>(HttpMethod.Post, "v1/messages", requiresAuth: true, cancellationToken, body);
+    }
 
     private async Task<CoreResult<T>> SendAsync<T>(
         HttpMethod method,

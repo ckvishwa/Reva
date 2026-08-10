@@ -11,10 +11,28 @@ public class RevaCoreClientTests
             Task.FromResult(TokenLoadResult.Unavailable());
     }
 
+    private sealed class FakeTokenProvider : ILocalTokenProvider
+    {
+        private readonly string _token;
+
+        public FakeTokenProvider(string token) => _token = token;
+
+        public Task<TokenLoadResult> GetTokenAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(TokenLoadResult.Available(_token));
+    }
+
     private static RevaCoreClient ClientFor(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1:8756/") };
         return new RevaCoreClient(httpClient, new NullTokenProvider());
+    }
+
+    private static (RevaCoreClient Client, FakeHttpMessageHandler Handler) AuthenticatedClientFor(
+        HttpMessageHandler handler, string token = "test-token-value")
+    {
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1:8756/") };
+        var client = new RevaCoreClient(httpClient, new FakeTokenProvider(token));
+        return (client, (FakeHttpMessageHandler)handler);
     }
 
     [Fact]
@@ -124,5 +142,64 @@ public class RevaCoreClientTests
 
         Assert.False(result.IsSuccess);
         Assert.DoesNotContain("abc-super-secret-value", result.Error!.SafeMessage);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_ParsesSuccessResponse()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"schema_version":1,"correlation_id":"11111111-1111-1111-1111-111111111111","reply":"Received: hi","memory_created":null}""");
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.SendMessageAsync("hi");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Received: hi", result.Value!.Reply);
+        Assert.Null(result.Value.MemoryCreated);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_PostsToV1MessagesWithBearerToken()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"schema_version":1,"correlation_id":"11111111-1111-1111-1111-111111111111","reply":"ok","memory_created":null}""");
+        var (client, fakeHandler) = AuthenticatedClientFor(handler, "test-token-value");
+
+        await client.SendMessageAsync("hello REVA");
+
+        Assert.NotNull(fakeHandler.LastRequest);
+        Assert.Equal(HttpMethod.Post, fakeHandler.LastRequest!.Method);
+        Assert.Equal("http://127.0.0.1:8756/v1/messages", fakeHandler.LastRequest.RequestUri!.ToString());
+        Assert.Equal("Bearer", fakeHandler.LastRequest.Headers.Authorization!.Scheme);
+        Assert.Equal("test-token-value", fakeHandler.LastRequest.Headers.Authorization.Parameter);
+
+        Assert.Contains("\"content\":\"hello REVA\"", fakeHandler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_TokenUnavailable_MapsToCoreUnauthorized_WithoutSendingRequest()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.OK, "{}");
+        var client = ClientFor(handler); // NullTokenProvider => token unavailable
+
+        var result = await client.SendMessageAsync("hi");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreUnauthorized, result.Error!.Kind);
+        Assert.Null(((FakeHttpMessageHandler)handler).LastRequest);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_ServerError_MapsToCoreServerFailure()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.InternalServerError);
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.SendMessageAsync("hi");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreServerFailure, result.Error!.Kind);
     }
 }
