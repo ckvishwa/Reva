@@ -37,43 +37,87 @@ No `AppxMSBuildToolsPath` override, no hardcoded Visual Studio install
 path — confirmed working with WindowsAppSDK 2.3.1 via both plain
 `dotnet build` and Visual Studio 2026's MSBuild.
 
-## Manual smoke test (Core connection + typed assistant)
+## E2E gate (automated, real Core + real app + real UI Automation)
 
-Automated GUI execution isn't wired into CI yet (see Testing below), so
-this is currently a manual check:
+The typed-assistant flow proven manually in Slice 3 is now automated
+and repeatable:
 
 ```powershell
-# Terminal 1 — start REVA Core
-python -m reva_core --serve
-
-# Terminal 2 — launch the desktop app (same REVA_DATA_DIR as Core if
-# you overrode it, so the desktop can find the same local_auth_token)
-dotnet run --project desktop\src\Reva.Desktop\Reva.Desktop.csproj
+powershell -ExecutionPolicy Bypass -File desktop\tests\E2E\Run-TypedAssistantE2E.ps1
 ```
 
-Expected: a window titled "REVA" appears, and within a moment the
-status line reads "Core Connected" (green dot). Stop Core (Ctrl+C in
-Terminal 1) and relaunch the app — it should show "Core Unavailable"
-(gray dot) instead. Both states must come from a real `GET /health`
-call — never simulated.
+Build the desktop app first (`dotnet build desktop\Reva.Desktop.sln
+--configuration Release`) — the script doesn't build it for you.
 
-Type a message in the composer and press Enter (or click Send): it
-should appear immediately under "You", the composer clears, Send
-disables while the request is in flight, and REVA Core's real reply
-appears under "REVA" a moment later. `GET /v1/audit-events` (with the
-real bearer token) will show a matching `typed_request_received` event
-with no `memory_created` — ordinary messages never create memory.
+This drives the **actual compiled `Reva.Desktop.exe`** via
+`System.Windows.Automation`, against a **real** `python -m reva_core
+--serve` process, in an isolated temp data directory and on a
+non-default loopback port (`18756`, so it never collides with a
+developer's own manually-running Core on the default `8756`). It is
+not a unit test, not a mocked-HTTP test, not a ViewModel test, and not
+a manually-clicked check.
 
-This exact flow was verified during Slice 3 development using real UI
-Automation (`System.Windows.Automation` from PowerShell) driving the
-real built exe against a real running Core — not simulated. That
-session also caught a real bug: `ShellViewModel.RefreshCoreStatusAsync`
-used to await with `ConfigureAwait(false)`, so the status update landed
-on a thread-pool thread and silently never reached the UI (no crash,
-no exception — just stuck on "Checking REVA Core..." forever, even
-against a healthy Core). Fixed by removing it; any ViewModel method
-that mutates UI-bound state after an `await` must not use
-`ConfigureAwait(false)`.
+Proves, in order: Core becomes healthy (bounded poll, no arbitrary
+sleep), the real window and its real controls (`ComposerBox`,
+`SendButton`, `MessageList`, `CoreStatusText` — all located by
+`AutomationId`) are found, the app shows a real "Core Connected"
+status, typing + sending renders both the user message and Core's real
+reply, the composer clears, and — the part a UI-only check can't prove
+— Core's own authenticated `GET /v1/audit-events` shows exactly one
+matching `typed_request_received` event with the correct content
+length and zero `memory_created`/`memory_create_requested` events
+(ordinary messages never create memory). Also asserts, statically, that
+no SQLite reference exists anywhere in `desktop/`.
+
+Cleanup (stop the app, stop Core, unregister log-forwarding handles)
+runs in a `finally` block — it happens whether the run passes or
+fails. On success the isolated temp directory is deleted; on failure
+it's preserved and its path is printed, along with Core's captured
+stdout/stderr, the app's pre-cleanup process state, and the last known
+UI text dump. Exit code `0` on full pass, `1` otherwise. Verified
+repeatable across multiple consecutive runs, each with a fresh
+correlation-bearing test message so stale audit/UI data can't produce
+a false positive.
+
+### Two real bugs this caught (both fixed, both now regression-tested)
+
+1. **`ShellViewModel.RefreshCoreStatusAsync` used `ConfigureAwait(false)`.**
+   Found during Slice 3's manual proof. The continuation (setting
+   `IsCoreConnected`/`CoreStatusText`) resumed on a thread-pool thread
+   instead of the UI thread — no exception, no crash, the status
+   silently never reached the UI, stuck on "Checking REVA Core..."
+   forever even against a healthy Core. Fixed by removing
+   `ConfigureAwait(false)`; any ViewModel method that mutates UI-bound
+   state after an `await` must not use it. Regression-tested in
+   `ShellViewModelTests.RefreshCoreStatusAsync_ResumesOnCallingSynchronizationContext`,
+   which installs a recording `SynchronizationContext` and fails if the
+   continuation bypasses it — empirically verified to actually catch
+   the bug (reintroduced it, watched the test fail, reverted, watched
+   it pass) before trusting it as a regression guard.
+2. **`x:Bind`'s `TwoWay` binding for `TextBox.Text` only commits on
+   `LostFocus`, not on every keystroke.** Found while building this
+   E2E script: `InvokePattern.Invoke()` (unlike a real mouse click)
+   doesn't reliably shift keyboard focus first, so `Assistant.ComposerText`
+   could still hold stale (often empty) content when Send fired,
+   hitting the ViewModel's correctly-working empty-input guard and
+   silently no-op'ing the whole send. This wasn't just a test artifact
+   — it affects the real Enter-to-send path too, since pressing Enter
+   never blurs the composer either. Fixed in `MainWindow.xaml.cs` by
+   reading `ComposerBox.Text` directly before acting on Send
+   (`SyncComposerTextFromTextBox`), rather than trusting the binding's
+   commit timing.
+
+### Manual exploratory run
+
+For interactive poking around (not needed to verify correctness — the
+E2E gate above covers that):
+
+```powershell
+# Terminal 1
+python -m reva_core --serve
+# Terminal 2 (same REVA_DATA_DIR as Core if you overrode it)
+dotnet run --project desktop\src\Reva.Desktop\Reva.Desktop.csproj
+```
 
 ## Configuration
 
@@ -136,14 +180,33 @@ color) imperatively in code-behind.
   `AssistantViewModel` (initial state, whitespace rejection, one
   request per submit, immediate user-message append, pending state,
   duplicate-send blocking, success/failure outcomes, exact safe-error
-  equality, no token exposure), `DesktopLogger` token-withholding,
-  `ObservableObject` property-change semantics. 55 tests, all passing.
+  equality, no token exposure), `ShellViewModel` (initial/success/failure
+  state, plus the `ConfigureAwait` regression guard above),
+  `DesktopLogger` token-withholding, `ObservableObject` property-change
+  semantics. 59 tests, all passing.
 - **Integration** (`tests/Integration/`): PLANNED (Slice 6) — real
-  Python Core + real temporary SQLite DB, no mocks.
-- **UI** (`tests/UI/`): no automated WinUI GUI execution in CI yet.
-  Documented as a **manual smoke test** (above) rather than faked with
-  screenshot testing or a skipped/fake automated suite. That manual
-  test has itself been performed with real UI Automation (not just
-  eyeballing) during Slice 2 and Slice 3 development — see the manual
-  smoke test section above for what it caught. ViewModels remain the
-  primary automated-test surface for UI *logic*.
+  Python Core + real temporary SQLite DB, no mocks, but exercised
+  through `RevaCoreClient`/repositories directly rather than the full
+  compiled app + UI.
+- **E2E** (`tests/E2E/`): `Run-TypedAssistantE2E.ps1` — see "E2E gate"
+  above. Real app, real Core, real UI Automation, real audit-trail
+  corroboration. Currently local-only; see CI status below for why.
+
+### CI status for the E2E gate
+
+**Not added to CI. This is a deliberate, documented limitation, not an
+oversight or something faked to look green.** GitHub Actions'
+`windows-latest` runners are real Windows Server VMs and can build
+WinUI apps fine (see the existing `csharp-desktop` job), but whether a
+GUI window they create can be reliably located, activated, and driven
+via UI Automation in that hosted, service-account, non-interactive-by-
+default session is a genuine open question this environment cannot
+verify — there is no way to push to GitHub Actions and observe the
+result from here. Rather than guess and risk either a flaky red job
+for infrastructure reasons unrelated to code correctness, or silently
+downgrading the "real E2E" claim into a service-level check to force a
+green checkmark (explicitly not acceptable), the gate stays local-only
+for now. `dotnet build`/`dotnet test` (unit-level) remain the CI-level
+gate; the E2E script is the authoritative pre-merge/pre-release check
+a developer runs locally. Revisit this once someone can actually
+validate a `windows-latest` UIA job empirically.
