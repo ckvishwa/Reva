@@ -11,6 +11,8 @@ public sealed class DesktopConfiguration
     private const string DefaultCoreUrl = "http://127.0.0.1:8756/";
     private const string CoreUrlEnvironmentVariable = "REVA_DESKTOP_CORE_URL";
     private const string DataDirectoryEnvironmentVariable = "REVA_DATA_DIR";
+    private const string RequestTimeoutSecondsEnvironmentVariable = "REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS";
+    private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
 
     public Uri CoreBaseUrl { get; }
 
@@ -62,6 +64,16 @@ public sealed class DesktopConfiguration
             ? Path.Combine(Directory.GetCurrentDirectory(), "data")
             : dataDirOverride;
 
-        return new DesktopConfiguration(baseUrl, dataDirectory, TimeSpan.FromSeconds(10));
+        // Overridable because Slice 5's AdkAssistantOrchestrator (real model
+        // inference + tool calling, opt-in via REVA_ASSISTANT_ORCHESTRATOR=adk)
+        // can genuinely take longer than the 10s default sized for Phase 1A/1B's
+        // deterministic instant echo. The default itself is unchanged.
+        var timeoutOverride = Environment.GetEnvironmentVariable(RequestTimeoutSecondsEnvironmentVariable);
+        var requestTimeout =
+            double.TryParse(timeoutOverride, out var timeoutSeconds) && timeoutSeconds > 0
+                ? TimeSpan.FromSeconds(timeoutSeconds)
+                : DefaultRequestTimeout;
+
+        return new DesktopConfiguration(baseUrl, dataDirectory, requestTimeout);
     }
 }

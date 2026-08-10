@@ -169,6 +169,7 @@ conventions), read once at startup:
 |---|---|---|
 | `REVA_DESKTOP_CORE_URL` | `http://127.0.0.1:8756/` | Core base URL. Must be loopback (`localhost`/`127.0.0.1`/`::1`) — a remote URL throws `DesktopConfigurationException` at startup, by design. |
 | `REVA_DATA_DIR` | `./data` (relative to the process's working directory) | Where REVA Core's `local_auth_token` file lives. Desktop and Core must currently point at the *same* directory — Core has no fixed per-user app-data location yet (tracked gap, see `docs/architecture/runtime-model.md` in the Python side). |
+| `REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS` | `10` | HTTP client timeout for every Core call. Phase 1A/1B's deterministic echo never needs more than 10s; Slice 5's `AdkAssistantOrchestrator` (real local-model inference, opt-in on the Core side via `REVA_ASSISTANT_ORCHESTRATOR=adk`) can take longer — raise this when Core is running in ADK mode. Invalid or non-positive values fall back to the 10s default. |
 
 ## Architecture
 
