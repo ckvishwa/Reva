@@ -8,7 +8,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto">
+    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
@@ -67,6 +67,45 @@
                 Content="Send"
                 Click="SendButton_Click"
                 IsEnabled="{x:Bind Assistant.IsNotPending, Mode=OneWay}" />
+        </StackPanel>
+
+        <!--
+            Explicit memory: the ONLY UI path that creates durable memory
+            (ADR-006). Deliberately separate from the assistant composer
+            above - never wired to SendMessageAsync or triggered by chat.
+        -->
+        <TextBlock Grid.Row="5" Margin="0,16,0,8" Text="Memory" FontSize="16" FontWeight="SemiBold" />
+
+        <StackPanel Grid.Row="6" Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBox
+                    x:Name="MemoryBox"
+                    AutomationProperties.AutomationId="MemoryBox"
+                    Width="480"
+                    PlaceholderText="Text to remember..."
+                    Text="{x:Bind Memory.MemoryText, Mode=TwoWay}"
+                    IsEnabled="{x:Bind Memory.IsNotPending, Mode=OneWay}" />
+                <Button
+                    x:Name="RememberButton"
+                    AutomationProperties.AutomationId="RememberButton"
+                    Content="Remember"
+                    Click="RememberButton_Click"
+                    IsEnabled="{x:Bind Memory.IsNotPending, Mode=OneWay}" />
+                <Button
+                    x:Name="SearchButton"
+                    AutomationProperties.AutomationId="SearchButton"
+                    Content="Search"
+                    Click="SearchButton_Click"
+                    IsEnabled="{x:Bind Memory.IsNotPending, Mode=OneWay}" />
+            </StackPanel>
+            <TextBlock
+                AutomationProperties.AutomationId="MemoryStatusText"
+                Text="{x:Bind Memory.StatusMessage, Mode=OneWay}"
+                TextWrapping="Wrap" />
+            <TextBlock
+                AutomationProperties.AutomationId="MemorySearchResultText"
+                Text="{x:Bind Memory.SearchResultText, Mode=OneWay}"
+                TextWrapping="Wrap" />
         </StackPanel>
 
     </Grid>
