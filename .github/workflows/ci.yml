@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  python:
     # REVA is Windows-first; CI runs on Windows so path/pragma/process
     # behavior is validated on the actual target platform.
     runs-on: windows-latest
@@ -66,3 +66,26 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+
+  csharp-desktop:
+    # windows-latest ships Visual Studio with the WinUI/Windows App SDK
+    # MSBuild components preinstalled, so plain `dotnet build`/`dotnet
+    # test` work with no VS-path overrides — confirmed locally against
+    # the same WindowsAppSDK 2.3.1 baseline this project uses.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore desktop\Reva.Desktop.sln
+
+      - name: Build
+        run: dotnet build desktop\Reva.Desktop.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build
