@@ -26,6 +26,14 @@ public class AssistantViewModelTests
         public Task<CoreResult<VersionInfo>> GetVersionAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("AssistantViewModel never calls GetVersionAsync.");
 
+        public Task<CoreResult<MemoryCreateResponse>> CreateMemoryAsync(
+            string content, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("AssistantViewModel never calls CreateMemoryAsync.");
+
+        public Task<CoreResult<MemoryQueryResponse>> QueryMemoriesAsync(
+            string query, int limit, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("AssistantViewModel never calls QueryMemoriesAsync.");
+
         public Task<CoreResult<TypedMessageResponse>> SendMessageAsync(
             string content, CancellationToken cancellationToken = default)
         {

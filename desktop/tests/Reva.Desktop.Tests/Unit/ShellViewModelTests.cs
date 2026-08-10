@@ -53,6 +53,14 @@ public class ShellViewModelTests
         public Task<CoreResult<TypedMessageResponse>> SendMessageAsync(
             string content, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("ShellViewModel never calls SendMessageAsync.");
+
+        public Task<CoreResult<MemoryCreateResponse>> CreateMemoryAsync(
+            string content, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("ShellViewModel never calls CreateMemoryAsync.");
+
+        public Task<CoreResult<MemoryQueryResponse>> QueryMemoriesAsync(
+            string query, int limit, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("ShellViewModel never calls QueryMemoriesAsync.");
     }
 
     private static HealthStatus HealthyStatus() =>

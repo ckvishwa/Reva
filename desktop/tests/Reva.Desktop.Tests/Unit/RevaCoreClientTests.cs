@@ -202,4 +202,108 @@ public class RevaCoreClientTests
         Assert.False(result.IsSuccess);
         Assert.Equal(CoreErrorKind.CoreServerFailure, result.Error!.Kind);
     }
+
+    [Fact]
+    public async Task CreateMemoryAsync_ParsesSuccessResponse()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.Created,
+            """{"schema_version":1,"id":"019fed00-0000-7000-8000-000000000000","category":"note","created_at":"2026-08-10T12:00:00Z","correlation_id":"11111111-1111-1111-1111-111111111111"}""");
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.CreateMemoryAsync("test-color-abc123 = cobalt");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("note", result.Value!.Category);
+        Assert.Equal("019fed00-0000-7000-8000-000000000000", result.Value.Id);
+    }
+
+    [Fact]
+    public async Task CreateMemoryAsync_PostsToV1MemoriesWithBearerTokenAndContent()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.Created,
+            """{"schema_version":1,"id":"x","category":"note","created_at":"2026-08-10T12:00:00Z","correlation_id":"11111111-1111-1111-1111-111111111111"}""");
+        var (client, fakeHandler) = AuthenticatedClientFor(handler, "test-token-value");
+
+        await client.CreateMemoryAsync("remember this fact");
+
+        Assert.Equal(HttpMethod.Post, fakeHandler.LastRequest!.Method);
+        Assert.Equal("http://127.0.0.1:8756/v1/memories", fakeHandler.LastRequest.RequestUri!.ToString());
+        Assert.Equal("test-token-value", fakeHandler.LastRequest.Headers.Authorization!.Parameter);
+        Assert.Contains("\"content\":\"remember this fact\"", fakeHandler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task CreateMemoryAsync_TokenUnavailable_MapsToCoreUnauthorized_WithoutSendingRequest()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.Created, "{}");
+        var client = ClientFor(handler); // NullTokenProvider => token unavailable
+
+        var result = await client.CreateMemoryAsync("hi");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreUnauthorized, result.Error!.Kind);
+        Assert.Null(((FakeHttpMessageHandler)handler).LastRequest);
+    }
+
+    [Fact]
+    public async Task CreateMemoryAsync_ServerRejection_MapsToCoreInvalidResponse()
+    {
+        // Mirrors Core's real 400 for e.g. empty-after-strip content.
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.BadRequest, """{"error":"content must not be empty"}""");
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.CreateMemoryAsync("   ");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreInvalidResponse, result.Error!.Kind);
+    }
+
+    [Fact]
+    public async Task QueryMemoriesAsync_ParsesSuccessResponse()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"schema_version":1,"results":[{"schema_version":1,"id":"m1","content":"cobalt","category":"note","source":{"schema_version":1,"conversation_id":null,"message_id":null,"origin_device_id":"d1","note":"explicit_api_memory_creation"},"tags":[],"created_at":"2026-08-10T12:00:00Z","updated_at":"2026-08-10T12:00:00Z"}],"correlation_id":"11111111-1111-1111-1111-111111111111"}""");
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.QueryMemoriesAsync("cobalt", 5);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value!.Results);
+        Assert.Equal("cobalt", result.Value.Results[0].Content);
+    }
+
+    [Fact]
+    public async Task QueryMemoriesAsync_EmptyResults_ParsesSafely()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"schema_version":1,"results":[],"correlation_id":"11111111-1111-1111-1111-111111111111"}""");
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.QueryMemoriesAsync("nonexistent-xyz", 5);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!.Results);
+    }
+
+    [Fact]
+    public async Task QueryMemoriesAsync_GetsFromV1MemoriesWithEncodedQueryAndLimit()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"schema_version":1,"results":[],"correlation_id":"11111111-1111-1111-1111-111111111111"}""");
+        var (client, fakeHandler) = AuthenticatedClientFor(handler);
+
+        await client.QueryMemoriesAsync("test color", 7);
+
+        Assert.Equal(HttpMethod.Get, fakeHandler.LastRequest!.Method);
+        // AbsoluteUri (not ToString()): Uri.ToString() unescapes %20 back to
+        // a literal space for display, which would hide an encoding bug.
+        Assert.Equal(
+            "http://127.0.0.1:8756/v1/memories?q=test%20color&limit=7",
+            fakeHandler.LastRequest.RequestUri!.AbsoluteUri);
+    }
 }
