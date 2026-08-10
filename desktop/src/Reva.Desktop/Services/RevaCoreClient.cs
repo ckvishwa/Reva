@@ -36,6 +36,20 @@ public sealed class RevaCoreClient : IRevaCoreClient
         return SendAsync<TypedMessageResponse>(HttpMethod.Post, "v1/messages", requiresAuth: true, cancellationToken, body);
     }
 
+    public Task<CoreResult<MemoryCreateResponse>> CreateMemoryAsync(
+        string content, CancellationToken cancellationToken = default)
+    {
+        var body = JsonContent.Create(new MemoryCreateRequest(content), options: JsonOptions);
+        return SendAsync<MemoryCreateResponse>(HttpMethod.Post, "v1/memories", requiresAuth: true, cancellationToken, body);
+    }
+
+    public Task<CoreResult<MemoryQueryResponse>> QueryMemoriesAsync(
+        string query, int limit, CancellationToken cancellationToken = default)
+    {
+        var relativePath = $"v1/memories?q={Uri.EscapeDataString(query)}&limit={limit}";
+        return SendAsync<MemoryQueryResponse>(HttpMethod.Get, relativePath, requiresAuth: true, cancellationToken);
+    }
+
     private async Task<CoreResult<T>> SendAsync<T>(
         HttpMethod method,
         string relativePath,
