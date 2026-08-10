@@ -1,6 +1,6 @@
 # REVA Desktop (Windows)
 
-Status: **IN PROGRESS** — Phase 1B, Slice 1+2 of 8 (see below)
+Status: **IN PROGRESS** — Phase 1B, Slice 1-3 of 8 (see below)
 
 A thin native Windows client for REVA Core. C#/.NET, WinUI 3, XAML,
 small explicit MVVM. It talks to REVA Core exclusively over the
@@ -37,7 +37,7 @@ No `AppxMSBuildToolsPath` override, no hardcoded Visual Studio install
 path — confirmed working with WindowsAppSDK 2.3.1 via both plain
 `dotnet build` and Visual Studio 2026's MSBuild.
 
-## Manual smoke test (Core connection)
+## Manual smoke test (Core connection + typed assistant)
 
 Automated GUI execution isn't wired into CI yet (see Testing below), so
 this is currently a manual check:
@@ -46,15 +46,34 @@ this is currently a manual check:
 # Terminal 1 — start REVA Core
 python -m reva_core --serve
 
-# Terminal 2 — launch the desktop app
+# Terminal 2 — launch the desktop app (same REVA_DATA_DIR as Core if
+# you overrode it, so the desktop can find the same local_auth_token)
 dotnet run --project desktop\src\Reva.Desktop\Reva.Desktop.csproj
 ```
 
 Expected: a window titled "REVA" appears, and within a moment the
-status line reads "● Core Connected" (green dot). Stop Core (Ctrl+C in
-Terminal 1) and relaunch the app — it should show "○ Core Unavailable"
+status line reads "Core Connected" (green dot). Stop Core (Ctrl+C in
+Terminal 1) and relaunch the app — it should show "Core Unavailable"
 (gray dot) instead. Both states must come from a real `GET /health`
 call — never simulated.
+
+Type a message in the composer and press Enter (or click Send): it
+should appear immediately under "You", the composer clears, Send
+disables while the request is in flight, and REVA Core's real reply
+appears under "REVA" a moment later. `GET /v1/audit-events` (with the
+real bearer token) will show a matching `typed_request_received` event
+with no `memory_created` — ordinary messages never create memory.
+
+This exact flow was verified during Slice 3 development using real UI
+Automation (`System.Windows.Automation` from PowerShell) driving the
+real built exe against a real running Core — not simulated. That
+session also caught a real bug: `ShellViewModel.RefreshCoreStatusAsync`
+used to await with `ConfigureAwait(false)`, so the status update landed
+on a thread-pool thread and silently never reached the UI (no crash,
+no exception — just stuck on "Checking REVA Core..." forever, even
+against a healthy Core). Fixed by removing it; any ViewModel method
+that mutates UI-bound state after an `await` must not use
+`ConfigureAwait(false)`.
 
 ## Configuration
 
@@ -69,18 +88,31 @@ conventions), read once at startup:
 ## Architecture
 
 ```text
-Views/         XAML + WinUI-typed code (converters, code-behind UI logic)
 ViewModels/    Plain C#, no WinUI types — testable without the XAML pipeline
+               (ShellViewModel, AssistantViewModel)
 Services/      DesktopConfiguration, ILocalTokenProvider/LocalTokenProvider,
                IRevaCoreClient/RevaCoreClient, DesktopLogger
-Contracts/     DTOs mirroring REVA Core's JSON responses (HealthStatus, ...)
-State/         ObservableObject — minimal hand-written INotifyPropertyChanged base
+Contracts/     DTOs mirroring REVA Core's JSON responses (HealthStatus,
+               VersionInfo, TypedMessageRequest/Response, ...)
+State/         ObservableObject (base), AssistantMessage (session-only
+               conversation entry — no persistence in this slice)
 ```
 
 `Views/`, `Resources/`, `Assets/` only exist once they have real content
 in them — see `docs/architecture/module-boundaries.md`'s "no empty
 packages" principle in the Python side; the same discipline applies
-here.
+here. (A `Views/StatusBrushConverter.cs` existed briefly in Slice 2 and
+was removed — see the WinUI codegen bug note below.)
+
+**A known WinUI 3 XAML-compiler limitation**: an `x:Bind` using an
+`IValueConverter` referenced via `{StaticResource}` fails to compile
+(`CS1503`, `SetConverterLookupRoot` expects a `FrameworkElement`) when
+the page root is a `Window` rather than a `Page`/`UserControl` — `Window`
+doesn't derive from `FrameworkElement`. Worked around throughout by
+exposing plain, converter-free properties from ViewModels/models
+instead (`AssistantMessage.RoleLabel`, `AssistantViewModel.IsNotPending`)
+and setting the one genuinely visual-only value (the status dot's
+color) imperatively in code-behind.
 
 ## Slice plan (Phase 1B)
 
@@ -88,7 +120,7 @@ here.
 |---|---|---|
 | 1 — Solution + CI baseline | **DONE** | Buildable WinUI solution, xUnit test project, CI gates |
 | 2 — Core configuration + connection | **DONE** | Loopback-validated config, token provider, `IRevaCoreClient`, honest Core Connected/Unavailable status |
-| 3 — Typed assistant | PLANNED | Message composer, send flow, `POST /v1/messages` |
+| 3 — Typed assistant | **DONE** | Message composer, send flow, `POST /v1/messages`, real UI-Automation-verified against a real Core |
 | 4 — Explicit memory creation | PLANNED | "Remember this" action, `POST /v1/memories` |
 | 5 — Memories UI | PLANNED | Search + detail view, `GET /v1/memories` |
 | 6 — Real Core integration tests | PLANNED | Test harness against a real temporary Python Core |
@@ -99,13 +131,19 @@ here.
 
 - **Unit** (`tests/Unit/`): `DesktopConfiguration` loopback validation,
   `LocalTokenProvider` safe-failure behavior, `RevaCoreClient` error
-  normalization (connection-refused, timeout, 401, 5xx, malformed
-  JSON, unexpected status), `DesktopLogger` token-withholding,
-  `ObservableObject` property-change semantics. 36 tests, all passing.
+  normalization and the typed-message request/response path (POST
+  target, Bearer header, body content, no-request-when-unauthorized),
+  `AssistantViewModel` (initial state, whitespace rejection, one
+  request per submit, immediate user-message append, pending state,
+  duplicate-send blocking, success/failure outcomes, exact safe-error
+  equality, no token exposure), `DesktopLogger` token-withholding,
+  `ObservableObject` property-change semantics. 55 tests, all passing.
 - **Integration** (`tests/Integration/`): PLANNED (Slice 6) — real
   Python Core + real temporary SQLite DB, no mocks.
 - **UI** (`tests/UI/`): no automated WinUI GUI execution in CI yet.
   Documented as a **manual smoke test** (above) rather than faked with
-  screenshot testing or a skipped/fake automated suite. ViewModels are
-  the automated-test surface for UI *logic*; the manual smoke test
-  covers the rest until a WinUI UI-testing story is evaluated.
+  screenshot testing or a skipped/fake automated suite. That manual
+  test has itself been performed with real UI Automation (not just
+  eyeballing) during Slice 2 and Slice 3 development — see the manual
+  smoke test section above for what it caught. ViewModels remain the
+  primary automated-test surface for UI *logic*.
