@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    # REVA is Windows-first; CI runs on Windows so path/pragma/process
+    # behavior is validated on the actual target platform.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy reva_core
+
+      - name: Unit tests
+        run: pytest tests/unit -v
+
+      - name: Integration tests
+        run: pytest tests/integration -v
+
+      - name: Contract tests
+        run: pytest tests/contract -v
+
+      - name: Security tests
+        run: pytest tests/security -v
+
+      - name: E2E tests
+        run: pytest tests/e2e -v
+
+      - name: Full suite with coverage
+        run: pytest --cov=reva_core --cov-report=term-missing --cov-report=xml
+
+      - name: Package/import smoke test
+        run: python -c "import reva_core; print(reva_core.__version__)"
+
+      - name: Core startup/shutdown smoke test
+        run: python -m reva_core
+        env:
+          REVA_DATA_DIR: ${{ runner.temp }}/reva-ci-data
+
+      - name: Migration/bootstrap script check
+        run: python scripts/verify_bootstrap.py
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
