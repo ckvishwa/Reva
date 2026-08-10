@@ -14,6 +14,15 @@ dependencies = [
     "pydantic-settings>=2.3,<3",
     "fastapi>=0.111,<1",
     "uvicorn>=0.30,<1",
+    # Orchestration dependency for Slice 5's AssistantOrchestrator boundary
+    # (opt-in via REVA_ASSISTANT_ORCHESTRATOR=adk) — see
+    # docs/adr/ADR-017-google-adk-orchestration-dependency.md for the exact
+    # pin rationale and upgrade policy. Exact pins, not ranges: ADK's own
+    # API surface (Runner/session/tool internals) has moved across minor
+    # versions in its pre-3.0 line, and this is not a dependency we want to
+    # silently float.
+    "google-adk==2.6.3",
+    "litellm==1.96.0",
 ]
 
 [project.optional-dependencies]
