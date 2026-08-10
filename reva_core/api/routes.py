@@ -43,7 +43,11 @@ def build_router(lifecycle: CoreLifecycle) -> APIRouter:
     require_token = build_auth_dependency(lifecycle)
 
     def _service() -> TypedInteractionService:
-        return TypedInteractionService(lifecycle.connection, lifecycle.primary_device_id)
+        return TypedInteractionService(
+            lifecycle.connection,
+            lifecycle.primary_device_id,
+            orchestrator=lifecycle.assistant_orchestrator,
+        )
 
     @router.post("/messages", response_model=TypedResponse)
     async def post_message(

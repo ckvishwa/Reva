@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     # Windows Credential Manager / DPAPI, not plaintext `.env`, for prod.
     llm_provider_api_key: SecretStr | None = None
 
+    # "deterministic" (default) preserves Phase 1A/1B's exact FakeLLMProvider
+    # echo behavior - every existing test and the default `python -m
+    # reva_core --serve` stay untouched. "adk" opts a running Core into
+    # Slice 5's AdkAssistantOrchestrator; see
+    # docs/adr/ADR-017-google-adk-orchestration-dependency.md.
+    assistant_orchestrator: Literal["deterministic", "adk"] = "deterministic"
+    # LiteLlm model string. Default targets a local Ollama model (no cloud
+    # credential required) - see ADR-017 for why.
+    adk_model: str = "ollama_chat/llama3.1:8b"
+    adk_model_api_base: str = "http://127.0.0.1:11434"
+    adk_timeout_seconds: float = 30.0
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "reva.db"
