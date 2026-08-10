@@ -1,6 +1,6 @@
 # REVA Desktop (Windows)
 
-Status: **IN PROGRESS** — Phase 1B, Slice 1-3 of 8 (see below)
+Status: **IN PROGRESS** — Phase 1B, Slice 1-4 of 8 (see below)
 
 A thin native Windows client for REVA Core. C#/.NET, WinUI 3, XAML,
 small explicit MVVM. It talks to REVA Core exclusively over the
@@ -107,6 +107,47 @@ a false positive.
    (`SyncComposerTextFromTextBox`), rather than trusting the binding's
    commit timing.
 
+## Slice 4 E2E: explicit memory + persistence
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop\tests\E2E\Run-MemoryPersistenceE2E.ps1
+```
+
+Same technique as the Slice 3 gate above (real `Reva.Desktop.exe`, real
+`python -m reva_core --serve`, real UI Automation), on its own isolated
+data directory and port (`18757`, distinct from Slice 3's `18756` so
+both can run concurrently), extended to prove the parts Slice 3 didn't
+touch:
+
+- A **negative case** first: setting `MemoryBox` to whitespace-only and
+  invoking `RememberButton` produces desktop feedback but zero
+  `memory_create_requested`/`memory_created` audit events.
+- **Ordinary chat still creates zero memory** — re-verified against the
+  real running Slice 4 build (not just inherited from the Slice 3
+  script) by sending a normal message and confirming no matching
+  memory exists afterward.
+- **Explicit Remember**: a unique `test-color-<id> = cobalt` value is
+  entered and Remembered. Desktop shows `"Remembered."` and clears the
+  box. Independently verified against Core: `GET /v1/memories` returns
+  exactly one matching result with byte-for-byte the right content (no
+  duplicates), and `GET /v1/audit-events` shows exactly one
+  `memory_create_requested` and one `memory_created` event, both
+  `outcome=success`, with `content_length` and `memory_id` cross-checked
+  against what was actually sent/returned.
+- **Full restart, same data directory**: both the Desktop and Core
+  processes are killed and relaunched from scratch against the
+  identical isolated `REVA_DATA_DIR` (not just a fresh in-memory
+  instance). After restart, the memory is proven to survive two ways:
+  independently via `GET /v1/memories`, and through the real
+  `SearchButton`/`MemorySearchResultText` controls, confirming recall
+  works end-to-end through freshly-started processes, not
+  process-local state.
+
+Cleanup follows the same `finally`-block discipline (both rounds —
+initial run and restart round each have their own), preserves
+diagnostics only on failure, and deletes the isolated temp directory
+on full success. Verified repeatable across multiple consecutive runs.
+
 ### Manual exploratory run
 
 For interactive poking around (not needed to verify correctness — the
@@ -133,11 +174,13 @@ conventions), read once at startup:
 
 ```text
 ViewModels/    Plain C#, no WinUI types — testable without the XAML pipeline
-               (ShellViewModel, AssistantViewModel)
+               (ShellViewModel, AssistantViewModel, MemoryViewModel)
 Services/      DesktopConfiguration, ILocalTokenProvider/LocalTokenProvider,
                IRevaCoreClient/RevaCoreClient, DesktopLogger
 Contracts/     DTOs mirroring REVA Core's JSON responses (HealthStatus,
-               VersionInfo, TypedMessageRequest/Response, ...)
+               VersionInfo, TypedMessageRequest/Response,
+               MemoryCreateRequest/Response, MemoryQueryResponse(Item),
+               MemorySourceReference, ...)
 State/         ObservableObject (base), AssistantMessage (session-only
                conversation entry — no persistence in this slice)
 ```
@@ -165,30 +208,36 @@ color) imperatively in code-behind.
 | 1 — Solution + CI baseline | **DONE** | Buildable WinUI solution, xUnit test project, CI gates |
 | 2 — Core configuration + connection | **DONE** | Loopback-validated config, token provider, `IRevaCoreClient`, honest Core Connected/Unavailable status |
 | 3 — Typed assistant | **DONE** | Message composer, send flow, `POST /v1/messages`, real UI-Automation-verified against a real Core |
-| 4 — Explicit memory creation | PLANNED | "Remember this" action, `POST /v1/memories` |
-| 5 — Memories UI | PLANNED | Search + detail view, `GET /v1/memories` |
+| 4 — Explicit memory creation | **DONE** | "Remember" + "Search" actions, `POST`/`GET /v1/memories`, real UI-Automation-verified restart/persistence proof |
+| 5 — Memories UI | PLANNED | Richer search + detail view beyond the minimal Slice 4 result text |
 | 6 — Real Core integration tests | PLANNED | Test harness against a real temporary Python Core |
-| 7 — Restart persistence proof | PLANNED | Automated restart-recovery E2E |
+| 7 — Restart persistence proof | **DONE (folded into Slice 4)** | Automated restart-recovery E2E — see `Run-MemoryPersistenceE2E.ps1` |
 | 8 — UI polish | PLANNED | Dark/charcoal/purple visual direction |
 
 ## Testing
 
 - **Unit** (`tests/Unit/`): `DesktopConfiguration` loopback validation,
   `LocalTokenProvider` safe-failure behavior, `RevaCoreClient` error
-  normalization and the typed-message request/response path (POST
-  target, Bearer header, body content, no-request-when-unauthorized),
+  normalization and the typed-message and explicit-memory
+  create/query request/response paths (POST/GET target, Bearer header,
+  body content, query-string encoding, no-request-when-unauthorized),
   `AssistantViewModel` (initial state, whitespace rejection, one
   request per submit, immediate user-message append, pending state,
   duplicate-send blocking, success/failure outcomes, exact safe-error
-  equality, no token exposure), `ShellViewModel` (initial/success/failure
-  state, plus the `ConfigureAwait` regression guard above),
-  `DesktopLogger` token-withholding, `ObservableObject` property-change
-  semantics. 59 tests, all passing.
+  equality, no token exposure), `MemoryViewModel` (initial state,
+  whitespace rejection for both Remember and Search, one request per
+  action, success/failure feedback text, MemoryText cleared only on
+  success, duplicate-submission blocking, no token exposure),
+  `ShellViewModel` (initial/success/failure state, plus the
+  `ConfigureAwait` regression guard above), `DesktopLogger`
+  token-withholding, `ObservableObject` property-change semantics. 82
+  tests, all passing.
 - **Integration** (`tests/Integration/`): PLANNED (Slice 6) — real
   Python Core + real temporary SQLite DB, no mocks, but exercised
   through `RevaCoreClient`/repositories directly rather than the full
   compiled app + UI.
-- **E2E** (`tests/E2E/`): `Run-TypedAssistantE2E.ps1` — see "E2E gate"
+- **E2E** (`tests/E2E/`): `Run-TypedAssistantE2E.ps1` (Slice 3) and
+  `Run-MemoryPersistenceE2E.ps1` (Slice 4) — see the E2E sections
   above. Real app, real Core, real UI Automation, real audit-trail
   corroboration. Currently local-only; see CI status below for why.
 
