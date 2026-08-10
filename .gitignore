@@ -26,6 +26,13 @@ coverage.xml
 /logs/
 local_auth_token
 
+# .NET / C# desktop
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+TestResults/
+
 # Editors / OS
 .vscode/
 .idea/

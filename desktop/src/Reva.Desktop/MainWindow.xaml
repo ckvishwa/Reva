@@ -1,0 +1,16 @@
+<Window
+    x:Class="Reva.Desktop.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Padding="24">
+        <StackPanel Spacing="8" VerticalAlignment="Top" HorizontalAlignment="Left">
+            <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
+        </StackPanel>
+    </Grid>
+
+</Window>
