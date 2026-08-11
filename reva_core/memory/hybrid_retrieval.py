@@ -9,12 +9,18 @@ query
              |
    hybrid = semantic_weight * semantic_norm + lexical_weight * lexical_norm
              |
-  drop hybrid < minimum_confidence, sort, deterministic tie-break
+  drop hybrid < minimum_confidence (only when a query embedding exists),
+  sort, deterministic tie-break
 
 Never raises on embedding-backend failure: a failed query embedding
 degrades to lexical-only ranking rather than failing the whole search
 (this is what keeps GET /v1/memories and search_memory working when
-Ollama is down after startup).
+Ollama is down after startup). "Degrades to lexical-only" means exactly
+that: when there is no query embedding at all (no provider, or the
+embed call failed), `minimum_confidence` — calibrated for the blended
+70/30 signal — is not applied, so the result set matches what
+`MemoryRepository.query` alone would have returned, not a silently
+truncated subset of it.
 """
 
 from __future__ import annotations
@@ -115,7 +121,21 @@ async def hybrid_search(
         hybrid_score = (
             config.semantic_weight * semantic_score + config.lexical_weight * lexical_score
         )
-        if hybrid_score < config.minimum_confidence:
+        # `minimum_confidence` is calibrated for the blended 70/30 signal.
+        # When there is no semantic signal at all for this query (no
+        # embedding provider, or the query-embedding call itself failed —
+        # `query_vector is None`), applying it anyway is mathematically
+        # wrong: every candidate's semantic_score is 0.0, so only the
+        # rank-normalized top slice of lexical matches would ever clear the
+        # threshold. A degraded-to-lexical-only search must return exactly
+        # what `MemoryRepository.query` would have (bounded only by
+        # `limit`), never a silently truncated subset. This bypass does
+        # NOT apply to an individual candidate that merely lacks its own
+        # embedding row yet (backfill lag) while a query_vector otherwise
+        # exists — that candidate's semantic_score of 0.0 is still
+        # meaningful relative to other candidates that do have one, so the
+        # blended filter stays intentional there.
+        if query_vector is not None and hybrid_score < config.minimum_confidence:
             continue
         ranked.append(
             RankedMemory(

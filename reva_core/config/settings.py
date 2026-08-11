@@ -52,7 +52,17 @@ class Settings(BaseSettings):
     # requires — see reva_core/models/embedding_providers.py.
     embedding_model: str = "nomic-embed-text"
     embedding_model_api_base: str = "http://127.0.0.1:11434"
-    embedding_timeout_seconds: float = 30.0
+    # Deliberately short relative to `adk_timeout_seconds`/
+    # `AdkAssistantOrchestrator._DEFAULT_TIMEOUT_SECONDS` (30.0): a query
+    # embedding call is one step inside a single ADK turn's budget, not the
+    # whole turn. `hybrid_search` already degrades to lexical-only on any
+    # embedding failure (Global Constraint), but only if that failure
+    # surfaces quickly — a *hung* (not merely refused) Ollama connection
+    # must not be allowed to consume the entire turn budget before the
+    # fallback ever gets a chance to run. A local Ollama embedding call
+    # normally completes in well under a second; 5s still leaves ~25s of
+    # headroom for the rest of the turn.
+    embedding_timeout_seconds: float = 5.0
 
     @property
     def db_path(self) -> Path:
