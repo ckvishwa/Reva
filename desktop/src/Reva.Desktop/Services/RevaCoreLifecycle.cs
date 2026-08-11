@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Reva.Desktop.Services;
 
 /// <summary>
@@ -78,19 +80,27 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         using (var startLock = new Mutex(initiallyOwned: false, StartLockName))
         {
             var acquired = startLock.WaitOne(StartLockTimeout);
+            if (!acquired)
+            {
+                // Could not confirm exclusive ownership of the launch decision
+                // within the timeout — fail safe rather than risk launching a
+                // second process against an already-occupied port (the whole
+                // point of this lock).
+                DesktopLogger.Warn("Timed out waiting for the Core start lock; treating Core as unavailable.");
+                SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+                return;
+            }
+
             try
             {
                 // Re-probe after acquiring the lock: whoever got here first may
                 // have already finished launching Core while this instance was
                 // waiting on the mutex.
-                if (acquired)
+                var reprobe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+                if (reprobe.IsSuccess)
                 {
-                    var reprobe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
-                    if (reprobe.IsSuccess)
-                    {
-                        await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
-                        return;
-                    }
+                    await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
+                    return;
                 }
 
                 var resolution = _executableLocator.Resolve();
@@ -101,15 +111,26 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                     return;
                 }
 
-                _ownedProcess = _processLauncher.Launch(
-                    resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                try
+                {
+                    _ownedProcess = _processLauncher.Launch(
+                        resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // Process.Start can fail for reasons outside our control
+                    // (AV blocking, path-length limits, permissions) — degrade
+                    // to Unavailable rather than crashing the app via the
+                    // unhandled exception this would otherwise become inside
+                    // App.OnLaunched's async void.
+                    DesktopLogger.Warn($"Failed to launch REVA Core: {ex.Message}");
+                    SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+                    return;
+                }
             }
             finally
             {
-                if (acquired)
-                {
-                    startLock.ReleaseMutex();
-                }
+                startLock.ReleaseMutex();
             }
         }
 
@@ -152,20 +173,35 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     {
         _monitorCts?.Cancel();
         _monitorCts = new CancellationTokenSource();
-        // Task.Run (not a bare fire-and-forget call): when _delay resolves
-        // synchronously (test doubles), every await in RunMonitorLoopAsync
-        // completes without yielding, so the loop body runs inline on
-        // whichever thread first calls StartMonitor — blocking StartAsync's
-        // caller forever, since nothing else can ever reach _monitorCts.Cancel().
-        // Task.Run moves that execution to the thread pool so this method,
-        // and therefore StartAsync, always returns promptly.
-        _ = Task.Run(() => RunMonitorLoopAsync(_monitorCts.Token));
+        _ = RunMonitorLoopAsync(_monitorCts.Token);
     }
 
     private async Task RunMonitorLoopAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
+            // Task.Yield (not just _delay): guarantees this loop always
+            // suspends and returns control to whoever called StartMonitor,
+            // even when _delay resolves synchronously (test doubles) —
+            // without it, every await in this method completes inline and
+            // the loop runs forever on the calling thread before StartMonitor
+            // (and therefore StartAsync) ever returns, since nothing else can
+            // reach _monitorCts.Cancel() to end it.
+            //
+            // Deliberately NOT Task.Run: that would detach the loop from the
+            // caller's SynchronizationContext (the UI thread's dispatcher in
+            // production), so RunMonitorIterationAsync's SetState/StateChanged
+            // would fire on a thread-pool thread — MainWindow's status-dot
+            // update touches a WinUI object and requires the UI thread.
+            // Task.Yield's continuation is posted back through
+            // SynchronizationContext.Current when one is installed, so the
+            // loop keeps running on the UI thread across iterations.
+            await Task.Yield();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
             await _delay(MonitorInterval, cancellationToken).ConfigureAwait(true);
             if (cancellationToken.IsCancellationRequested)
             {
@@ -203,23 +239,38 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
             if (resolution.IsAvailable)
             {
                 _ownedProcess.Dispose();
-                _ownedProcess = _processLauncher.Launch(
-                    resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                try
+                {
+                    _ownedProcess = _processLauncher.Launch(
+                        resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // A relaunch failure must not fault this method — it runs
+                    // inside the background monitor loop, and an unobserved
+                    // exception there would silently end all future reconnect
+                    // attempts with no user-visible indication.
+                    DesktopLogger.Warn($"Failed to relaunch REVA Core: {ex.Message}");
+                    _ownedProcess = null;
+                }
             }
         }
     }
 
     private async Task<bool> WaitForHealthAsync(CancellationToken cancellationToken)
     {
-        // Elapsed time is tracked logically (accumulated poll interval),
-        // never via real wall-clock (DateTimeOffset.UtcNow deadline) — a
-        // wall-clock deadline would keep this loop spinning for the full
-        // real HealthTimeout even when a test injects a no-op _delay,
-        // defeating the seam's entire purpose (see ctor doc comment).
+        // Elapsed time adds the poll interval logically (never a real
+        // Task.Delay wait when a test injects a no-op _delay, which would
+        // defeat the seam's whole purpose — see ctor doc comment) PLUS the
+        // call's own measured duration, so a slow-but-not-instantly-failing
+        // GetHealthAsync still counts toward the bound instead of being
+        // free, which could otherwise stretch this well past HealthTimeout.
         var elapsed = TimeSpan.Zero;
         while (elapsed < HealthTimeout)
         {
+            var callStart = Stopwatch.GetTimestamp();
             var result = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+            elapsed += Stopwatch.GetElapsedTime(callStart);
             if (result.IsSuccess)
             {
                 return true;
@@ -234,12 +285,14 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
     private async Task<bool> WaitForTokenAsync(CancellationToken cancellationToken)
     {
-        // See WaitForHealthAsync: elapsed is logical, not wall-clock, so the
-        // injected _delay seam genuinely avoids real waiting in tests.
+        // See WaitForHealthAsync: elapsed adds the poll interval logically
+        // plus the call's own measured duration.
         var elapsed = TimeSpan.Zero;
         while (elapsed < TokenTimeout)
         {
+            var callStart = Stopwatch.GetTimestamp();
             var result = await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(true);
+            elapsed += Stopwatch.GetElapsedTime(callStart);
             if (result.IsAvailable)
             {
                 return true;
