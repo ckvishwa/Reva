@@ -64,6 +64,9 @@ class CoreLifecycle:
                 model_name=self._settings.adk_model,
                 model_api_base=self._settings.adk_model_api_base,
                 timeout_seconds=self._settings.adk_timeout_seconds,
+                embedding_provider=self._embedding_provider,
+                embedding_model_id=self._settings.embedding_model,
+                ranking_config=self._ranking_config,
             )
         self._started_at = utc_now()
         self._status = CoreStatus.HEALTHY

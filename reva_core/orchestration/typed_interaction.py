@@ -22,6 +22,9 @@ from datetime import datetime
 
 from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
+from reva_core.memory.hybrid_retrieval import hybrid_search
+from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
+from reva_core.models.embedding import EmbeddingProvider
 from reva_core.models.llm import LLMProvider, LLMRequest
 from reva_core.shared.contracts.conversation import Conversation, Message, MessageRole
 from reva_core.shared.contracts.memory import (
@@ -68,11 +71,17 @@ class TypedInteractionService:
         origin_device_id: str,
         llm_provider: LLMProvider | None = None,
         orchestrator: AssistantOrchestrator | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
+        embedding_model_id: str = "",
+        ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG,
     ) -> None:
         self._conn = conn
         self._origin_device_id = origin_device_id
         self._llm = llm_provider if llm_provider is not None else _default_llm_provider()
         self._orchestrator = orchestrator
+        self._embedding_provider = embedding_provider
+        self._embedding_model_id = embedding_model_id
+        self._ranking_config = ranking_config
         self._conversations = ConversationRepository(conn)
         self._messages = MessageRepository(conn)
         self._memories = MemoryRepository(conn)
@@ -193,7 +202,7 @@ class TypedInteractionService:
             )
         return memory
 
-    def query_memories(self, query: str, limit: int, correlation_id: str) -> list[Memory]:
+    async def query_memories(self, query: str, limit: int, correlation_id: str) -> list[Memory]:
         stripped = query.strip()
         if not stripped:
             raise ValidationError("memory query must not be empty")
@@ -211,7 +220,19 @@ class TypedInteractionService:
                 occurred_at=now,
             )
         )
-        results = self._memories.query(stripped, limit)
+        if self._embedding_provider is not None:
+            ranked = await hybrid_search(
+                self._conn,
+                self._embedding_provider,
+                query=stripped,
+                limit=limit,
+                model_id=self._embedding_model_id,
+                correlation_id=correlation_id,
+                config=self._ranking_config,
+            )
+            results = [r.memory for r in ranked]
+        else:
+            results = self._memories.query(stripped, limit)
         self._audit.insert(
             AuditEvent(
                 id=new_id(),
