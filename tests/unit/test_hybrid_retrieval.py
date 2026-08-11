@@ -172,6 +172,29 @@ async def test_none_embedding_provider_uses_lexical_only(store):
     assert any(r.memory.id == memory.id for r in results)
 
 
+async def test_lexical_only_fallback_does_not_truncate_matches(store):
+    """Regression: when there is no semantic signal at all (here, the
+    embedding provider's embed() call raises), `hybrid_search` must
+    degrade to exactly what `MemoryRepository.query` would have returned
+    (bounded only by `limit`) — not silently drop matches by running every
+    candidate through the 70/30-blended `minimum_confidence` filter, which
+    only the rank-normalized top third of lexical matches could ever
+    clear. Before the fix, this returned only 3 of the 10 matches."""
+    memories = [_insert_memory(store, f"lexical match candidate {i}") for i in range(10)]
+    provider = FailingEmbeddingProvider()
+
+    results = await hybrid_search(
+        store,
+        provider,
+        query="lexical match candidate",
+        limit=10,
+        model_id=_MODEL,
+        correlation_id=_CID,
+    )
+
+    assert {r.memory.id for r in results} == {m.id for m in memories}
+
+
 async def test_limit_is_respected(store):
     for i in range(10):
         m = _insert_memory(store, f"bounded candidate {i}")
