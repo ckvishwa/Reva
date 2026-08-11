@@ -49,6 +49,31 @@ public class DesktopConfigurationTests
     }
 
     [Fact]
+    public void CreateDefault_UsesStableLocalAppDataDirectory_WhenNoEnvironmentOverride()
+    {
+        var configuration = DesktopConfiguration.CreateDefault();
+
+        Assert.Equal(RuntimePaths.GetDefaultDataDirectory(), configuration.CoreDataDirectory);
+    }
+
+    [Fact]
+    public void CreateDefault_RespectsDataDirectoryEnvironmentOverride()
+    {
+        var overridePath = Path.Combine(Path.GetTempPath(), "reva-desktop-config-test-" + Guid.NewGuid());
+        Environment.SetEnvironmentVariable("REVA_DATA_DIR", overridePath);
+        try
+        {
+            var configuration = DesktopConfiguration.CreateDefault();
+
+            Assert.Equal(overridePath, configuration.CoreDataDirectory);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("REVA_DATA_DIR", null);
+        }
+    }
+
+    [Fact]
     public void CreateDefault_RespectsCoreUrlEnvironmentOverride()
     {
         Environment.SetEnvironmentVariable("REVA_DESKTOP_CORE_URL", "http://127.0.0.1:9999/");
