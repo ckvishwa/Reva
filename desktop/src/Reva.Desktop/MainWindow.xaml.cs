@@ -16,29 +16,34 @@ public sealed partial class MainWindow : Window
 
     public MemoryViewModel Memory { get; }
 
-    public MainWindow(IRevaCoreClient coreClient)
+    public MainWindow(IRevaCoreClient coreClient, IRevaCoreLifecycle lifecycle)
     {
         InitializeComponent();
-        Shell = new ShellViewModel(coreClient);
+        Shell = new ShellViewModel(lifecycle);
         Assistant = new AssistantViewModel(coreClient);
         Memory = new MemoryViewModel(coreClient);
         Shell.PropertyChanged += OnShellPropertyChanged;
-
-        // Deliberately not gated on the Activated event: confirmed via
-        // manual smoke test (real launch, real Core, real UI Automation
-        // read-back) that Activated does not reliably fire for every
-        // launch path, leaving the status stuck on "Checking REVA
-        // Core..." even though Core was healthy and reachable the whole
-        // time. The initial health check must run unconditionally.
-        _ = Shell.RefreshCoreStatusAsync();
+        ApplyStatusDotColor();
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ShellViewModel.IsCoreConnected))
+        if (e.PropertyName == nameof(ShellViewModel.LifecycleState))
         {
-            StatusDot.Fill = new SolidColorBrush(Shell.IsCoreConnected ? Colors.LimeGreen : Colors.Gray);
+            ApplyStatusDotColor();
         }
+    }
+
+    private void ApplyStatusDotColor()
+    {
+        var color = Shell.LifecycleState switch
+        {
+            CoreLifecycleState.Connected => Colors.LimeGreen,
+            CoreLifecycleState.Starting => Colors.Gold,
+            CoreLifecycleState.AuthorizationUnavailable => Colors.OrangeRed,
+            _ => Colors.Gray,
+        };
+        StatusDot.Fill = new SolidColorBrush(color);
     }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
