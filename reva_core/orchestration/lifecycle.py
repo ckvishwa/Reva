@@ -11,9 +11,14 @@ from datetime import datetime
 
 from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.config.settings import Settings
+from reva_core.memory.embedding_backfill import backfill_missing_embeddings
+from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
+from reva_core.models.embedding import EmbeddingProvider
+from reva_core.models.embedding_providers import OllamaEmbeddingProvider
 from reva_core.security.local_token import ensure_local_token
 from reva_core.shared.contracts.health import CoreStatus, HealthStatus
 from reva_core.shared.errors import StorageError
+from reva_core.shared.ids import new_id
 from reva_core.shared.logging import get_logger
 from reva_core.shared.time import utc_now
 from reva_core.storage.bootstrap import initialize_database
@@ -32,12 +37,20 @@ class CoreLifecycle:
         self._local_token: str | None = None
         self._primary_device_id: str | None = None
         self._assistant_orchestrator: AssistantOrchestrator | None = None
+        self._embedding_provider: EmbeddingProvider | None = None
+        self._ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG
 
     def startup(self) -> HealthStatus:
         self._status = CoreStatus.STARTING
         self._conn, self._db_schema_version = initialize_database(self._settings.db_path)
         self._primary_device_id = DeviceRepository(self._conn).get_or_create_primary_device()
         self._local_token = ensure_local_token(self._settings.data_dir)
+        self._embedding_provider = OllamaEmbeddingProvider(
+            model=self._settings.embedding_model,
+            api_base=self._settings.embedding_model_api_base,
+            timeout_seconds=self._settings.embedding_timeout_seconds,
+        )
+        self._run_startup_backfill()
         if self._settings.assistant_orchestrator == "adk":
             # Imported lazily so `google.adk`/`litellm` are only ever
             # imported by a Core process that actually opted into ADK —
@@ -62,6 +75,33 @@ class CoreLifecycle:
             },
         )
         return self.health()
+
+    def _run_startup_backfill(self) -> None:
+        # asyncio.run is safe here: startup() runs before uvicorn creates
+        # its own event loop. Any failure (Ollama unreachable, a single
+        # record failing to embed) must never prevent Core from becoming
+        # HEALTHY — this is a best-effort warm-up, not a startup
+        # precondition. An empty memories table (the common CI case)
+        # embeds zero records regardless of backend reachability.
+        import asyncio
+
+        assert self._embedding_provider is not None
+        assert self._conn is not None
+        try:
+            result = asyncio.run(
+                backfill_missing_embeddings(
+                    self._conn,
+                    self._embedding_provider,
+                    model_id=self._settings.embedding_model,
+                    correlation_id=new_id(),
+                )
+            )
+            logger.info(
+                "embedding backfill completed",
+                extra={"embedded_count": result.embedded_count, "failed_count": result.failed_count},
+            )
+        except Exception:
+            logger.warning("embedding backfill failed at startup; continuing without it", exc_info=True)
 
     def shutdown(self) -> None:
         self._status = CoreStatus.SHUTTING_DOWN
@@ -102,3 +142,15 @@ class CoreLifecycle:
         "deterministic" default is active, not that startup() hasn't run.
         """
         return self._assistant_orchestrator
+
+    @property
+    def embedding_provider(self) -> EmbeddingProvider | None:
+        return self._embedding_provider
+
+    @property
+    def embedding_model_id(self) -> str:
+        return self._settings.embedding_model
+
+    @property
+    def ranking_config(self) -> HybridRankingConfig:
+        return self._ranking_config
