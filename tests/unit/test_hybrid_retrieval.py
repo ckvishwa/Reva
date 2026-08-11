@@ -61,7 +61,9 @@ def store(tmp_path):
     conn.close()
 
 
-def _insert_memory(conn, content: str) -> Memory:
+def _insert_memory(
+    conn, content: str, retention_state: RetentionState = RetentionState.ACTIVE
+) -> Memory:
     now = utc_now()
     device_id = new_id()
     # Create the device that will be referenced by the memory's origin_device_id
@@ -76,7 +78,7 @@ def _insert_memory(conn, content: str) -> Memory:
         content=content,
         source=MemorySourceReference(origin_device_id=device_id, note="test"),
         tags=(),
-        retention_state=RetentionState.ACTIVE,
+        retention_state=retention_state,
         sync_version=1,
         created_at=now,
         updated_at=now,
@@ -221,6 +223,68 @@ async def test_lexical_only_fallback_does_not_truncate_matches(store):
     )
 
     assert {r.memory.id for r in results} == {m.id for m in memories}
+
+
+async def test_empty_embeddings_table_does_not_truncate_matches(store):
+    """Regression: unlike the FailingEmbeddingProvider case above, here the
+    query embedding SUCCEEDS (`query_vector is not None`) but the corpus
+    has zero rows in `memory_embeddings` for this `model_id` — e.g. Ollama
+    was down for the whole startup backfill, or a memory was created
+    mid-session and hasn't been backfilled yet. Every candidate's
+    semantic_score is then 0.0 (semantic_scores stays empty), so
+    hybrid_score = 0.30 * lexical_score, and the old bare
+    `query_vector is not None` guard would require lexical_score >= 0.667
+    to clear minimum_confidence=0.20 — silently dropping the bottom two
+    thirds of otherwise-valid lexical matches. Before the fix, this
+    returned only 3 of the 10 matches."""
+    memories = [_insert_memory(store, f"lexical match candidate {i}") for i in range(10)]
+    # A provider that embeds successfully, but no rows are ever upserted
+    # into MemoryEmbeddingRepository for _MODEL — the embeddings table is
+    # empty for this model_id even though embedding itself works fine.
+    provider = DeterministicEmbeddingProvider(vectors_by_keyword={}, default=(1.0, 0.0))
+
+    results = await hybrid_search(
+        store,
+        provider,
+        query="lexical match candidate",
+        limit=10,
+        model_id=_MODEL,
+        correlation_id=_CID,
+    )
+
+    assert {r.memory.id for r in results} == {m.id for m in memories}
+
+
+async def test_archived_memory_excluded_from_semantic_path(store):
+    """Regression: the lexical path (`MemoryRepository.query`) filters
+    `retention_state = 'active'`, but the semantic path's candidate set
+    comes from `memory_embeddings`, which carries no retention_state of
+    its own. An archived memory whose embedding row was never cleaned up
+    must never surface via `hybrid_search`, even when it would otherwise
+    be the strongest semantic match for the query."""
+    archived = _insert_memory(store, "I have a pet cat.", retention_state=RetentionState.ARCHIVED)
+    active = _insert_memory(store, "unrelated distractor about databases")
+    embeddings = MemoryEmbeddingRepository(store)
+    provider = DeterministicEmbeddingProvider(
+        vectors_by_keyword={"cat": (1.0, 0.0), "database": (0.0, 1.0)},
+        default=(0.0, 0.5),
+    )
+    # The archived memory gets the strongest possible semantic match for
+    # the query; the active memory gets none. If the archived one leaked
+    # through, it would be results[0].
+    embeddings.upsert(archived.id, _MODEL, (1.0, 0.0))
+    embeddings.upsert(active.id, _MODEL, (0.0, 1.0))
+
+    results = await hybrid_search(
+        store,
+        provider,
+        query="What animal do I own?",
+        limit=5,
+        model_id=_MODEL,
+        correlation_id=_CID,
+    )
+
+    assert all(r.memory.id != archived.id for r in results)
 
 
 async def test_limit_is_respected(store):
