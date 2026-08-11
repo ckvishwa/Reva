@@ -74,7 +74,8 @@ class MemoryEmbeddingRepository:
             decoded = _decode_vector(row["vector"])
             if decoded is None:
                 logger.warning(
-                    "skipping corrupt embedding", extra={"memory_id": row["memory_id"], "model_id": model_id}
+                    "skipping corrupt embedding",
+                    extra={"memory_id": row["memory_id"], "model_id": model_id},
                 )
                 continue
             results.append((row["memory_id"], decoded))

@@ -28,7 +28,8 @@ async def test_embed_returns_vector_from_ollama_response():
         return httpx.Response(200, json={"embedding": [0.1, 0.2, 0.3]})
 
     provider = OllamaEmbeddingProvider(
-        model="nomic-embed-text", api_base="http://127.0.0.1:11434",
+        model="nomic-embed-text",
+        api_base="http://127.0.0.1:11434",
         client=_client_with_transport(handler),
     )
 
@@ -43,7 +44,8 @@ async def test_embed_raises_provider_error_on_connection_failure():
         raise httpx.ConnectError("connection refused", request=request)
 
     provider = OllamaEmbeddingProvider(
-        model="nomic-embed-text", api_base="http://127.0.0.1:11434",
+        model="nomic-embed-text",
+        api_base="http://127.0.0.1:11434",
         client=_client_with_transport(handler),
     )
 
@@ -58,7 +60,8 @@ async def test_embed_raises_provider_error_on_non_200():
         return httpx.Response(500, json={"error": "model not found"})
 
     provider = OllamaEmbeddingProvider(
-        model="missing-model", api_base="http://127.0.0.1:11434",
+        model="missing-model",
+        api_base="http://127.0.0.1:11434",
         client=_client_with_transport(handler),
     )
 
@@ -73,7 +76,8 @@ async def test_embed_raises_provider_error_on_malformed_json_body():
         return httpx.Response(200, json={"unexpected": "shape"})
 
     provider = OllamaEmbeddingProvider(
-        model="nomic-embed-text", api_base="http://127.0.0.1:11434",
+        model="nomic-embed-text",
+        api_base="http://127.0.0.1:11434",
         client=_client_with_transport(handler),
     )
 
@@ -88,7 +92,8 @@ async def test_embed_raises_provider_error_on_timeout():
         raise httpx.TimeoutException("timed out", request=request)
 
     provider = OllamaEmbeddingProvider(
-        model="nomic-embed-text", api_base="http://127.0.0.1:11434",
+        model="nomic-embed-text",
+        api_base="http://127.0.0.1:11434",
         client=_client_with_transport(handler),
     )
 

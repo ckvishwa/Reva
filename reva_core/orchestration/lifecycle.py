@@ -101,10 +101,15 @@ class CoreLifecycle:
             )
             logger.info(
                 "embedding backfill completed",
-                extra={"embedded_count": result.embedded_count, "failed_count": result.failed_count},
+                extra={
+                    "embedded_count": result.embedded_count,
+                    "failed_count": result.failed_count,
+                },
             )
         except Exception:
-            logger.warning("embedding backfill failed at startup; continuing without it", exc_info=True)
+            logger.warning(
+                "embedding backfill failed at startup; continuing without it", exc_info=True
+            )
 
     def shutdown(self) -> None:
         self._status = CoreStatus.SHUTTING_DOWN

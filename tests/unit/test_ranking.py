@@ -14,7 +14,9 @@ def test_default_config_documents_seventy_thirty_split():
 
 
 def test_default_config_weights_sum_to_one():
-    total = DEFAULT_HYBRID_RANKING_CONFIG.semantic_weight + DEFAULT_HYBRID_RANKING_CONFIG.lexical_weight
+    total = (
+        DEFAULT_HYBRID_RANKING_CONFIG.semantic_weight + DEFAULT_HYBRID_RANKING_CONFIG.lexical_weight
+    )
     assert total == pytest.approx(1.0)
 
 

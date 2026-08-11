@@ -8,7 +8,12 @@ import pytest
 
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.models.embedding import EmbeddingProvider, EmbeddingRequest, EmbeddingResult
-from reva_core.shared.contracts.memory import Memory, MemoryCategory, MemorySourceReference, RetentionState
+from reva_core.shared.contracts.memory import (
+    Memory,
+    MemoryCategory,
+    MemorySourceReference,
+    RetentionState,
+)
 from reva_core.shared.ids import new_id
 from reva_core.shared.time import utc_now
 from reva_core.storage.bootstrap import initialize_database
@@ -52,10 +57,15 @@ def _insert_memory(conn, content: str) -> str:
     )
     MemoryRepository(conn).insert(
         Memory(
-            id=memory_id, category=MemoryCategory.NOTE, content=content,
+            id=memory_id,
+            category=MemoryCategory.NOTE,
+            content=content,
             source=MemorySourceReference(origin_device_id=device_id, note="test"),
-            tags=(), retention_state=RetentionState.ACTIVE, sync_version=1,
-            created_at=now, updated_at=now,
+            tags=(),
+            retention_state=RetentionState.ACTIVE,
+            sync_version=1,
+            created_at=now,
+            updated_at=now,
         )
     )
     return memory_id
@@ -64,7 +74,9 @@ def _insert_memory(conn, content: str) -> str:
 async def test_backfill_embeds_all_missing_memories(store):
     ids = [_insert_memory(store, f"memory {i}") for i in range(3)]
 
-    result = await backfill_missing_embeddings(store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID)
+    result = await backfill_missing_embeddings(
+        store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID
+    )
 
     assert result.embedded_count == 3
     assert result.failed_count == 0
@@ -75,9 +87,13 @@ async def test_backfill_embeds_all_missing_memories(store):
 
 async def test_backfill_is_idempotent_on_rerun(store):
     _insert_memory(store, "already backfilled")
-    await backfill_missing_embeddings(store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID)
+    await backfill_missing_embeddings(
+        store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID
+    )
 
-    second_result = await backfill_missing_embeddings(store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID)
+    second_result = await backfill_missing_embeddings(
+        store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID
+    )
 
     assert second_result.embedded_count == 0
 
@@ -88,7 +104,9 @@ async def test_backfill_skips_failing_record_without_stopping_the_rest(store):
     other_good_id = _insert_memory(store, "another good memory")
     provider = FailOnKeywordProvider(failing_keyword="BOOM")
 
-    result = await backfill_missing_embeddings(store, provider, model_id=_MODEL, correlation_id=_CID)
+    result = await backfill_missing_embeddings(
+        store, provider, model_id=_MODEL, correlation_id=_CID
+    )
 
     assert result.embedded_count == 2
     assert result.failed_count == 1
@@ -111,7 +129,9 @@ async def test_backfill_does_not_delete_or_alter_source_memory_on_failure(store)
 
 
 async def test_backfill_with_zero_pending_memories_is_a_safe_noop(store):
-    result = await backfill_missing_embeddings(store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID)
+    result = await backfill_missing_embeddings(
+        store, SucceedingProvider(), model_id=_MODEL, correlation_id=_CID
+    )
 
     assert result.embedded_count == 0
     assert result.failed_count == 0

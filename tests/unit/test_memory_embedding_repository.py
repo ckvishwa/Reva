@@ -4,11 +4,14 @@ this is a separate table, never a column on `memories` itself."""
 
 from __future__ import annotations
 
-import struct
-
 import pytest
 
-from reva_core.shared.contracts.memory import Memory, MemoryCategory, MemorySourceReference, RetentionState
+from reva_core.shared.contracts.memory import (
+    Memory,
+    MemoryCategory,
+    MemorySourceReference,
+    RetentionState,
+)
 from reva_core.shared.ids import new_id
 from reva_core.shared.time import utc_now
 from reva_core.storage.bootstrap import initialize_database
