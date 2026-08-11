@@ -14,6 +14,11 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     private static readonly TimeSpan TokenPollInterval = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan TokenTimeout = TimeSpan.FromSeconds(10);
 
+    private const string StartLockName = @"Local\Reva.Desktop.CoreLifecycle.Start";
+    private static readonly TimeSpan StartLockTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(5);
+    private const int MaxRelaunchAttempts = 3;
+
     private readonly IRevaCoreClient _coreClient;
     private readonly ILocalTokenProvider _tokenProvider;
     private readonly ICoreExecutableLocator _executableLocator;
@@ -22,6 +27,8 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
     private ICoreProcessHandle? _ownedProcess;
+    private CancellationTokenSource? _monitorCts;
+    private int _relaunchAttempts;
 
     public RevaCoreLifecycle(
         IRevaCoreClient coreClient,
@@ -68,15 +75,43 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
             return;
         }
 
-        var resolution = _executableLocator.Resolve();
-        if (!resolution.IsAvailable)
+        using (var startLock = new Mutex(initiallyOwned: false, StartLockName))
         {
-            DesktopLogger.Warn($"REVA Core executable resolution failed: {resolution.FailureReason}");
-            SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
-            return;
-        }
+            var acquired = startLock.WaitOne(StartLockTimeout);
+            try
+            {
+                // Re-probe after acquiring the lock: whoever got here first may
+                // have already finished launching Core while this instance was
+                // waiting on the mutex.
+                if (acquired)
+                {
+                    var reprobe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+                    if (reprobe.IsSuccess)
+                    {
+                        await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
+                        return;
+                    }
+                }
 
-        _ownedProcess = _processLauncher.Launch(resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                var resolution = _executableLocator.Resolve();
+                if (!resolution.IsAvailable)
+                {
+                    DesktopLogger.Warn($"REVA Core executable resolution failed: {resolution.FailureReason}");
+                    SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+                    return;
+                }
+
+                _ownedProcess = _processLauncher.Launch(
+                    resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+            }
+            finally
+            {
+                if (acquired)
+                {
+                    startLock.ReleaseMutex();
+                }
+            }
+        }
 
         var becameHealthy = await WaitForHealthAsync(cancellationToken).ConfigureAwait(true);
         if (!becameHealthy)
@@ -90,10 +125,15 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
     public void StopMonitoring()
     {
-        // Task 5 fills this in with real monitor-loop cancellation.
+        _monitorCts?.Cancel();
+        _monitorCts = null;
     }
 
-    public void Dispose() => _ownedProcess?.Dispose();
+    public void Dispose()
+    {
+        StopMonitoring();
+        _ownedProcess?.Dispose();
+    }
 
     private async Task FinishConnectingAsync(CancellationToken cancellationToken)
     {
@@ -101,6 +141,72 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         SetState(
             tokenAvailable ? CoreLifecycleState.Connected : CoreLifecycleState.AuthorizationUnavailable,
             tokenAvailable ? "Core Connected" : "REVA authorization unavailable");
+
+        if (tokenAvailable)
+        {
+            StartMonitor();
+        }
+    }
+
+    private void StartMonitor()
+    {
+        _monitorCts?.Cancel();
+        _monitorCts = new CancellationTokenSource();
+        // Task.Run (not a bare fire-and-forget call): when _delay resolves
+        // synchronously (test doubles), every await in RunMonitorLoopAsync
+        // completes without yielding, so the loop body runs inline on
+        // whichever thread first calls StartMonitor — blocking StartAsync's
+        // caller forever, since nothing else can ever reach _monitorCts.Cancel().
+        // Task.Run moves that execution to the thread pool so this method,
+        // and therefore StartAsync, always returns promptly.
+        _ = Task.Run(() => RunMonitorLoopAsync(_monitorCts.Token));
+    }
+
+    private async Task RunMonitorLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await _delay(MonitorInterval, cancellationToken).ConfigureAwait(true);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await RunMonitorIterationAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>One reconnect check. Public so tests can drive a single
+    /// iteration deterministically instead of racing the real timer loop.</summary>
+    public async Task RunMonitorIterationAsync()
+    {
+        var health = await _coreClient.GetHealthAsync().ConfigureAwait(true);
+        if (health.IsSuccess)
+        {
+            _relaunchAttempts = 0;
+            if (State != CoreLifecycleState.Connected)
+            {
+                await FinishConnectingAsync(CancellationToken.None).ConfigureAwait(true);
+            }
+            return;
+        }
+
+        SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+
+        // Only relaunch a process this instance owns and watched exit —
+        // never touch a Core this instance merely attached to (rule: never
+        // kill or replace a process Desktop didn't start).
+        if (_ownedProcess is { HasExited: true } && _relaunchAttempts < MaxRelaunchAttempts)
+        {
+            _relaunchAttempts++;
+            var resolution = _executableLocator.Resolve();
+            if (resolution.IsAvailable)
+            {
+                _ownedProcess.Dispose();
+                _ownedProcess = _processLauncher.Launch(
+                    resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+            }
+        }
     }
 
     private async Task<bool> WaitForHealthAsync(CancellationToken cancellationToken)
