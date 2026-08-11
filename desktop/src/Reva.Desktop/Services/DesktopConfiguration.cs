@@ -17,12 +17,12 @@ public sealed class DesktopConfiguration
     public Uri CoreBaseUrl { get; }
 
     /// <summary>
-    /// Directory REVA Core's local_auth_token file lives in. Phase 1A's
-    /// Python Core has no fixed per-user app-data location yet (documented
-    /// gap — see docs/architecture/runtime-model.md), so Desktop and Core
-    /// must currently agree on this directory explicitly (same default,
-    /// ./data, or the same REVA_DATA_DIR override) rather than the
-    /// desktop guessing a Windows-standard path Core doesn't use.
+    /// Directory REVA Core's local_auth_token file and SQLite database
+    /// live in. Defaults to the stable per-user location
+    /// <see cref="RuntimePaths.GetDefaultDataDirectory"/> (same directory
+    /// <see cref="RevaCoreLifecycle"/> passes to a Core process it
+    /// launches via REVA_DATA_DIR), overridable via REVA_DATA_DIR for
+    /// tests/development — see docs/architecture/runtime-model.md.
     /// </summary>
     public string CoreDataDirectory { get; }
 
@@ -61,7 +61,7 @@ public sealed class DesktopConfiguration
 
         var dataDirOverride = Environment.GetEnvironmentVariable(DataDirectoryEnvironmentVariable);
         var dataDirectory = string.IsNullOrWhiteSpace(dataDirOverride)
-            ? Path.Combine(Directory.GetCurrentDirectory(), "data")
+            ? RuntimePaths.GetDefaultDataDirectory()
             : dataDirOverride;
 
         // Overridable because Slice 5's AdkAssistantOrchestrator (real model
