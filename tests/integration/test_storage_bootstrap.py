@@ -14,6 +14,7 @@ EXPECTED_TABLES = {
     "conversations",
     "messages",
     "memories",
+    "memory_embeddings",
     "reminders",
     "permissions",
     "audit_events",
@@ -25,7 +26,7 @@ def test_initialize_database_creates_expected_schema(tmp_path):
     db_path = tmp_path / "reva.db"
     conn, version = initialize_database(db_path)
     try:
-        assert version == 1
+        assert version == 2
         tables = {
             row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
@@ -76,9 +77,9 @@ def test_restart_is_idempotent(tmp_path):
 
     conn2, version2 = initialize_database(db_path)
     try:
-        assert version1 == version2 == 1
+        assert version1 == version2 == 2
         migration_rows = conn2.execute("SELECT COUNT(*) AS n FROM schema_migrations").fetchone()
-        assert migration_rows["n"] == 1
+        assert migration_rows["n"] == 2
     finally:
         conn2.close()
 
