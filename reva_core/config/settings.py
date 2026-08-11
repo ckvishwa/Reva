@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     adk_model_api_base: str = "http://127.0.0.1:11434"
     adk_timeout_seconds: float = 30.0
 
+    # Local-first embedding backend for hybrid semantic memory retrieval
+    # (Slice 6). Same Ollama server the "adk" orchestrator path already
+    # requires — see reva_core/models/embedding_providers.py.
+    embedding_model: str = "nomic-embed-text"
+    embedding_model_api_base: str = "http://127.0.0.1:11434"
+    embedding_timeout_seconds: float = 30.0
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "reva.db"

@@ -82,3 +82,65 @@ def test_primary_device_id_stable_across_restart(tmp_path):
         assert second.primary_device_id == device_id
     finally:
         second.shutdown()
+
+
+def test_startup_builds_embedding_provider(tmp_path):
+    from reva_core.models.embedding_providers import OllamaEmbeddingProvider
+
+    settings = load_settings(_env_file=None, data_dir=tmp_path / "data")
+    lifecycle = CoreLifecycle(settings)
+
+    lifecycle.startup()
+
+    assert isinstance(lifecycle.embedding_provider, OllamaEmbeddingProvider)
+    assert lifecycle.embedding_model_id == settings.embedding_model
+    lifecycle.shutdown()
+
+
+def test_startup_succeeds_even_when_embedding_backend_is_unreachable(tmp_path, monkeypatch):
+    """Ollama is never running in CI. Startup with a non-empty memories
+    table and an unreachable embedding backend must still reach HEALTHY —
+    this is the core CI-safety guarantee for this slice."""
+    from reva_core.shared.contracts.health import CoreStatus
+    from reva_core.shared.contracts.memory import Memory, MemoryCategory, MemorySourceReference, RetentionState
+    from reva_core.shared.ids import new_id
+    from reva_core.shared.time import utc_now
+    from reva_core.storage.bootstrap import initialize_database
+    from reva_core.storage.repositories.device_repository import DeviceRepository
+    from reva_core.storage.repositories.memory_repository import MemoryRepository
+
+    data_dir = tmp_path / "data"
+    conn, _ = initialize_database(data_dir / "reva.db")
+    # memories.origin_device_id is a NOT NULL FK to devices(id), so a real
+    # device row must exist first (matches DeviceRepository usage elsewhere,
+    # e.g. tests/integration/test_embedding_backfill.py's _insert_memory).
+    device_id = DeviceRepository(conn).get_or_create_primary_device()
+    now = utc_now()
+    MemoryRepository(conn).insert(
+        Memory(
+            id=new_id(), category=MemoryCategory.NOTE, content="pre-existing memory",
+            source=MemorySourceReference(origin_device_id=device_id, note="test"),
+            tags=(), retention_state=RetentionState.ACTIVE, sync_version=1, created_at=now, updated_at=now,
+        )
+    )
+    conn.close()
+
+    settings = load_settings(_env_file=None, data_dir=data_dir, embedding_model_api_base="http://127.0.0.1:1")
+    lifecycle = CoreLifecycle(settings)
+
+    health = lifecycle.startup()
+
+    assert health.status == CoreStatus.HEALTHY
+    lifecycle.shutdown()
+
+
+def test_startup_with_empty_memories_table_does_not_require_embedding_backend(tmp_path):
+    from reva_core.shared.contracts.health import CoreStatus
+
+    settings = load_settings(_env_file=None, data_dir=tmp_path / "data", embedding_model_api_base="http://127.0.0.1:1")
+    lifecycle = CoreLifecycle(settings)
+
+    health = lifecycle.startup()
+
+    assert health.status == CoreStatus.HEALTHY
+    lifecycle.shutdown()
