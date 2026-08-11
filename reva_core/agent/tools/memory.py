@@ -17,10 +17,13 @@ give the model a tool capable of it.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
+from reva_core.memory.hybrid_retrieval import hybrid_search
+from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
+from reva_core.models.embedding import EmbeddingProvider
 from reva_core.shared.ids import new_id
 from reva_core.shared.time import utc_now
 from reva_core.storage.repositories.audit_repository import AuditRepository
@@ -42,7 +45,10 @@ def build_search_memory_tool(
     conn: sqlite3.Connection,
     origin_device_id: str,
     correlation_id: str,
-) -> Callable[..., dict[str, Any]]:
+    embedding_provider: EmbeddingProvider | None = None,
+    embedding_model_id: str = "",
+    ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG,
+) -> Callable[..., Awaitable[dict[str, Any]]]:
     """Builds a `search_memory` tool bound to one request's connection,
     device, and correlation id. Built fresh per `respond()` call
     (cheap — no I/O) so the audit trail it produces ties back to the
@@ -52,7 +58,7 @@ def build_search_memory_tool(
     memories = MemoryRepository(conn)
     audit = AuditRepository(conn)
 
-    def search_memory(query: str, limit: int = _DEFAULT_RESULTS) -> dict[str, Any]:
+    async def search_memory(query: str, limit: int = _DEFAULT_RESULTS) -> dict[str, Any]:
         """Search the user's durable REVA memories for a text match.
 
         Use this when the user asks about something they previously told
@@ -62,15 +68,14 @@ def build_search_memory_tool(
         that you have no matching memory; never guess or fabricate one.
 
         Args:
-          query: Text to search for (case-insensitive substring match
-            against stored memory content).
+          query: Text to search for (matched both by keyword and meaning).
           limit: Maximum number of results to return.
 
         Returns:
           A dict with "status" ("success" or "error"). On success,
           "results" is a list of matching memory content strings, most
-          recently updated first. On error, "message" is a safe,
-          user-showable explanation.
+          relevant first. On error, "message" is a safe, user-showable
+          explanation.
         """
         if not isinstance(query, str) or not query.strip():
             return {"status": "error", "message": "query must not be empty"}
@@ -95,7 +100,19 @@ def build_search_memory_tool(
                     occurred_at=now,
                 )
             )
-            results = memories.query(stripped, bounded_limit)
+            if embedding_provider is not None:
+                ranked = await hybrid_search(
+                    conn,
+                    embedding_provider,
+                    query=stripped,
+                    limit=bounded_limit,
+                    model_id=embedding_model_id,
+                    correlation_id=correlation_id,
+                    config=ranking_config,
+                )
+                results = [r.memory for r in ranked]
+            else:
+                results = memories.query(stripped, bounded_limit)
         except Exception:
             audit.insert(
                 AuditEvent(

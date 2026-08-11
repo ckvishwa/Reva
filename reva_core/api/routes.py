@@ -47,6 +47,9 @@ def build_router(lifecycle: CoreLifecycle) -> APIRouter:
             lifecycle.connection,
             lifecycle.primary_device_id,
             orchestrator=lifecycle.assistant_orchestrator,
+            embedding_provider=lifecycle.embedding_provider,
+            embedding_model_id=lifecycle.embedding_model_id,
+            ranking_config=lifecycle.ranking_config,
         )
 
     @router.post("/messages", response_model=TypedResponse)
@@ -95,7 +98,7 @@ def build_router(lifecycle: CoreLifecycle) -> APIRouter:
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
     ) -> MemoryQueryResponse:
         query_request = MemoryQueryRequest(query=q, limit=limit)
-        memories = _service().query_memories(
+        memories = await _service().query_memories(
             query_request.query, query_request.limit, header_correlation_id
         )
         items = tuple(

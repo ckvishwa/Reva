@@ -38,6 +38,8 @@ from reva_core.agent.reva_agent import build_reva_agent
 from reva_core.agent.tools.memory import build_search_memory_tool
 from reva_core.agent.tools.system import get_current_time
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
+from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
+from reva_core.models.embedding import EmbeddingProvider
 from reva_core.shared.errors import ProviderError, ProviderErrorKind
 from reva_core.shared.ids import new_id
 from reva_core.shared.time import utc_now
@@ -60,6 +62,9 @@ class AdkAssistantOrchestrator:
         model: str | BaseLlm,
         session_service: BaseSessionService | None = None,
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+        embedding_provider: EmbeddingProvider | None = None,
+        embedding_model_id: str = "",
+        ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG,
     ) -> None:
         self._conn = conn
         self._origin_device_id = origin_device_id
@@ -69,6 +74,9 @@ class AdkAssistantOrchestrator:
         # not anything unclear on our side.
         self._session_service = session_service or InMemorySessionService()  # type: ignore[no-untyped-call]
         self._timeout_seconds = timeout_seconds
+        self._embedding_provider = embedding_provider
+        self._embedding_model_id = embedding_model_id
+        self._ranking_config = ranking_config
 
     async def respond(
         self,
@@ -92,7 +100,14 @@ class AdkAssistantOrchestrator:
             )
         )
 
-        search_memory = build_search_memory_tool(self._conn, user_id, correlation_id)
+        search_memory = build_search_memory_tool(
+            self._conn,
+            user_id,
+            correlation_id,
+            embedding_provider=self._embedding_provider,
+            embedding_model_id=self._embedding_model_id,
+            ranking_config=self._ranking_config,
+        )
         agent = build_reva_agent(model=self._model, tools=[search_memory, get_current_time])
         runner = Runner(
             app_name=_APP_NAME,
@@ -194,6 +209,9 @@ def build_adk_orchestrator(
     model_name: str,
     model_api_base: str,
     timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+    embedding_provider: EmbeddingProvider | None = None,
+    embedding_model_id: str = "",
+    ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG,
 ) -> AdkAssistantOrchestrator:
     """Builds the production `AdkAssistantOrchestrator` against a real
     LiteLlm-wrapped model endpoint. Imports `LiteLlm` lazily so that
@@ -209,4 +227,7 @@ def build_adk_orchestrator(
         origin_device_id=origin_device_id,
         model=model,
         timeout_seconds=timeout_seconds,
+        embedding_provider=embedding_provider,
+        embedding_model_id=embedding_model_id,
+        ranking_config=ranking_config,
     )

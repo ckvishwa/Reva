@@ -58,56 +58,56 @@ def _make_memory(conn, device_id, content: str) -> None:
     )
 
 
-def test_search_memory_returns_matching_content(store):
+async def test_search_memory_returns_matching_content(store):
     conn, device_id = store
     _make_memory(conn, device_id, "My test color is cobalt.")
     _make_memory(conn, device_id, "unrelated memory")
     search_memory = build_search_memory_tool(conn, device_id, _CID)
 
-    result = search_memory(query="cobalt")
+    result = await search_memory(query="cobalt")
 
     assert result["status"] == "success"
     assert result["results"] == ["My test color is cobalt."]
 
 
-def test_search_memory_case_insensitive_and_trims_query(store):
+async def test_search_memory_case_insensitive_and_trims_query(store):
     conn, device_id = store
     _make_memory(conn, device_id, "REVA uses Push-To-Talk")
     search_memory = build_search_memory_tool(conn, device_id, _CID)
 
-    result = search_memory(query="  PUSH-to-talk  ")
+    result = await search_memory(query="  PUSH-to-talk  ")
 
     assert result["status"] == "success"
     assert len(result["results"]) == 1
 
 
-def test_search_memory_limit_is_bounded_to_max(store):
+async def test_search_memory_limit_is_bounded_to_max(store):
     conn, device_id = store
     for i in range(15):
         _make_memory(conn, device_id, f"bounded memory {i}")
     search_memory = build_search_memory_tool(conn, device_id, _CID)
 
-    result = search_memory(query="bounded memory", limit=10_000)
+    result = await search_memory(query="bounded memory", limit=10_000)
 
     assert result["status"] == "success"
     assert len(result["results"]) <= 10
 
 
-def test_search_memory_zero_results_returns_empty_success(store):
+async def test_search_memory_zero_results_returns_empty_success(store):
     conn, device_id = store
     search_memory = build_search_memory_tool(conn, device_id, _CID)
 
-    result = search_memory(query="nonexistent-term-xyz")
+    result = await search_memory(query="nonexistent-term-xyz")
 
     assert result == {"status": "success", "results": []}
 
 
 @pytest.mark.parametrize("bad_query", ["", "   ", "\t\n"])
-def test_search_memory_invalid_query_rejected_without_touching_repository(store, bad_query):
+async def test_search_memory_invalid_query_rejected_without_touching_repository(store, bad_query):
     conn, device_id = store
     search_memory = build_search_memory_tool(conn, device_id, _CID)
 
-    result = search_memory(query=bad_query)
+    result = await search_memory(query=bad_query)
 
     assert result["status"] == "error"
     # No memory_query_requested/completed audit event: the repository was
@@ -116,17 +116,17 @@ def test_search_memory_invalid_query_rejected_without_touching_repository(store,
     assert not any(e.action.startswith("memory_query") for e in events)
 
 
-def test_search_memory_non_numeric_limit_falls_back_to_default_without_crashing(store):
+async def test_search_memory_non_numeric_limit_falls_back_to_default_without_crashing(store):
     conn, device_id = store
     _make_memory(conn, device_id, "fallback limit test")
     search_memory = build_search_memory_tool(conn, device_id, _CID)
 
-    result = search_memory(query="fallback limit test", limit="not-a-number")
+    result = await search_memory(query="fallback limit test", limit="not-a-number")
 
     assert result["status"] == "success"
 
 
-def test_search_memory_repository_exception_handled_safely(store, monkeypatch):
+async def test_search_memory_repository_exception_handled_safely(store, monkeypatch):
     conn, device_id = store
     _make_memory(conn, device_id, "will not be reached")
     search_memory = build_search_memory_tool(conn, device_id, _CID)
@@ -136,7 +136,7 @@ def test_search_memory_repository_exception_handled_safely(store, monkeypatch):
 
     monkeypatch.setattr(MemoryRepository, "query", _boom)
 
-    result = search_memory(query="anything")
+    result = await search_memory(query="anything")
 
     assert result == {
         "status": "error",

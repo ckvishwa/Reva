@@ -101,34 +101,34 @@ def test_create_explicit_memory_persists_and_returns_memory(service):
     assert memory.source.note == "explicit_api_memory_creation"
 
 
-def test_query_memories_rejects_empty_query(service):
+async def test_query_memories_rejects_empty_query(service):
     with pytest.raises(ValidationError):
-        service.query_memories("   ", 20, _cid())
+        await service.query_memories("   ", 20, _cid())
 
 
-def test_query_memories_returns_empty_list_when_no_match(service):
+async def test_query_memories_returns_empty_list_when_no_match(service):
     service.create_explicit_memory("unrelated content", MemoryCategory.NOTE, (), _cid())
-    results = service.query_memories("nonexistent-term-xyz", 20, _cid())
+    results = await service.query_memories("nonexistent-term-xyz", 20, _cid())
     assert results == []
 
 
-def test_query_memories_matches_case_insensitive_substring(service):
+async def test_query_memories_matches_case_insensitive_substring(service):
     service.create_explicit_memory("REVA uses Push-To-Talk", MemoryCategory.NOTE, (), _cid())
-    results = service.query_memories("push-to-talk", 20, _cid())
+    results = await service.query_memories("push-to-talk", 20, _cid())
     assert len(results) == 1
 
 
-def test_query_memories_orders_most_recently_updated_first(service):
+async def test_query_memories_orders_most_recently_updated_first(service):
     cid = _cid()
     first = service.create_explicit_memory("alpha memory", MemoryCategory.NOTE, (), cid)
     second = service.create_explicit_memory("alpha memory two", MemoryCategory.NOTE, (), cid)
-    results = service.query_memories("alpha", 20, cid)
+    results = await service.query_memories("alpha", 20, cid)
     assert [m.id for m in results] == [second.id, first.id]
 
 
-def test_query_memories_respects_bounded_limit(service):
+async def test_query_memories_respects_bounded_limit(service):
     cid = _cid()
     for i in range(5):
         service.create_explicit_memory(f"bounded test {i}", MemoryCategory.NOTE, (), cid)
-    results = service.query_memories("bounded test", 2, cid)
+    results = await service.query_memories("bounded test", 2, cid)
     assert len(results) == 2
