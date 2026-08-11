@@ -102,7 +102,12 @@ def test_startup_succeeds_even_when_embedding_backend_is_unreachable(tmp_path, m
     table and an unreachable embedding backend must still reach HEALTHY —
     this is the core CI-safety guarantee for this slice."""
     from reva_core.shared.contracts.health import CoreStatus
-    from reva_core.shared.contracts.memory import Memory, MemoryCategory, MemorySourceReference, RetentionState
+    from reva_core.shared.contracts.memory import (
+        Memory,
+        MemoryCategory,
+        MemorySourceReference,
+        RetentionState,
+    )
     from reva_core.shared.ids import new_id
     from reva_core.shared.time import utc_now
     from reva_core.storage.bootstrap import initialize_database
@@ -118,14 +123,22 @@ def test_startup_succeeds_even_when_embedding_backend_is_unreachable(tmp_path, m
     now = utc_now()
     MemoryRepository(conn).insert(
         Memory(
-            id=new_id(), category=MemoryCategory.NOTE, content="pre-existing memory",
+            id=new_id(),
+            category=MemoryCategory.NOTE,
+            content="pre-existing memory",
             source=MemorySourceReference(origin_device_id=device_id, note="test"),
-            tags=(), retention_state=RetentionState.ACTIVE, sync_version=1, created_at=now, updated_at=now,
+            tags=(),
+            retention_state=RetentionState.ACTIVE,
+            sync_version=1,
+            created_at=now,
+            updated_at=now,
         )
     )
     conn.close()
 
-    settings = load_settings(_env_file=None, data_dir=data_dir, embedding_model_api_base="http://127.0.0.1:1")
+    settings = load_settings(
+        _env_file=None, data_dir=data_dir, embedding_model_api_base="http://127.0.0.1:1"
+    )
     lifecycle = CoreLifecycle(settings)
 
     health = lifecycle.startup()
@@ -137,7 +150,9 @@ def test_startup_succeeds_even_when_embedding_backend_is_unreachable(tmp_path, m
 def test_startup_with_empty_memories_table_does_not_require_embedding_backend(tmp_path):
     from reva_core.shared.contracts.health import CoreStatus
 
-    settings = load_settings(_env_file=None, data_dir=tmp_path / "data", embedding_model_api_base="http://127.0.0.1:1")
+    settings = load_settings(
+        _env_file=None, data_dir=tmp_path / "data", embedding_model_api_base="http://127.0.0.1:1"
+    )
     lifecycle = CoreLifecycle(settings)
 
     health = lifecycle.startup()

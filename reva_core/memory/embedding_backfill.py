@@ -54,7 +54,11 @@ async def backfill_missing_embeddings(
                 embedded_count += 1
                 progressed = True
             except Exception:
-                logger.warning("failed to embed memory during backfill", extra={"memory_id": memory_id}, exc_info=True)
+                logger.warning(
+                    "failed to embed memory during backfill",
+                    extra={"memory_id": memory_id},
+                    exc_info=True,
+                )
                 failed_ids.add(memory_id)
 
         if not progressed:
@@ -62,4 +66,8 @@ async def backfill_missing_embeddings(
             # instead of looping forever re-attempting the same failures.
             break
 
-    return BackfillResult(embedded_count=embedded_count, failed_count=len(failed_ids), failed_memory_ids=tuple(sorted(failed_ids)))
+    return BackfillResult(
+        embedded_count=embedded_count,
+        failed_count=len(failed_ids),
+        failed_memory_ids=tuple(sorted(failed_ids)),
+    )

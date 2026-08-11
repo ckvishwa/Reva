@@ -45,9 +45,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                 timeout=self._timeout_seconds,
             )
         except httpx.TimeoutException as exc:
-            raise ProviderError(
-                ProviderErrorKind.TIMEOUT, "Embedding request timed out."
-            ) from exc
+            raise ProviderError(ProviderErrorKind.TIMEOUT, "Embedding request timed out.") from exc
         except httpx.HTTPError as exc:
             raise ProviderError(
                 ProviderErrorKind.UNAVAILABLE, "Embedding backend is unreachable."
@@ -74,6 +72,4 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
             ) from exc
 
         vector_tuple = tuple(float(v) for v in vector)
-        return EmbeddingResult(
-            vector=vector_tuple, correlation_id=request.correlation_id
-        )
+        return EmbeddingResult(vector=vector_tuple, correlation_id=request.correlation_id)
