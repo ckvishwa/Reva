@@ -113,7 +113,8 @@ CANONICAL_MEMORIES: tuple[str, ...] = (
     "I have used Postman.",
     "I am interested in detection engineering and DFIR.",
     "I have also explored AI red teaming.",
-    "My job-search work emphasizes entering the job market rather than over-filtering opportunities.",
+    "My job-search work emphasizes entering the job market rather than over-filtering "
+    "opportunities.",
     "SDET is currently my primary job profile.",
     # Cybersecurity
     "I built SOC/detection labs.",
