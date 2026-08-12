@@ -266,7 +266,7 @@ async def test_archived_memory_excluded_from_semantic_path(store):
     active = _insert_memory(store, "unrelated distractor about databases")
     embeddings = MemoryEmbeddingRepository(store)
     provider = DeterministicEmbeddingProvider(
-        vectors_by_keyword={"cat": (1.0, 0.0), "database": (0.0, 1.0)},
+        vectors_by_keyword={"cat": (1.0, 0.0), "animal": (1.0, 0.0), "database": (0.0, 1.0)},
         default=(0.0, 0.5),
     )
     # The archived memory gets the strongest possible semantic match for
