@@ -213,14 +213,14 @@ async def test_malformed_model_output_raises_provider_error(store):
     assert excinfo.value.kind == ProviderErrorKind.INVALID_RESPONSE
 
 
-def test_explicit_remember_flow_unaffected_by_adk_wiring(store):
+async def test_explicit_remember_flow_unaffected_by_adk_wiring(store):
     conn, device_id = store
     orchestrator = AdkAssistantOrchestrator(
         conn=conn, origin_device_id=device_id, model=FailingAdkLlm()
     )
     svc = TypedInteractionService(conn, device_id, orchestrator=orchestrator)
 
-    memory = svc.create_explicit_memory(
+    memory = await svc.create_explicit_memory(
         "REVA V1 uses push-to-talk, not always-on listening.", MemoryCategory.NOTE, (), _CID
     )
 

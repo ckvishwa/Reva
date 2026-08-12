@@ -24,7 +24,7 @@ from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
 from reva_core.memory.hybrid_retrieval import hybrid_search
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
-from reva_core.models.embedding import EmbeddingProvider
+from reva_core.models.embedding import EmbeddingProvider, EmbeddingRequest
 from reva_core.models.llm import LLMProvider, LLMRequest
 from reva_core.shared.contracts.conversation import Conversation, Message, MessageRole
 from reva_core.shared.contracts.memory import (
@@ -35,12 +35,16 @@ from reva_core.shared.contracts.memory import (
 )
 from reva_core.shared.errors import ProviderError, ValidationError
 from reva_core.shared.ids import new_id
+from reva_core.shared.logging import get_logger
 from reva_core.shared.time import utc_now
 from reva_core.storage.connection import transaction
 from reva_core.storage.repositories.audit_repository import AuditRepository
 from reva_core.storage.repositories.conversation_repository import ConversationRepository
+from reva_core.storage.repositories.memory_embedding_repository import MemoryEmbeddingRepository
 from reva_core.storage.repositories.memory_repository import MemoryRepository
 from reva_core.storage.repositories.message_repository import MessageRepository
+
+logger = get_logger("orchestration.typed_interaction")
 
 _REMEMBER_PREFIX = "remember:"
 _UNAVAILABLE_REPLY = "Model reasoning is currently unavailable; your request was received."
@@ -85,6 +89,7 @@ class TypedInteractionService:
         self._conversations = ConversationRepository(conn)
         self._messages = MessageRepository(conn)
         self._memories = MemoryRepository(conn)
+        self._memory_embeddings = MemoryEmbeddingRepository(conn)
         self._audit = AuditRepository(conn)
 
     async def handle_typed_message(self, content: str, correlation_id: str) -> TypedMessageResult:
@@ -175,7 +180,7 @@ class TypedInteractionService:
             reply=reply,
         )
 
-    def create_explicit_memory(
+    async def create_explicit_memory(
         self,
         content: str,
         category: MemoryCategory,
@@ -200,6 +205,31 @@ class TypedInteractionService:
                 correlation_id=correlation_id,
                 now=now,
             )
+
+        # Deliberately outside the transaction: never hold a SQLite write
+        # transaction open across an async provider call. Best-effort only
+        # — a failure here must never affect the memory write above, which
+        # has already committed. A memory that isn't embedded here is
+        # naturally picked up by the next restart-safe backfill (it has no
+        # memory_embeddings row for this model_id yet).
+        if self._embedding_provider is not None:
+            try:
+                result = await self._embedding_provider.embed(
+                    EmbeddingRequest(text=stripped, correlation_id=correlation_id)
+                )
+                self._memory_embeddings.upsert(memory.id, self._embedding_model_id, result.vector)
+                logger.info(
+                    "explicit memory embedded on write",
+                    extra={"memory_id": memory.id, "model_id": self._embedding_model_id},
+                )
+            except Exception:
+                logger.warning(
+                    "failed to embed explicit memory on write; "
+                    "will be picked up by the next backfill",
+                    extra={"memory_id": memory.id, "model_id": self._embedding_model_id},
+                    exc_info=True,
+                )
+
         return memory
 
     async def query_memories(self, query: str, limit: int, correlation_id: str) -> list[Memory]:
