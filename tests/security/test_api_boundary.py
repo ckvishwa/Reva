@@ -20,6 +20,7 @@ _ALLOWED_PATHS = {
     "/v1/messages",
     "/v1/memories",
     "/v1/audit-events",
+    "/v1/voice/speech",
 }
 
 

@@ -10,6 +10,7 @@ import pytest
         ("post", "/v1/memories", {"json": {"content": "hi"}}),
         ("get", "/v1/memories", {"params": {"q": "hi"}}),
         ("get", "/v1/audit-events", {}),
+        ("post", "/v1/voice/speech", {"json": {"text": "hi", "language": "en"}}),
     ],
 )
 def test_v1_endpoint_rejects_missing_auth(client, method, path, kwargs):
