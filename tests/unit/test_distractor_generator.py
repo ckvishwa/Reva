@@ -34,3 +34,13 @@ def test_supports_at_least_five_hundred_without_repeating():
     distractors = generate_distractors(500)
     assert len(distractors) == 500
     assert len(set(distractors)) == 500
+
+
+def test_supports_at_least_one_thousand_without_repeating():
+    # A real --total-size 1000 / --scale 1000 evaluation run
+    # (docs/superpowers/sdd/2026-08-10-semantic-eval-and-e2e/task-3-brief.md
+    # Step 2) requires this to hold for real, not cap out short of 1000
+    # while still silently reporting "scale=1000".
+    distractors = generate_distractors(1000)
+    assert len(distractors) == 1000
+    assert len(set(distractors)) == 1000
