@@ -41,3 +41,7 @@ Thumbs.db
 
 # Unrelated third-party content vendored under this checkout root
 useful_sites/
+
+# Slice 6 semantic evaluation — generated/regenerable, never a private corpus
+scripts/semantic_eval/output/
+reva-semantic-eval-*/
