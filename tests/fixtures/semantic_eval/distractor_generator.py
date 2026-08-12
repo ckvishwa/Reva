@@ -478,6 +478,109 @@ _AI_FACTS = [
     "probabilistic matrix factorization models uncertainty",
 ]
 
+
+# Combinatorial value lists — deterministic cross products, not hardcoded
+# prose, added specifically to push generate_distractors' unique-value
+# capacity past 1000 (see test_supports_at_least_one_thousand_without_repeating
+# in tests/unit/test_distractor_generator.py). Each (adjective, noun) pair
+# is guaranteed distinct because both source lists are internally unique,
+# so the Cartesian product has no duplicate entries.
+_PROJECT_ADJECTIVES = [
+    "Nightly",
+    "Alpha",
+    "Beta",
+    "Legacy",
+    "Modular",
+    "Distributed",
+    "Federated",
+    "Adaptive",
+    "Resilient",
+    "Scalable",
+    "Elastic",
+    "Composable",
+    "Isolated",
+    "Ephemeral",
+    "Declarative",
+    "Reactive",
+    "Deterministic",
+    "Idempotent",
+    "Stateless",
+    "Observability",
+    "Incremental",
+    "Concurrent",
+    "Asynchronous",
+    "Immutable",
+    "Provisional",
+]
+_PROJECT_NOUNS = [
+    "Pipeline",
+    "Gateway",
+    "Scheduler",
+    "Registry",
+    "Broker",
+    "Sandbox",
+    "Harness",
+    "Ledger",
+    "Router",
+    "Dashboard",
+    "Crawler",
+    "Indexer",
+    "Sink",
+    "Cache",
+    "Queue",
+    "Snapshot",
+    "Mesh",
+    "Fabric",
+    "Beacon",
+    "Relay",
+    "Notifier",
+    "Collector",
+    "Validator",
+    "Compiler",
+    "Emulator",
+]
+_PROJECT_DESCRIPTORS: tuple[str, ...] = tuple(
+    f"{adjective} {noun}" for adjective in _PROJECT_ADJECTIVES for noun in _PROJECT_NOUNS
+)
+
+_SKILL_ADJECTIVES = [
+    "distributed",
+    "event-driven",
+    "graph-based",
+    "streaming",
+    "batch",
+    "real-time",
+    "federated",
+    "multi-tenant",
+    "serverless",
+    "edge",
+    "offline-first",
+    "schema-driven",
+    "config-driven",
+    "queue-backed",
+    "cache-backed",
+]
+_SKILL_NOUNS = [
+    "data pipelines",
+    "search systems",
+    "recommendation engines",
+    "billing systems",
+    "authentication flows",
+    "logging infrastructure",
+    "caching layers",
+    "monitoring stacks",
+    "deployment tooling",
+    "testing frameworks",
+    "notification systems",
+    "reporting dashboards",
+    "workflow engines",
+    "feature flag systems",
+    "rate-limiting middleware",
+]
+_SKILL_DESCRIPTORS: tuple[str, ...] = tuple(
+    f"{adjective} {noun}" for adjective in _SKILL_ADJECTIVES for noun in _SKILL_NOUNS
+)
+
 _TEMPLATES: tuple[tuple[str, list[str]], ...] = (
     ("The test user owns a {}.", _PHONES),
     ("The test user has worked with {}.", _LANGUAGES),
@@ -498,6 +601,8 @@ _TEMPLATES: tuple[tuple[str, list[str]], ...] = (
     ("The test user has used {} as a database.", _DATABASES),
     ("The test user runs {} on a home server.", _OPERATING_SYSTEMS),
     ("The test user knows that {}.", _AI_FACTS),
+    ("Project {} is an internal tooling prototype.", list(_PROJECT_DESCRIPTORS)),
+    ("The test user has experience with {}.", list(_SKILL_DESCRIPTORS)),
 )
 
 
