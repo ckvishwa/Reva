@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import wave
+import struct
 from asyncio.subprocess import PIPE
 from pathlib import Path
 from typing import Any
@@ -160,7 +160,7 @@ class ChatterboxWorkerTTSProvider(TextToSpeechProvider):
     ) -> dict[str, Any]:
         if process.stdin is None or process.stdout is None or process.returncode is not None:
             raise ProviderError(ProviderErrorKind.UNAVAILABLE, "TTS worker is not running")
-        payload = json.dumps(request, ensure_ascii=False).encode("utf-8") + b"\n"
+        payload = json.dumps(request, ensure_ascii=True).encode("utf-8") + b"\n"
         try:
             process.stdin.write(payload)
             await process.stdin.drain()
@@ -243,10 +243,8 @@ def _validate_wav(path: Path) -> tuple[int, int]:
     if not path.is_file():
         raise ProviderError(ProviderErrorKind.INVALID_RESPONSE, "TTS worker output file missing")
     try:
-        with wave.open(str(path), "rb") as wav:
-            sample_rate = wav.getframerate()
-            frames = wav.getnframes()
-    except wave.Error as exc:
+        sample_rate, frames = _read_wav_metadata(path)
+    except ValueError as exc:
         raise ProviderError(
             ProviderErrorKind.INVALID_RESPONSE, "TTS worker output is not WAV"
         ) from exc
@@ -257,3 +255,36 @@ def _validate_wav(path: Path) -> tuple[int, int]:
     if frames <= 0:
         raise ProviderError(ProviderErrorKind.INVALID_RESPONSE, "TTS worker WAV has no audio")
     return sample_rate, int((frames / sample_rate) * 1000)
+
+
+def _read_wav_metadata(path: Path) -> tuple[int, float]:
+    data = path.read_bytes()
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise ValueError("not a RIFF/WAVE file")
+
+    offset = 12
+    sample_rate = 0
+    block_align = 0
+    data_size = 0
+    while offset + 8 <= len(data):
+        chunk_id = data[offset : offset + 4]
+        chunk_size = struct.unpack_from("<I", data, offset + 4)[0]
+        chunk_start = offset + 8
+        chunk_end = chunk_start + chunk_size
+        if chunk_end > len(data):
+            raise ValueError("WAV chunk exceeds file size")
+        if chunk_id == b"fmt ":
+            if chunk_size < 16:
+                raise ValueError("WAV fmt chunk is too small")
+            audio_format, _, sample_rate, _, block_align, _ = struct.unpack_from(
+                "<HHIIHH", data, chunk_start
+            )
+            if audio_format not in {1, 3, 65534}:
+                raise ValueError("unsupported WAV sample format")
+        elif chunk_id == b"data":
+            data_size = chunk_size
+        offset = chunk_end + (chunk_size % 2)
+
+    if sample_rate <= 0 or block_align <= 0 or data_size <= 0:
+        raise ValueError("WAV metadata is incomplete")
+    return sample_rate, data_size / block_align

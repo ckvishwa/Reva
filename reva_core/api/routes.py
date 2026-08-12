@@ -18,8 +18,8 @@ file's default) sidesteps the bug entirely.
 """
 
 import shutil
+import struct
 import tempfile
-import wave
 from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
@@ -385,10 +385,8 @@ def _content_length(value: str | None) -> int | None:
 
 def _validate_wav_upload(path: Path, *, max_duration_seconds: float) -> int:
     try:
-        with wave.open(str(path), "rb") as wav:
-            frames = wav.getnframes()
-            frame_rate = wav.getframerate()
-    except wave.Error as exc:
+        frame_rate, frames = _read_wav_metadata(path)
+    except ValueError as exc:
         raise ValidationError("invalid WAV audio") from exc
     if frames <= 0 or frame_rate <= 0:
         raise ValidationError("empty WAV audio")
@@ -396,6 +394,39 @@ def _validate_wav_upload(path: Path, *, max_duration_seconds: float) -> int:
     if duration_seconds > max_duration_seconds:
         raise ValidationError("audio duration exceeds limit")
     return max(1, int(duration_seconds * 1000))
+
+
+def _read_wav_metadata(path: Path) -> tuple[int, float]:
+    data = path.read_bytes()
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise ValueError("not a RIFF/WAVE file")
+
+    offset = 12
+    sample_rate = 0
+    block_align = 0
+    data_size = 0
+    while offset + 8 <= len(data):
+        chunk_id = data[offset : offset + 4]
+        chunk_size = struct.unpack_from("<I", data, offset + 4)[0]
+        chunk_start = offset + 8
+        chunk_end = chunk_start + chunk_size
+        if chunk_end > len(data):
+            raise ValueError("WAV chunk exceeds file size")
+        if chunk_id == b"fmt ":
+            if chunk_size < 16:
+                raise ValueError("WAV fmt chunk is too small")
+            audio_format, _, sample_rate, _, block_align, _ = struct.unpack_from(
+                "<HHIIHH", data, chunk_start
+            )
+            if audio_format not in {1, 3, 65534}:
+                raise ValueError("unsupported WAV sample format")
+        elif chunk_id == b"data":
+            data_size = chunk_size
+        offset = chunk_end + (chunk_size % 2)
+
+    if sample_rate <= 0 or block_align <= 0 or data_size <= 0:
+        raise ValueError("WAV metadata is incomplete")
+    return sample_rate, data_size / block_align
 
 
 def _delete_file(path: str | Path) -> None:
