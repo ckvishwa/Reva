@@ -110,3 +110,9 @@ class AuditEventListResponse(ApiModel):
 class VoiceSpeechRequest(ApiModel):
     text: NonEmptyStr = Field(max_length=800)
     language: Literal["en", "te"] = "en"
+
+
+class VoiceTranscriptionResponse(ApiModel):
+    text: str
+    language: Literal["en", "te"]
+    duration_ms: int

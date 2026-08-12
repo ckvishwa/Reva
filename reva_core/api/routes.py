@@ -17,11 +17,14 @@ Phase 1A development. Keeping annotations eagerly evaluated (this
 file's default) sidesteps the bug entirely.
 """
 
+import shutil
+import tempfile
+import wave
 from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from starlette.background import BackgroundTask
 from starlette.responses import FileResponse
 
@@ -36,8 +39,10 @@ from reva_core.api.schemas import (
     TypedRequest,
     TypedResponse,
     VoiceSpeechRequest,
+    VoiceTranscriptionResponse,
 )
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
+from reva_core.models.stt import TranscriptionInput
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.orchestration.typed_interaction import TypedInteractionService
 from reva_core.shared.errors import ProviderError, ProviderErrorKind, ValidationError
@@ -203,6 +208,111 @@ def build_router(lifecycle: CoreLifecycle) -> APIRouter:
             background=BackgroundTask(_delete_file, audio.path),
         )
 
+    @router.post("/voice/transcriptions")
+    async def post_voice_transcription(
+        request: Request,
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> VoiceTranscriptionResponse:
+        provider = lifecycle.speech_to_text_provider
+        media_type = _normalized_media_type(request.headers.get("content-type"))
+        max_upload_bytes = lifecycle.settings.stt_max_upload_bytes
+        if media_type != "audio/wav":
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="unsupported_audio_type",
+            )
+        content_length = _content_length(request.headers.get("content-length"))
+        if content_length is not None and content_length > max_upload_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="audio_too_large",
+            )
+
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty_audio")
+        if len(body) > max_upload_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="audio_too_large",
+            )
+        if provider is None:
+            _record_voice_transcription_audit(
+                lifecycle,
+                action="voice_transcription_failed",
+                outcome=AuditOutcome.FAILURE,
+                correlation_id=header_correlation_id,
+                metadata={"reason": "unavailable", "media_type": media_type, "bytes": len(body)},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="voice_unavailable",
+            )
+
+        temp_dir = Path(tempfile.gettempdir()) / f"reva-stt-{new_id()}"
+        temp_dir.mkdir(parents=True, exist_ok=False)
+        audio_path = temp_dir / "input.wav"
+        try:
+            audio_path.write_bytes(body)
+            duration_ms = _validate_wav_upload(
+                audio_path, max_duration_seconds=lifecycle.settings.stt_max_duration_seconds
+            )
+            _record_voice_transcription_audit(
+                lifecycle,
+                action="voice_transcription_requested",
+                outcome=AuditOutcome.SUCCESS,
+                correlation_id=header_correlation_id,
+                metadata={"media_type": media_type, "bytes": len(body), "duration_ms": duration_ms},
+            )
+            result = await provider.transcribe(
+                TranscriptionInput(path=audio_path, media_type=media_type)
+            )
+        except ValidationError as exc:
+            _record_voice_transcription_audit(
+                lifecycle,
+                action="voice_transcription_failed",
+                outcome=AuditOutcome.FAILURE,
+                correlation_id=header_correlation_id,
+                metadata={"reason": "validation", "media_type": media_type, "bytes": len(body)},
+            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except ProviderError as exc:
+            _record_voice_transcription_audit(
+                lifecycle,
+                action="voice_transcription_failed",
+                outcome=AuditOutcome.FAILURE,
+                correlation_id=header_correlation_id,
+                metadata={
+                    "provider": "stt",
+                    "reason": exc.kind.value,
+                    "media_type": media_type,
+                    "bytes": len(body),
+                },
+            )
+            raise HTTPException(
+                status_code=_provider_status(exc.kind),
+                detail="voice_unavailable",
+            ) from exc
+        finally:
+            _delete_tree(temp_dir)
+
+        _record_voice_transcription_audit(
+            lifecycle,
+            action="voice_transcription_completed",
+            outcome=AuditOutcome.SUCCESS,
+            correlation_id=header_correlation_id,
+            metadata={
+                "provider": result.provider,
+                "language": result.language,
+                "duration_ms": result.duration_ms,
+            },
+        )
+        return VoiceTranscriptionResponse(
+            text=result.text,
+            language=result.language,
+            duration_ms=result.duration_ms,
+        )
+
     return router
 
 
@@ -236,6 +346,63 @@ def _record_voice_speech_audit(
     )
 
 
+def _record_voice_transcription_audit(
+    lifecycle: CoreLifecycle,
+    *,
+    action: str,
+    outcome: AuditOutcome,
+    correlation_id: str,
+    metadata: dict[str, object],
+) -> None:
+    AuditRepository(lifecycle.connection).insert(
+        AuditEvent(
+            id=new_id(),
+            category=AuditEventCategory.SYSTEM,
+            action=action,
+            outcome=outcome,
+            correlation_id=correlation_id,
+            actor_device_id=lifecycle.primary_device_id,
+            metadata=metadata,
+            occurred_at=utc_now(),
+        )
+    )
+
+
+def _normalized_media_type(value: str | None) -> str:
+    if value is None:
+        return ""
+    return value.split(";", 1)[0].strip().lower()
+
+
+def _content_length(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _validate_wav_upload(path: Path, *, max_duration_seconds: float) -> int:
+    try:
+        with wave.open(str(path), "rb") as wav:
+            frames = wav.getnframes()
+            frame_rate = wav.getframerate()
+    except wave.Error as exc:
+        raise ValidationError("invalid WAV audio") from exc
+    if frames <= 0 or frame_rate <= 0:
+        raise ValidationError("empty WAV audio")
+    duration_seconds = frames / frame_rate
+    if duration_seconds > max_duration_seconds:
+        raise ValidationError("audio duration exceeds limit")
+    return max(1, int(duration_seconds * 1000))
+
+
 def _delete_file(path: str | Path) -> None:
     with suppress(OSError):
         Path(path).unlink(missing_ok=True)
+
+
+def _delete_tree(path: Path) -> None:
+    with suppress(OSError):
+        shutil.rmtree(path)

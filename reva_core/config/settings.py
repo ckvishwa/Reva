@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     stt_model: str = "Systran/faster-whisper-small"
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
+    stt_timeout_seconds: float = 60.0
+    stt_max_upload_bytes: int = 10 * 1024 * 1024
+    stt_max_duration_seconds: float = 30.0
 
     @property
     def db_path(self) -> Path:

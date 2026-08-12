@@ -24,6 +24,7 @@ dependencies = [
     # silently float.
     "google-adk==2.6.3",
     "litellm==1.96.0",
+    "faster-whisper==1.2.1",
 ]
 
 [project.optional-dependencies]
