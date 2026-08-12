@@ -8,7 +8,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
@@ -69,14 +69,43 @@
                 IsEnabled="{x:Bind Assistant.IsNotPending, Mode=OneWay}" />
         </StackPanel>
 
+        <StackPanel Grid.Row="5" Margin="0,12,0,0" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button
+                    x:Name="VoiceButton"
+                    AutomationProperties.AutomationId="VoiceButton"
+                    Content="Hold to Talk"
+                    PointerPressed="VoiceButton_PointerPressed"
+                    PointerReleased="VoiceButton_PointerReleased"
+                    PointerCanceled="VoiceButton_PointerCanceled"
+                    PointerCaptureLost="VoiceButton_PointerCanceled"
+                    IsEnabled="{x:Bind Assistant.IsNotPending, Mode=OneWay}" />
+                <Button
+                    x:Name="StopSpeakingButton"
+                    AutomationProperties.AutomationId="StopSpeakingButton"
+                    Content="Stop Speaking"
+                    Click="StopSpeakingButton_Click"
+                    IsEnabled="{x:Bind Assistant.CanStopSpeaking, Mode=OneWay}" />
+                <TextBlock
+                    AutomationProperties.AutomationId="VoiceStatusText"
+                    Text="{x:Bind Assistant.VoiceStatusText, Mode=OneWay}"
+                    VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock
+                AutomationProperties.AutomationId="VoiceErrorText"
+                Text="{x:Bind Assistant.VoiceErrorMessage, Mode=OneWay}"
+                Foreground="IndianRed"
+                TextWrapping="Wrap" />
+        </StackPanel>
+
         <!--
             Explicit memory: the ONLY UI path that creates durable memory
             (ADR-006). Deliberately separate from the assistant composer
             above - never wired to SendMessageAsync or triggered by chat.
         -->
-        <TextBlock Grid.Row="5" Margin="0,16,0,8" Text="Memory" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock Grid.Row="6" Margin="0,16,0,8" Text="Memory" FontSize="16" FontWeight="SemiBold" />
 
-        <StackPanel Grid.Row="6" Spacing="8">
+        <StackPanel Grid.Row="7" Spacing="8">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBox
                     x:Name="MemoryBox"

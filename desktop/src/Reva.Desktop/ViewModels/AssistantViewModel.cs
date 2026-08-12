@@ -13,13 +13,23 @@ namespace Reva.Desktop.ViewModels;
 public sealed class AssistantViewModel : ObservableObject
 {
     private readonly IRevaCoreClient _coreClient;
+    private readonly IVoiceDevice _voiceDevice;
     private string _composerText = string.Empty;
     private bool _isPending;
+    private bool _isVoiceBusy;
+    private bool _isListening;
+    private bool _isSpeaking;
+    private string _voiceStatusText = "Voice Unavailable";
     private string? _errorMessage;
+    private string? _voiceErrorMessage;
+    private CancellationTokenSource? _voiceTurnCancellation;
+    private CancellationTokenSource? _speechPlaybackCancellation;
 
-    public AssistantViewModel(IRevaCoreClient coreClient)
+    public AssistantViewModel(IRevaCoreClient coreClient, IVoiceDevice? voiceDevice = null)
     {
         _coreClient = coreClient;
+        _voiceDevice = voiceDevice ?? new UnavailableVoiceDevice();
+        _voiceStatusText = _voiceDevice.IsAvailable ? "Voice Ready" : "Voice Unavailable";
     }
 
     public ObservableCollection<AssistantMessage> Messages { get; } = new();
@@ -47,6 +57,52 @@ public sealed class AssistantViewModel : ObservableObject
     /// WinUI types.</summary>
     public bool IsNotPending => !IsPending;
 
+    public bool IsMicrophoneActive
+    {
+        get => _isListening;
+        private set
+        {
+            if (SetProperty(ref _isListening, value))
+            {
+                RaiseVoiceAvailabilityProperties();
+            }
+        }
+    }
+
+    public bool IsSpeaking
+    {
+        get => _isSpeaking;
+        private set
+        {
+            if (SetProperty(ref _isSpeaking, value))
+            {
+                RaiseVoiceAvailabilityProperties();
+            }
+        }
+    }
+
+    public bool IsVoiceBusy
+    {
+        get => _isVoiceBusy;
+        private set
+        {
+            if (SetProperty(ref _isVoiceBusy, value))
+            {
+                RaiseVoiceAvailabilityProperties();
+            }
+        }
+    }
+
+    public bool CanStartVoiceInput => _voiceDevice.IsAvailable && !IsPending && !IsVoiceBusy;
+
+    public bool CanStopSpeaking => IsSpeaking;
+
+    public string VoiceStatusText
+    {
+        get => _voiceStatusText;
+        private set => SetProperty(ref _voiceStatusText, value);
+    }
+
     /// <summary>Safe, display-ready text only — never a raw exception,
     /// response body, or internal detail. Null when there is no error to
     /// show.</summary>
@@ -54,6 +110,12 @@ public sealed class AssistantViewModel : ObservableObject
     {
         get => _errorMessage;
         private set => SetProperty(ref _errorMessage, value);
+    }
+
+    public string? VoiceErrorMessage
+    {
+        get => _voiceErrorMessage;
+        private set => SetProperty(ref _voiceErrorMessage, value);
     }
 
     public async Task SendMessageAsync(CancellationToken cancellationToken = default)
@@ -66,31 +128,184 @@ public sealed class AssistantViewModel : ObservableObject
         }
 
         var trimmed = ComposerText.Trim();
-        if (trimmed.Length == 0)
+        await SendMessageCoreAsync(trimmed, clearComposer: true, cancellationToken);
+    }
+
+    public async Task StartVoiceInputAsync(CancellationToken cancellationToken = default)
+    {
+        if (!CanStartVoiceInput)
+        {
+            if (!_voiceDevice.IsAvailable)
+            {
+                VoiceStatusText = "Voice Unavailable";
+            }
+            return;
+        }
+
+        StopSpeaking();
+        VoiceErrorMessage = null;
+        IsVoiceBusy = true;
+        IsMicrophoneActive = true;
+        VoiceStatusText = "Listening…";
+        _voiceTurnCancellation?.Dispose();
+        _voiceTurnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        try
+        {
+            await _voiceDevice.StartRecordingAsync(_voiceTurnCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            IsMicrophoneActive = false;
+            IsVoiceBusy = false;
+            VoiceStatusText = _voiceDevice.IsAvailable ? "Voice Ready" : "Voice Unavailable";
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            VoiceStatusText = "Voice Unavailable";
+            VoiceErrorMessage = "Voice capture is unavailable.";
+            IsMicrophoneActive = false;
+            IsVoiceBusy = false;
+            _voiceDevice.CancelRecording();
+        }
+    }
+
+    public async Task FinishVoiceInputAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsMicrophoneActive)
         {
             return;
         }
 
+        var turnCancellation = _voiceTurnCancellation;
+        var linkedToken = turnCancellation?.Token ?? cancellationToken;
+        IsMicrophoneActive = false;
+        VoiceStatusText = "Transcribing…";
+
+        try
+        {
+            var audio = await _voiceDevice.StopRecordingAsync(linkedToken);
+            if (audio.Length == 0)
+            {
+                VoiceErrorMessage = "No voice audio was captured.";
+                VoiceStatusText = "Voice Ready";
+                return;
+            }
+
+            var transcription = await _coreClient.TranscribeSpeechAsync(audio, linkedToken);
+            if (!transcription.IsSuccess)
+            {
+                ApplyVoiceFailure(transcription.Error!);
+                return;
+            }
+
+            VoiceStatusText = "Thinking…";
+            var reply = await SendMessageCoreAsync(
+                transcription.Value!.Text,
+                clearComposer: false,
+                linkedToken);
+            if (reply is null)
+            {
+                VoiceStatusText = "Voice Ready";
+                return;
+            }
+
+            VoiceStatusText = "Speaking…";
+            var language = VoiceLanguageResolver.Resolve(reply);
+            var speech = await _coreClient.SynthesizeSpeechAsync(reply, language, linkedToken);
+            if (!speech.IsSuccess)
+            {
+                ApplyVoiceFailure(speech.Error!);
+                return;
+            }
+
+            _speechPlaybackCancellation?.Cancel();
+            _speechPlaybackCancellation?.Dispose();
+            _speechPlaybackCancellation = CancellationTokenSource.CreateLinkedTokenSource(linkedToken);
+            IsSpeaking = true;
+            await _voiceDevice.PlayAsync(speech.Value!, _speechPlaybackCancellation.Token);
+            VoiceStatusText = "Voice Ready";
+        }
+        catch (OperationCanceledException)
+        {
+            VoiceStatusText = "Voice Ready";
+        }
+        catch (Exception)
+        {
+            VoiceStatusText = "Voice Unavailable";
+            VoiceErrorMessage = "Voice is unavailable.";
+        }
+        finally
+        {
+            IsSpeaking = false;
+            IsVoiceBusy = false;
+        }
+    }
+
+    public void StopSpeaking()
+    {
+        _speechPlaybackCancellation?.Cancel();
+        _voiceDevice.StopPlayback();
+        IsSpeaking = false;
+        if (!IsMicrophoneActive && _voiceDevice.IsAvailable)
+        {
+            VoiceStatusText = "Voice Ready";
+        }
+    }
+
+    private async Task<string?> SendMessageCoreAsync(
+        string content,
+        bool clearComposer,
+        CancellationToken cancellationToken)
+    {
+        var trimmed = content.Trim();
+        if (trimmed.Length == 0 || IsPending)
+        {
+            return null;
+        }
+
         ErrorMessage = null;
         IsPending = true;
+        RaiseVoiceAvailabilityProperties();
         Messages.Add(AssistantMessage.FromUser(trimmed));
-        ComposerText = string.Empty;
+        if (clearComposer)
+        {
+            ComposerText = string.Empty;
+        }
 
         try
         {
             var result = await _coreClient.SendMessageAsync(trimmed, cancellationToken);
             if (result.IsSuccess)
             {
-                Messages.Add(AssistantMessage.FromAssistant(result.Value!.Reply));
+                var reply = result.Value!.Reply;
+                Messages.Add(AssistantMessage.FromAssistant(reply));
+                return reply;
             }
             else
             {
                 ErrorMessage = result.Error!.SafeMessage;
+                return null;
             }
         }
         finally
         {
             IsPending = false;
+            RaiseVoiceAvailabilityProperties();
         }
+    }
+
+    private void RaiseVoiceAvailabilityProperties()
+    {
+        RaisePropertyChanged(nameof(CanStartVoiceInput));
+        RaisePropertyChanged(nameof(CanStopSpeaking));
+    }
+
+    private void ApplyVoiceFailure(CoreError error)
+    {
+        VoiceErrorMessage = error.SafeMessage;
+        VoiceStatusText = error.Kind is CoreErrorKind.CoreUnavailable or CoreErrorKind.CoreTimeout
+            ? "Voice Unavailable"
+            : "Voice Ready";
     }
 }

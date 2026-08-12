@@ -16,11 +16,11 @@ public sealed partial class MainWindow : Window
 
     public MemoryViewModel Memory { get; }
 
-    public MainWindow(IRevaCoreClient coreClient, IRevaCoreLifecycle lifecycle)
+    public MainWindow(IRevaCoreClient coreClient, IRevaCoreLifecycle lifecycle, IVoiceDevice? voiceDevice = null)
     {
         InitializeComponent();
         Shell = new ShellViewModel(lifecycle);
-        Assistant = new AssistantViewModel(coreClient);
+        Assistant = new AssistantViewModel(coreClient, voiceDevice);
         Memory = new MemoryViewModel(coreClient);
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
@@ -77,6 +77,32 @@ public sealed partial class MainWindow : Window
     private void SyncComposerTextFromTextBox()
     {
         Assistant.ComposerText = ComposerBox.Text;
+    }
+
+    private async void VoiceButton_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        VoiceButton.CapturePointer(e.Pointer);
+        await Assistant.StartVoiceInputAsync();
+    }
+
+    private async void VoiceButton_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        VoiceButton.ReleasePointerCaptures();
+        await Assistant.FinishVoiceInputAsync();
+    }
+
+    private async void VoiceButton_PointerCanceled(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        VoiceButton.ReleasePointerCaptures();
+        await Assistant.FinishVoiceInputAsync();
+    }
+
+    private void StopSpeakingButton_Click(object sender, RoutedEventArgs e)
+    {
+        Assistant.StopSpeaking();
     }
 
     private async void RememberButton_Click(object sender, RoutedEventArgs e)

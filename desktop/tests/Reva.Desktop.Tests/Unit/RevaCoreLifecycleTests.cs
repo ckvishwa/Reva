@@ -39,6 +39,12 @@ public class RevaCoreLifecycleTests
 
         public Task<CoreResult<MemoryQueryResponse>> QueryMemoriesAsync(
             string query, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<CoreResult<VoiceTranscriptionResponse>> TranscribeSpeechAsync(
+            byte[] wavAudio, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<CoreResult<byte[]>> SynthesizeSpeechAsync(
+            string text, string language, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeTokenProvider : ILocalTokenProvider
@@ -259,6 +265,12 @@ public class RevaCoreLifecycleTests
 
         public Task<CoreResult<MemoryQueryResponse>> QueryMemoriesAsync(
             string query, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<CoreResult<VoiceTranscriptionResponse>> TranscribeSpeechAsync(
+            byte[] wavAudio, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<CoreResult<byte[]>> SynthesizeSpeechAsync(
+            string text, string language, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class CountingLauncher : ICoreProcessLauncher

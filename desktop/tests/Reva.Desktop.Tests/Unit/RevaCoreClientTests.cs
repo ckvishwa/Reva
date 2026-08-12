@@ -306,4 +306,55 @@ public class RevaCoreClientTests
             "http://127.0.0.1:8756/v1/memories?q=test%20color&limit=7",
             fakeHandler.LastRequest.RequestUri!.AbsoluteUri);
     }
+
+    [Fact]
+    public async Task TranscribeSpeechAsync_PostsWavToVoiceEndpointWithBearerToken()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"schema_version":1,"text":"hello REVA","language":"en","duration_ms":900}""");
+        var (client, fakeHandler) = AuthenticatedClientFor(handler);
+
+        var result = await client.TranscribeSpeechAsync(new byte[] { 1, 2, 3 });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("hello REVA", result.Value!.Text);
+        Assert.Equal(HttpMethod.Post, fakeHandler.LastRequest!.Method);
+        Assert.Equal("http://127.0.0.1:8756/v1/voice/transcriptions", fakeHandler.LastRequest.RequestUri!.ToString());
+        Assert.Equal("audio/wav", fakeHandler.LastRequest.Content!.Headers.ContentType!.MediaType);
+        Assert.Equal("Bearer", fakeHandler.LastRequest.Headers.Authorization!.Scheme);
+    }
+
+    [Fact]
+    public async Task SynthesizeSpeechAsync_PostsTextAndReturnsWavBytes()
+    {
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(new byte[] { 82, 73, 70, 70 }),
+        }));
+        var (client, fakeHandler) = AuthenticatedClientFor(handler);
+
+        var result = await client.SynthesizeSpeechAsync("Good morning.", "en");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new byte[] { 82, 73, 70, 70 }, result.Value);
+        Assert.Equal(HttpMethod.Post, fakeHandler.LastRequest!.Method);
+        Assert.Equal("http://127.0.0.1:8756/v1/voice/speech", fakeHandler.LastRequest.RequestUri!.ToString());
+        Assert.Contains("\"text\":\"Good morning.\"", fakeHandler.LastRequestBody);
+        Assert.Contains("\"language\":\"en\"", fakeHandler.LastRequestBody);
+        Assert.Equal("Bearer", fakeHandler.LastRequest.Headers.Authorization!.Scheme);
+    }
+
+    [Fact]
+    public async Task VoiceUnavailable_MapsToSafeVoiceMessage()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.ServiceUnavailable);
+        var (client, _) = AuthenticatedClientFor(handler);
+
+        var result = await client.TranscribeSpeechAsync(new byte[] { 1, 2, 3 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreUnavailable, result.Error!.Kind);
+        Assert.Equal("REVA voice is unavailable.", result.Error.SafeMessage);
+    }
 }

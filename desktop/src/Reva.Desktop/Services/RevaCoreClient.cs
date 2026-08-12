@@ -50,12 +50,39 @@ public sealed class RevaCoreClient : IRevaCoreClient
         return SendAsync<MemoryQueryResponse>(HttpMethod.Get, relativePath, requiresAuth: true, cancellationToken);
     }
 
+    public Task<CoreResult<VoiceTranscriptionResponse>> TranscribeSpeechAsync(
+        byte[] wavAudio, CancellationToken cancellationToken = default)
+    {
+        var body = new ByteArrayContent(wavAudio);
+        body.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+        return SendAsync<VoiceTranscriptionResponse>(
+            HttpMethod.Post,
+            "v1/voice/transcriptions",
+            requiresAuth: true,
+            cancellationToken,
+            body,
+            voiceRequest: true);
+    }
+
+    public Task<CoreResult<byte[]>> SynthesizeSpeechAsync(
+        string text, string language, CancellationToken cancellationToken = default)
+    {
+        var body = JsonContent.Create(new VoiceSpeechRequest(text, language), options: JsonOptions);
+        return SendBytesAsync(
+            HttpMethod.Post,
+            "v1/voice/speech",
+            requiresAuth: true,
+            cancellationToken,
+            body);
+    }
+
     private async Task<CoreResult<T>> SendAsync<T>(
         HttpMethod method,
         string relativePath,
         bool requiresAuth,
         CancellationToken cancellationToken,
-        HttpContent? content = null)
+        HttpContent? content = null,
+        bool voiceRequest = false)
     {
         using var request = new HttpRequestMessage(method, relativePath);
         if (content is not null)
@@ -94,17 +121,100 @@ public sealed class RevaCoreClient : IRevaCoreClient
 
         using (response)
         {
-            return await InterpretResponseAsync<T>(response, cancellationToken).ConfigureAwait(false);
+            return await InterpretResponseAsync<T>(response, cancellationToken, voiceRequest)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private async Task<CoreResult<byte[]>> SendBytesAsync(
+        HttpMethod method,
+        string relativePath,
+        bool requiresAuth,
+        CancellationToken cancellationToken,
+        HttpContent? content = null)
+    {
+        using var request = new HttpRequestMessage(method, relativePath);
+        if (content is not null)
+        {
+            request.Content = content;
+        }
+
+        if (requiresAuth)
+        {
+            var tokenResult = await _tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+            if (!tokenResult.IsAvailable)
+            {
+                return CoreResult<byte[]>.Failure(
+                    CoreErrorKind.CoreUnauthorized, "REVA authorization is unavailable.");
+            }
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenResult.Token);
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return CoreResult<byte[]>.Failure(CoreErrorKind.CoreTimeout, "REVA voice did not respond in time.");
+        }
+        catch (HttpRequestException)
+        {
+            return CoreResult<byte[]>.Failure(CoreErrorKind.CoreUnavailable, "REVA Core is not reachable.");
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                return CoreResult<byte[]>.Failure(
+                    CoreErrorKind.CoreUnauthorized, "REVA Core rejected local authentication.");
+            }
+
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+            {
+                return CoreResult<byte[]>.Failure(
+                    CoreErrorKind.CoreUnavailable, "REVA voice is unavailable.");
+            }
+
+            if (response.StatusCode == HttpStatusCode.GatewayTimeout)
+            {
+                return CoreResult<byte[]>.Failure(
+                    CoreErrorKind.CoreTimeout, "REVA voice did not respond in time.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return CoreResult<byte[]>.Failure(
+                    CoreErrorKind.CoreInvalidResponse, "REVA Core returned an unexpected response.");
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            return bytes.Length == 0
+                ? CoreResult<byte[]>.Failure(CoreErrorKind.CoreInvalidResponse, "REVA Core returned an empty response.")
+                : CoreResult<byte[]>.Success(bytes);
         }
     }
 
     private static async Task<CoreResult<T>> InterpretResponseAsync<T>(
-        HttpResponseMessage response, CancellationToken cancellationToken)
+        HttpResponseMessage response, CancellationToken cancellationToken, bool voiceRequest = false)
     {
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             return CoreResult<T>.Failure(
                 CoreErrorKind.CoreUnauthorized, "REVA Core rejected local authentication.");
+        }
+
+        if (voiceRequest && response.StatusCode == HttpStatusCode.ServiceUnavailable)
+        {
+            return CoreResult<T>.Failure(CoreErrorKind.CoreUnavailable, "REVA voice is unavailable.");
+        }
+
+        if (voiceRequest && response.StatusCode == HttpStatusCode.GatewayTimeout)
+        {
+            return CoreResult<T>.Failure(CoreErrorKind.CoreTimeout, "REVA voice did not respond in time.");
         }
 
         if ((int)response.StatusCode >= 500)
