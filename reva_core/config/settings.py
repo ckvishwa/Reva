@@ -64,6 +64,26 @@ class Settings(BaseSettings):
     # headroom for the rest of the turn.
     embedding_timeout_seconds: float = 5.0
 
+    # Slice 7 local voice. TTS is disabled by default so ordinary Core
+    # health and typed chat never depend on a heavy voice runtime being
+    # installed. Paths are operator-provided environment values, not
+    # production defaults, because the REVI reference audio and dedicated
+    # Chatterbox interpreter are local/private assets.
+    tts_enabled: bool = False
+    tts_python: Path | None = None
+    tts_reference_wav: Path | None = None
+    tts_model_id: str = "shankarpandala/chatterbox-telugu"
+    tts_device: str = "cuda"
+    tts_default_language: Literal["en", "te"] = "en"
+    tts_ready_timeout_seconds: float = 60.0
+    tts_synthesis_timeout_seconds: float = 120.0
+
+    # Speech-to-text defaults are intentionally CPU-first for Slice 7 so
+    # STT does not contend with Ollama/Chatterbox on a 4 GB GPU.
+    stt_model: str = "Systran/faster-whisper-small"
+    stt_device: str = "cpu"
+    stt_compute_type: str = "int8"
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "reva.db"
