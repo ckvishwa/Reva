@@ -8,6 +8,7 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/memories"),
     ("GET", "/v1/memories"),
     ("GET", "/v1/audit-events"),
+    ("POST", "/v1/voice/speech"),
 }
 
 _ALLOWED_NON_DOMAIN_PREFIXES = {
@@ -20,7 +21,7 @@ _ALLOWED_NON_DOMAIN_PREFIXES = {
 }
 
 
-def test_only_the_four_v1_endpoints_exist(client):
+def test_only_the_known_v1_endpoints_exist(client):
     found = set()
     for route in iter_effective_routes(client.app):
         path = getattr(route, "path", None)

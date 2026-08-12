@@ -7,14 +7,18 @@ Owns no SQL (delegates to `storage.bootstrap`) and no policy decisions.
 from __future__ import annotations
 
 import sqlite3
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.config.settings import Settings
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
+from reva_core.models.chatterbox_tts import ChatterboxWorkerTTSProvider
 from reva_core.models.embedding import EmbeddingProvider
 from reva_core.models.embedding_providers import OllamaEmbeddingProvider
+from reva_core.models.tts import TextToSpeechProvider
 from reva_core.security.local_token import ensure_local_token
 from reva_core.shared.contracts.health import CoreStatus, HealthStatus
 from reva_core.shared.errors import StorageError
@@ -28,7 +32,9 @@ logger = get_logger("orchestration")
 
 
 class CoreLifecycle:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, text_to_speech_provider: TextToSpeechProvider | None = None
+    ) -> None:
         self._settings = settings
         self._conn: sqlite3.Connection | None = None
         self._db_schema_version: int | None = None
@@ -38,6 +44,7 @@ class CoreLifecycle:
         self._primary_device_id: str | None = None
         self._assistant_orchestrator: AssistantOrchestrator | None = None
         self._embedding_provider: EmbeddingProvider | None = None
+        self._text_to_speech_provider = text_to_speech_provider
         self._ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG
 
     def startup(self) -> HealthStatus:
@@ -50,6 +57,7 @@ class CoreLifecycle:
             api_base=self._settings.embedding_model_api_base,
             timeout_seconds=self._settings.embedding_timeout_seconds,
         )
+        self._build_text_to_speech_provider()
         self._run_startup_backfill()
         if self._settings.assistant_orchestrator == "adk":
             # Imported lazily so `google.adk`/`litellm` are only ever
@@ -111,13 +119,46 @@ class CoreLifecycle:
                 "embedding backfill failed at startup; continuing without it", exc_info=True
             )
 
+    def _build_text_to_speech_provider(self) -> None:
+        if self._text_to_speech_provider is not None or not self._settings.tts_enabled:
+            return
+        if self._settings.tts_python is None or self._settings.tts_reference_wav is None:
+            logger.warning("tts is enabled but python/reference configuration is incomplete")
+            return
+        output_dir = Path(tempfile.gettempdir()) / f"reva-tts-{new_id()}"
+        self._text_to_speech_provider = ChatterboxWorkerTTSProvider(
+            python_exe=self._settings.tts_python,
+            reference_wav=self._settings.tts_reference_wav,
+            model_id=self._settings.tts_model_id,
+            device=self._settings.tts_device,
+            output_dir=output_dir,
+            default_language=self._settings.tts_default_language,
+            ready_timeout_seconds=self._settings.tts_ready_timeout_seconds,
+            synthesis_timeout_seconds=self._settings.tts_synthesis_timeout_seconds,
+        )
+
     def shutdown(self) -> None:
         self._status = CoreStatus.SHUTTING_DOWN
+        self._shutdown_text_to_speech_provider()
         if self._conn is not None:
             self._conn.close()
             self._conn = None
         self._status = CoreStatus.STOPPED
         logger.info("core stopped")
+
+    def _shutdown_text_to_speech_provider(self) -> None:
+        provider = self._text_to_speech_provider
+        shutdown = getattr(provider, "shutdown", None)
+        if shutdown is None:
+            return
+        import asyncio
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(shutdown())
+            return
+        logger.warning("tts worker shutdown skipped because an event loop is already running")
 
     def health(self) -> HealthStatus:
         return HealthStatus(
@@ -162,3 +203,7 @@ class CoreLifecycle:
     @property
     def ranking_config(self) -> HybridRankingConfig:
         return self._ranking_config
+
+    @property
+    def text_to_speech_provider(self) -> TextToSpeechProvider | None:
+        return self._text_to_speech_provider

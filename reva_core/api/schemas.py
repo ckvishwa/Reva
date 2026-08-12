@@ -9,7 +9,7 @@ internal database row is ever returned directly.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field
 
@@ -105,3 +105,8 @@ class MemoryQueryResponse(ApiModel):
 class AuditEventListResponse(ApiModel):
     events: tuple[AuditEvent, ...]
     correlation_id: CorrelationId
+
+
+class VoiceSpeechRequest(ApiModel):
+    text: NonEmptyStr = Field(max_length=800)
+    language: Literal["en", "te"] = "en"
