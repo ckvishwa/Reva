@@ -13,6 +13,7 @@ from reva_core.orchestration.typed_interaction import TypedInteractionService
 from reva_core.shared.contracts.memory import Memory, MemoryCategory
 from reva_core.storage.bootstrap import initialize_database
 from reva_core.storage.repositories.device_repository import DeviceRepository
+from reva_core.storage.repositories.memory_embedding_repository import MemoryEmbeddingRepository
 
 _CID = "66666666-6666-6666-6666-666666666666"
 _MODEL = "test-model"
@@ -89,7 +90,7 @@ def service(tmp_path):
 
 async def _remember(service, content: str) -> Memory:
     svc, conn, _, provider = service
-    memory = svc.create_explicit_memory(content, MemoryCategory.NOTE, (), _CID)
+    memory = await svc.create_explicit_memory(content, MemoryCategory.NOTE, (), _CID)
     await backfill_missing_embeddings(conn, provider, model_id=_MODEL, correlation_id=_CID)
     return memory
 
@@ -172,3 +173,48 @@ async def test_negative_case_no_confident_match(service):
     results = await svc.query_memories("best recipe for banana bread", 5, _CID)
 
     assert not any(r.content in distractors for r in results)
+
+
+async def test_embed_on_write_makes_new_memory_immediately_searchable(service):
+    """Scenario A: proves the actual gap is closed. Unlike `_remember`,
+    this does NOT call `backfill_missing_embeddings` at all — embed-on-write
+    alone must be enough for the memory to be semantically retrievable in
+    the same session."""
+    svc, _, _, _ = service
+
+    await svc.create_explicit_memory("I have a pet cat.", MemoryCategory.NOTE, (), _CID)
+
+    results = await svc.query_memories("What animal do I own?", 5, _CID)
+
+    assert results and "cat" in results[0].content.lower()
+
+
+async def test_embed_on_write_leaves_zero_pending_for_backfill(service):
+    """Scenario D: a memory successfully embedded on write must not be
+    re-embedded by a later backfill run — `missing_for_model` must already
+    exclude it, and `BackfillResult.embedded_count` must not count it."""
+    svc, conn, _, provider = service
+
+    await svc.create_explicit_memory("I have a pet cat.", MemoryCategory.NOTE, (), _CID)
+
+    backfill_result = await backfill_missing_embeddings(
+        conn, provider, model_id=_MODEL, correlation_id=_CID
+    )
+
+    assert backfill_result.embedded_count == 0
+
+
+async def test_embed_on_write_produces_no_duplicate_embedding_row(service):
+    """Scenario E: embed-on-write followed by a backfill run (which finds
+    nothing pending for this memory, per scenario D) must leave exactly one
+    memory_embeddings row for it — the (memory_id, model_id) upsert primary
+    key held, and the two separate write paths didn't create two rows."""
+    svc, conn, _, provider = service
+
+    memory = await svc.create_explicit_memory("I have a pet cat.", MemoryCategory.NOTE, (), _CID)
+    await backfill_missing_embeddings(conn, provider, model_id=_MODEL, correlation_id=_CID)
+
+    rows = MemoryEmbeddingRepository(conn).all_for_model(_MODEL)
+    matching = [row for row in rows if row[0] == memory.id]
+
+    assert len(matching) == 1

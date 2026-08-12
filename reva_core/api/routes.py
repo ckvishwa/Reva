@@ -79,7 +79,7 @@ def build_router(lifecycle: CoreLifecycle) -> APIRouter:
     ) -> ExplicitMemoryCreateResponse:
         correlation_id = payload.correlation_id or header_correlation_id
         try:
-            memory = _service().create_explicit_memory(
+            memory = await _service().create_explicit_memory(
                 payload.content, payload.category, payload.tags, correlation_id
             )
         except ValidationError as exc:
