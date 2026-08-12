@@ -45,6 +45,9 @@ def main() -> int:
             continue
         text = request["text"]
         output_path = Path(request["output_path"])
+        if text == "worker-error":
+            _emit({"id": request_id, "status": "error", "kind": "internal"})
+            continue
         if text == "crash-once":
             marker = output_path.parent / "crash-once-marker"
             if not marker.exists():

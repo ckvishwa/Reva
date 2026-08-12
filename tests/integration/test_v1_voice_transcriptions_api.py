@@ -53,6 +53,33 @@ def _wav_bytes(*, duration_seconds: float = 0.1, sample_rate: int = 16_000) -> b
     return stream.getvalue()
 
 
+def _float_wav_bytes(*, sample_rate: int = 24_000) -> bytes:
+    samples = struct.pack("<ff", 0.0, 0.25)
+    channels = 1
+    bits_per_sample = 32
+    block_align = channels * bits_per_sample // 8
+    fmt = struct.pack(
+        "<HHIIHH",
+        3,
+        channels,
+        sample_rate,
+        sample_rate * block_align,
+        block_align,
+        bits_per_sample,
+    )
+    return (
+        b"RIFF"
+        + struct.pack("<I", 4 + (8 + len(fmt)) + (8 + len(samples)))
+        + b"WAVE"
+        + b"fmt "
+        + struct.pack("<I", len(fmt))
+        + fmt
+        + b"data"
+        + struct.pack("<I", len(samples))
+        + samples
+    )
+
+
 @pytest.fixture
 def transcription_core(tmp_path):
     provider = FakeTranscriptionProvider()
@@ -100,6 +127,21 @@ def test_voice_transcription_returns_text_and_deletes_uploaded_audio(
     assert provider.calls[0].media_type == "audio/wav"
     assert not provider.calls[0].path.exists()
     assert provider.calls[0].path.name == "input.wav"
+
+
+def test_voice_transcription_accepts_ieee_float_wav(
+    transcription_core, transcription_client, transcription_auth_headers
+):
+    _, provider = transcription_core
+
+    response = transcription_client.post(
+        "/v1/voice/transcriptions",
+        content=_float_wav_bytes(),
+        headers={**transcription_auth_headers, "Content-Type": "audio/wav"},
+    )
+
+    assert response.status_code == 200
+    assert provider.seen_existing_path
 
 
 def test_voice_transcription_rejects_empty_audio(transcription_client, transcription_auth_headers):
