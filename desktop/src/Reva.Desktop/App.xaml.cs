@@ -32,7 +32,7 @@ public partial class App : Application
             coreClient, tokenProvider, new DeveloperModeCoreExecutableLocator(), new CoreProcessLauncher(), configuration);
         _lifecycle = lifecycle;
 
-        _window = new MainWindow(coreClient, lifecycle);
+        _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice());
         _window.Activate();
 
         // Deliberately started after Activate(), not awaited before it: the

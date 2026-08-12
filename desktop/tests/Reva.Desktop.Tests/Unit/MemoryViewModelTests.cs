@@ -49,6 +49,14 @@ public class MemoryViewModelTests
             QueryCallCount++;
             return _queryResponder!(query, limit, cancellationToken);
         }
+
+        public Task<CoreResult<VoiceTranscriptionResponse>> TranscribeSpeechAsync(
+            byte[] wavAudio, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("MemoryViewModel never calls TranscribeSpeechAsync.");
+
+        public Task<CoreResult<byte[]>> SynthesizeSpeechAsync(
+            string text, string language, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("MemoryViewModel never calls SynthesizeSpeechAsync.");
     }
 
     private static MemoryCreateResponse SuccessCreateResponse() =>

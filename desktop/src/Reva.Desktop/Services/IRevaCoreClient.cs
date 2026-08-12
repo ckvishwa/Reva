@@ -32,4 +32,14 @@ public interface IRevaCoreClient
     /// query only — no ranking/semantic logic here or in Core yet.</summary>
     Task<CoreResult<MemoryQueryResponse>> QueryMemoriesAsync(
         string query, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>POST /v1/voice/transcriptions. Authenticated raw WAV upload.
+    /// Desktop never performs STT locally.</summary>
+    Task<CoreResult<VoiceTranscriptionResponse>> TranscribeSpeechAsync(
+        byte[] wavAudio, CancellationToken cancellationToken = default);
+
+    /// <summary>POST /v1/voice/speech. Authenticated local Core TTS.
+    /// Desktop never loads the voice model or reference audio.</summary>
+    Task<CoreResult<byte[]>> SynthesizeSpeechAsync(
+        string text, string language, CancellationToken cancellationToken = default);
 }
