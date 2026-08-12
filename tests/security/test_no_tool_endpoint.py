@@ -9,6 +9,7 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("GET", "/v1/memories"),
     ("GET", "/v1/audit-events"),
     ("POST", "/v1/voice/speech"),
+    ("POST", "/v1/voice/transcriptions"),
 }
 
 _ALLOWED_NON_DOMAIN_PREFIXES = {

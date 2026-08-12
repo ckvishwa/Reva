@@ -18,6 +18,8 @@ from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankin
 from reva_core.models.chatterbox_tts import ChatterboxWorkerTTSProvider
 from reva_core.models.embedding import EmbeddingProvider
 from reva_core.models.embedding_providers import OllamaEmbeddingProvider
+from reva_core.models.faster_whisper_stt import FasterWhisperSTTProvider
+from reva_core.models.stt import SpeechToTextProvider
 from reva_core.models.tts import TextToSpeechProvider
 from reva_core.security.local_token import ensure_local_token
 from reva_core.shared.contracts.health import CoreStatus, HealthStatus
@@ -33,7 +35,10 @@ logger = get_logger("orchestration")
 
 class CoreLifecycle:
     def __init__(
-        self, settings: Settings, text_to_speech_provider: TextToSpeechProvider | None = None
+        self,
+        settings: Settings,
+        text_to_speech_provider: TextToSpeechProvider | None = None,
+        speech_to_text_provider: SpeechToTextProvider | None = None,
     ) -> None:
         self._settings = settings
         self._conn: sqlite3.Connection | None = None
@@ -45,6 +50,7 @@ class CoreLifecycle:
         self._assistant_orchestrator: AssistantOrchestrator | None = None
         self._embedding_provider: EmbeddingProvider | None = None
         self._text_to_speech_provider = text_to_speech_provider
+        self._speech_to_text_provider = speech_to_text_provider
         self._ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG
 
     def startup(self) -> HealthStatus:
@@ -57,6 +63,7 @@ class CoreLifecycle:
             api_base=self._settings.embedding_model_api_base,
             timeout_seconds=self._settings.embedding_timeout_seconds,
         )
+        self._build_speech_to_text_provider()
         self._build_text_to_speech_provider()
         self._run_startup_backfill()
         if self._settings.assistant_orchestrator == "adk":
@@ -137,6 +144,16 @@ class CoreLifecycle:
             synthesis_timeout_seconds=self._settings.tts_synthesis_timeout_seconds,
         )
 
+    def _build_speech_to_text_provider(self) -> None:
+        if self._speech_to_text_provider is not None:
+            return
+        self._speech_to_text_provider = FasterWhisperSTTProvider(
+            model=self._settings.stt_model,
+            device=self._settings.stt_device,
+            compute_type=self._settings.stt_compute_type,
+            timeout_seconds=self._settings.stt_timeout_seconds,
+        )
+
     def shutdown(self) -> None:
         self._status = CoreStatus.SHUTTING_DOWN
         self._shutdown_text_to_speech_provider()
@@ -207,3 +224,11 @@ class CoreLifecycle:
     @property
     def text_to_speech_provider(self) -> TextToSpeechProvider | None:
         return self._text_to_speech_provider
+
+    @property
+    def speech_to_text_provider(self) -> SpeechToTextProvider | None:
+        return self._speech_to_text_provider
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
