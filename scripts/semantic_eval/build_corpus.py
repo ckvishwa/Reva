@@ -7,7 +7,7 @@ a developer's real REVA_DATA_DIR — this script has no code path that
 even accepts one.
 
 Usage:
-    python scripts/semantic_eval/build_corpus.py --total-size 500
+    python -m scripts.semantic_eval.build_corpus --total-size 500
 """
 
 from __future__ import annotations
