@@ -20,6 +20,11 @@ def test_default_config_weights_sum_to_one():
     assert total == pytest.approx(1.0)
 
 
+def test_default_config_uses_evaluation_backed_no_match_thresholds():
+    assert DEFAULT_HYBRID_RANKING_CONFIG.minimum_confidence == pytest.approx(0.20)
+    assert DEFAULT_HYBRID_RANKING_CONFIG.minimum_semantic_only_confidence == pytest.approx(0.57)
+
+
 def test_config_is_frozen():
     with pytest.raises(AttributeError):
         DEFAULT_HYBRID_RANKING_CONFIG.semantic_weight = 0.5  # type: ignore[misc]

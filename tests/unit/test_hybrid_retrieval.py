@@ -158,6 +158,29 @@ async def test_below_minimum_confidence_excluded(store):
     assert results == []
 
 
+async def test_semantic_only_low_confidence_candidate_excluded_by_default(store):
+    first = _insert_memory(store, "I use an iPhone 12 as my main phone.")
+    second = _insert_memory(store, "What phone do I use?")
+    embeddings = MemoryEmbeddingRepository(store)
+    embeddings.upsert(first.id, _MODEL, (1.0, 0.5))
+    embeddings.upsert(second.id, _MODEL, (1.0, 0.4))
+    provider = DeterministicEmbeddingProvider(
+        vectors_by_keyword={"dinosaur": (0.0, 1.0)},
+        default=(1.0, 0.0),
+    )
+
+    results = await hybrid_search(
+        store,
+        provider,
+        query="What is my favorite dinosaur?",
+        limit=5,
+        model_id=_MODEL,
+        correlation_id=_CID,
+    )
+
+    assert results == []
+
+
 async def test_tie_break_is_deterministic_across_repeated_calls(store):
     first = _insert_memory(store, "tie candidate alpha")
     second = _insert_memory(store, "tie candidate beta")

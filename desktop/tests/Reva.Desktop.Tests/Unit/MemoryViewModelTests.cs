@@ -246,6 +246,26 @@ public class MemoryViewModelTests
     }
 
     [Fact]
+    public async Task SearchAsync_NoResultsAfterPreviousSuccess_ClearsStaleResults()
+    {
+        var client = new FakeCoreClient(
+            queryResponder: (query, _, _) => Task.FromResult(
+                CoreResult<MemoryQueryResponse>.Success(
+                    query == "Do I have an iPhone 12?"
+                        ? SuccessQueryResponse("I use an iPhone 12 as my main phone.")
+                        : SuccessQueryResponse())));
+        var viewModel = new MemoryViewModel(client);
+
+        await viewModel.SearchAsync("Do I have an iPhone 12?");
+        Assert.Contains("iPhone 12", viewModel.SearchResultText);
+
+        await viewModel.SearchAsync("What is my favorite dinosaur?");
+
+        Assert.Equal("No matching memories found.", viewModel.SearchResultText);
+        Assert.DoesNotContain("iPhone 12", viewModel.SearchResultText);
+    }
+
+    [Fact]
     public async Task SearchAsync_Failure_SetsSafeErrorMessage()
     {
         var client = new FakeCoreClient(
