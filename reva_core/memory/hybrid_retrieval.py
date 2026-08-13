@@ -164,6 +164,13 @@ async def hybrid_search(
             and hybrid_score < config.minimum_confidence
         ):
             continue
+        if (
+            query_vector is not None
+            and semantic_scores
+            and not in_lexical
+            and semantic_score < config.minimum_semantic_only_confidence
+        ):
+            continue
         ranked.append(
             RankedMemory(
                 memory=candidate_memory,

@@ -3,15 +3,17 @@
     Real Windows E2E proof that the Desktop Memory Panel's Search action
     transparently benefits from hybrid Core retrieval (Slice 6, spec
     section 12) — no keyword overlap required between what was
-    Remembered and what was Searched.
+    Remembered and what was Searched — and that an unrelated negative
+    query clears stale positive results.
 
 .DESCRIPTION
     Same technique as Run-MemoryPersistenceE2E.ps1: real Process.Start of
     Python Core (isolated data dir, isolated port), real Reva.Desktop.exe,
     real UI Automation. Proves three cases from the work order verbatim:
         Stored "I have a pet cat." / Search "animal" -> found
-        Stored "My main career target is SDET." / Search "testing job" -> found
+        Stored "My main career target is SDET." / Search "What kind of testing job am I targeting?" -> found
         Stored "I use an iPhone 12 as my main phone." / Search "daily handset" -> found
+        Stored phone rows / Search "What is my favorite dinosaur?" -> no matches
 
 .PARAMETER Configuration
     Build configuration to test. Default: Release.
@@ -216,8 +218,9 @@ New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 
 $cases = @(
     @{ Remember = "I have a pet cat."; Search = "animal"; ExpectContains = "cat" }
-    @{ Remember = "My main career target is SDET."; Search = "testing job"; ExpectContains = "SDET" }
+    @{ Remember = "My main career target is SDET."; Search = "What kind of testing job am I targeting?"; ExpectContains = "SDET" }
     @{ Remember = "I use an iPhone 12 as my main phone."; Search = "daily handset"; ExpectContains = "iPhone" }
+    @{ Remember = "What phone do I use?"; Search = "Do I have an iPhone 12?"; ExpectContains = "iPhone" }
 )
 
 try {
@@ -272,6 +275,24 @@ try {
         }
         Assert-True ($null -ne $found) "Search '$($case.Search)' found memory containing '$($case.ExpectContains)' with no required keyword overlap"
     }
+
+    Write-Host ""
+    Write-Host "Negative case: Search 'What is my favorite dinosaur?' after prior phone hit..."
+    $negativeQuery = "What is my favorite dinosaur?"
+    $memoryValuePattern.SetValue($negativeQuery)
+    Wait-Until -TimeoutSeconds 5 -Description "negative search box content set" -Condition {
+        $memoryValuePattern.Current.Value -eq $negativeQuery
+    } | Out-Null
+    $searchButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+
+    $noMatch = Wait-Until -TimeoutSeconds $searchTimeoutSeconds -Description "negative search shows no matches and clears stale results" -Condition {
+        $value = $memorySearchResultText.Current.Name
+        $script:lastUiDump = @("MemorySearchResultText: [$value]")
+        if ($value -eq "No matching memories found.") { return $value }
+        return $null
+    }
+    Assert-True ($null -ne $noMatch) "Search '$negativeQuery' shows 'No matching memories found.'"
+    Assert-True (-not $memorySearchResultText.Current.Name.Contains("iPhone")) "Negative search cleared stale phone result"
 }
 finally {
     if ($appProcess) { Stop-Cleanly -Process $appProcess }

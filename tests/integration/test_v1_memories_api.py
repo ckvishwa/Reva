@@ -1,3 +1,27 @@
+from fastapi.testclient import TestClient
+
+from reva_core.api.app import create_app
+from reva_core.config.settings import load_settings
+from reva_core.models.embedding import EmbeddingProvider, EmbeddingRequest, EmbeddingResult
+from reva_core.orchestration.lifecycle import CoreLifecycle
+
+
+class PhoneDinosaurEmbeddingProvider(EmbeddingProvider):
+    async def embed(self, request: EmbeddingRequest) -> EmbeddingResult:
+        text = request.text.lower()
+        if "dinosaur" in text:
+            vector = (0.0, 1.0, 0.0)
+        elif "iphone" in text or "phone" in text:
+            vector = (1.0, 0.0, 0.0)
+        else:
+            vector = (0.0, 0.0, 1.0)
+        return EmbeddingResult(vector=vector, correlation_id=request.correlation_id)
+
+
+def _use_phone_dinosaur_embeddings(core) -> None:
+    core._embedding_provider = PhoneDinosaurEmbeddingProvider()  # noqa: SLF001
+
+
 def test_create_memory_persists_to_sqlite(client, core, auth_headers):
     response = client.post(
         "/v1/memories",
@@ -53,6 +77,63 @@ def test_query_memories_empty_result_is_safe(client, auth_headers):
     )
     assert response.status_code == 200
     assert response.json()["results"] == []
+
+
+def test_query_memories_phone_positive_and_dinosaur_negative(client, core, auth_headers):
+    _use_phone_dinosaur_embeddings(core)
+    for content in [
+        "I use an iPhone 12 as my main phone.",
+        "What phone do I use?",
+    ]:
+        response = client.post("/v1/memories", json={"content": content}, headers=auth_headers)
+        assert response.status_code == 201
+
+    positive = client.get(
+        "/v1/memories", params={"q": "Do I have an iPhone 12?"}, headers=auth_headers
+    )
+    assert positive.status_code == 200
+    positive_contents = [item["content"] for item in positive.json()["results"]]
+    assert "I use an iPhone 12 as my main phone." in positive_contents
+
+    negative = client.get(
+        "/v1/memories", params={"q": "What is my favorite dinosaur?"}, headers=auth_headers
+    )
+    assert negative.status_code == 200
+    assert negative.json()["results"] == []
+
+
+def test_query_memories_isolated_data_dir_owner_boundary(tmp_path, client, core, auth_headers):
+    _use_phone_dinosaur_embeddings(core)
+    response = client.post(
+        "/v1/memories",
+        json={"content": "I use an iPhone 12 as my main phone."},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+
+    other_settings = load_settings(
+        _env_file=None,
+        data_dir=tmp_path / "other-owner",
+        assistant_orchestrator="deterministic",
+        tts_enabled=False,
+    )
+    other_core = CoreLifecycle(other_settings)
+    other_core.startup()
+    try:
+        _use_phone_dinosaur_embeddings(other_core)
+        other_client = TestClient(create_app(other_core))
+        other_headers = {"Authorization": f"Bearer {other_core.local_token}"}
+
+        other_response = other_client.get(
+            "/v1/memories",
+            params={"q": "Do I have an iPhone 12?"},
+            headers=other_headers,
+        )
+
+        assert other_response.status_code == 200
+        assert other_response.json()["results"] == []
+    finally:
+        other_core.shutdown()
 
 
 def test_query_memories_rejects_missing_query_param(client, auth_headers):
