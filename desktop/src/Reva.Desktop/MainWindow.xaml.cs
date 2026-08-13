@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
         Memory = new MemoryViewModel(coreClient);
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
+        RegisterVoicePointerHandlers();
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -79,8 +80,34 @@ public sealed partial class MainWindow : Window
         Assistant.ComposerText = ComposerBox.Text;
     }
 
+    private void RegisterVoicePointerHandlers()
+    {
+        VoiceButton.AddHandler(
+            UIElement.PointerPressedEvent,
+            new PointerEventHandler(VoiceButton_PointerPressed),
+            handledEventsToo: true);
+        VoiceButton.AddHandler(
+            UIElement.PointerReleasedEvent,
+            new PointerEventHandler(VoiceButton_PointerReleased),
+            handledEventsToo: true);
+        VoiceButton.AddHandler(
+            UIElement.PointerCanceledEvent,
+            new PointerEventHandler(VoiceButton_PointerCanceled),
+            handledEventsToo: true);
+        VoiceButton.AddHandler(
+            UIElement.PointerCaptureLostEvent,
+            new PointerEventHandler(VoiceButton_PointerCaptureLost),
+            handledEventsToo: true);
+    }
+
+    private async void Root_Loaded(object sender, RoutedEventArgs e)
+    {
+        await Assistant.RefreshVoiceAvailabilityAsync();
+    }
+
     private async void VoiceButton_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        DesktopLogger.Info("voice pointer pressed handler reached");
         e.Handled = true;
         VoiceButton.CapturePointer(e.Pointer);
         await Assistant.StartVoiceInputAsync();
@@ -88,6 +115,7 @@ public sealed partial class MainWindow : Window
 
     private async void VoiceButton_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
+        DesktopLogger.Info("voice pointer released handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
         await Assistant.FinishVoiceInputAsync();
@@ -95,6 +123,15 @@ public sealed partial class MainWindow : Window
 
     private async void VoiceButton_PointerCanceled(object sender, PointerRoutedEventArgs e)
     {
+        DesktopLogger.Info("voice pointer canceled handler reached");
+        e.Handled = true;
+        VoiceButton.ReleasePointerCaptures();
+        await Assistant.FinishVoiceInputAsync();
+    }
+
+    private async void VoiceButton_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        DesktopLogger.Info("voice pointer capture lost handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
         await Assistant.FinishVoiceInputAsync();
@@ -103,6 +140,11 @@ public sealed partial class MainWindow : Window
     private void StopSpeakingButton_Click(object sender, RoutedEventArgs e)
     {
         Assistant.StopSpeaking();
+    }
+
+    private async void MicrophoneSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        await Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-microphone"));
     }
 
     private async void RememberButton_Click(object sender, RoutedEventArgs e)

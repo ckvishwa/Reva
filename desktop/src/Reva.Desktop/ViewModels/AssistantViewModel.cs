@@ -16,6 +16,7 @@ public sealed class AssistantViewModel : ObservableObject
     private readonly IVoiceDevice _voiceDevice;
     private string _composerText = string.Empty;
     private bool _isPending;
+    private bool _isVoiceAvailable;
     private bool _isVoiceBusy;
     private bool _isListening;
     private bool _isSpeaking;
@@ -24,12 +25,14 @@ public sealed class AssistantViewModel : ObservableObject
     private string? _voiceErrorMessage;
     private CancellationTokenSource? _voiceTurnCancellation;
     private CancellationTokenSource? _speechPlaybackCancellation;
+    private Task? _recordingStartTask;
 
     public AssistantViewModel(IRevaCoreClient coreClient, IVoiceDevice? voiceDevice = null)
     {
         _coreClient = coreClient;
         _voiceDevice = voiceDevice ?? new UnavailableVoiceDevice();
-        _voiceStatusText = _voiceDevice.IsAvailable ? "Voice Ready" : "Voice Unavailable";
+        _isVoiceAvailable = _voiceDevice.IsAvailable;
+        _voiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
     }
 
     public ObservableCollection<AssistantMessage> Messages { get; } = new();
@@ -56,6 +59,8 @@ public sealed class AssistantViewModel : ObservableObject
     /// from XAML without a converter, and the ViewModel stays free of
     /// WinUI types.</summary>
     public bool IsNotPending => !IsPending;
+
+    public bool CanUseVoiceButton => _isVoiceAvailable && !IsPending;
 
     public bool IsMicrophoneActive
     {
@@ -93,7 +98,7 @@ public sealed class AssistantViewModel : ObservableObject
         }
     }
 
-    public bool CanStartVoiceInput => _voiceDevice.IsAvailable && !IsPending && !IsVoiceBusy;
+    public bool CanStartVoiceInput => _isVoiceAvailable && !IsPending && !IsVoiceBusy;
 
     public bool CanStopSpeaking => IsSpeaking;
 
@@ -118,6 +123,31 @@ public sealed class AssistantViewModel : ObservableObject
         private set => SetProperty(ref _voiceErrorMessage, value);
     }
 
+    public async Task RefreshVoiceAvailabilityAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var availability = await _voiceDevice.VerifyAvailabilityAsync(cancellationToken);
+            _isVoiceAvailable = availability.IsReady;
+            VoiceStatusText = availability.IsReady ? "Voice Ready" : "Voice Unavailable";
+            VoiceErrorMessage = availability.IsReady ? null : availability.SafeMessage;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            _isVoiceAvailable = false;
+            VoiceStatusText = "Voice Unavailable";
+            VoiceErrorMessage = VoiceDeviceAvailability.RecordingFailed().SafeMessage;
+        }
+        finally
+        {
+            RaiseVoiceAvailabilityProperties();
+        }
+    }
+
     public async Task SendMessageAsync(CancellationToken cancellationToken = default)
     {
         if (IsPending)
@@ -133,12 +163,13 @@ public sealed class AssistantViewModel : ObservableObject
 
     public async Task StartVoiceInputAsync(CancellationToken cancellationToken = default)
     {
+        if (!_isVoiceAvailable)
+        {
+            await RefreshVoiceAvailabilityAsync(cancellationToken);
+        }
+
         if (!CanStartVoiceInput)
         {
-            if (!_voiceDevice.IsAvailable)
-            {
-                VoiceStatusText = "Voice Unavailable";
-            }
             return;
         }
 
@@ -152,20 +183,23 @@ public sealed class AssistantViewModel : ObservableObject
 
         try
         {
-            await _voiceDevice.StartRecordingAsync(_voiceTurnCancellation.Token);
+            _recordingStartTask = _voiceDevice.StartRecordingAsync(_voiceTurnCancellation.Token);
+            await _recordingStartTask;
         }
         catch (OperationCanceledException)
         {
             IsMicrophoneActive = false;
             IsVoiceBusy = false;
-            VoiceStatusText = _voiceDevice.IsAvailable ? "Voice Ready" : "Voice Unavailable";
+            VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+        }
+        catch (VoiceCaptureException ex)
+        {
+            ApplyVoiceCaptureFailure(ex.Availability);
+            _voiceDevice.CancelRecording();
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            VoiceStatusText = "Voice Unavailable";
-            VoiceErrorMessage = "Voice capture is unavailable.";
-            IsMicrophoneActive = false;
-            IsVoiceBusy = false;
+            ApplyVoiceCaptureFailure(VoiceDeviceAvailability.RecordingFailed());
             _voiceDevice.CancelRecording();
         }
     }
@@ -184,11 +218,16 @@ public sealed class AssistantViewModel : ObservableObject
 
         try
         {
+            if (_recordingStartTask is not null)
+            {
+                await _recordingStartTask;
+            }
+
             var audio = await _voiceDevice.StopRecordingAsync(linkedToken);
             if (audio.Length == 0)
             {
                 VoiceErrorMessage = "No voice audio was captured.";
-                VoiceStatusText = "Voice Ready";
+                VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
                 return;
             }
 
@@ -224,19 +263,23 @@ public sealed class AssistantViewModel : ObservableObject
             _speechPlaybackCancellation = CancellationTokenSource.CreateLinkedTokenSource(linkedToken);
             IsSpeaking = true;
             await _voiceDevice.PlayAsync(speech.Value!, _speechPlaybackCancellation.Token);
-            VoiceStatusText = "Voice Ready";
+            VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
         }
         catch (OperationCanceledException)
         {
-            VoiceStatusText = "Voice Ready";
+            VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+        }
+        catch (VoiceCaptureException ex)
+        {
+            ApplyVoiceCaptureFailure(ex.Availability);
         }
         catch (Exception)
         {
-            VoiceStatusText = "Voice Unavailable";
-            VoiceErrorMessage = "Voice is unavailable.";
+            ApplyVoiceCaptureFailure(VoiceDeviceAvailability.RecordingFailed());
         }
         finally
         {
+            _recordingStartTask = null;
             IsSpeaking = false;
             IsVoiceBusy = false;
         }
@@ -247,7 +290,7 @@ public sealed class AssistantViewModel : ObservableObject
         _speechPlaybackCancellation?.Cancel();
         _voiceDevice.StopPlayback();
         IsSpeaking = false;
-        if (!IsMicrophoneActive && _voiceDevice.IsAvailable)
+        if (!IsMicrophoneActive && _isVoiceAvailable)
         {
             VoiceStatusText = "Voice Ready";
         }
@@ -298,6 +341,7 @@ public sealed class AssistantViewModel : ObservableObject
     private void RaiseVoiceAvailabilityProperties()
     {
         RaisePropertyChanged(nameof(CanStartVoiceInput));
+        RaisePropertyChanged(nameof(CanUseVoiceButton));
         RaisePropertyChanged(nameof(CanStopSpeaking));
     }
 
@@ -307,5 +351,15 @@ public sealed class AssistantViewModel : ObservableObject
         VoiceStatusText = error.Kind is CoreErrorKind.CoreUnavailable or CoreErrorKind.CoreTimeout
             ? "Voice Unavailable"
             : "Voice Ready";
+    }
+
+    private void ApplyVoiceCaptureFailure(VoiceDeviceAvailability availability)
+    {
+        _isVoiceAvailable = false;
+        VoiceStatusText = "Voice Unavailable";
+        VoiceErrorMessage = availability.SafeMessage;
+        IsMicrophoneActive = false;
+        IsVoiceBusy = false;
+        RaiseVoiceAvailabilityProperties();
     }
 }
