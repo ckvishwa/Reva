@@ -8,7 +8,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
@@ -75,11 +75,7 @@
                     x:Name="VoiceButton"
                     AutomationProperties.AutomationId="VoiceButton"
                     Content="Hold to Talk"
-                    PointerPressed="VoiceButton_PointerPressed"
-                    PointerReleased="VoiceButton_PointerReleased"
-                    PointerCanceled="VoiceButton_PointerCanceled"
-                    PointerCaptureLost="VoiceButton_PointerCanceled"
-                    IsEnabled="{x:Bind Assistant.IsNotPending, Mode=OneWay}" />
+                    IsEnabled="{x:Bind Assistant.CanUseVoiceButton, Mode=OneWay}" />
                 <Button
                     x:Name="StopSpeakingButton"
                     AutomationProperties.AutomationId="StopSpeakingButton"
@@ -96,6 +92,11 @@
                 Text="{x:Bind Assistant.VoiceErrorMessage, Mode=OneWay}"
                 Foreground="IndianRed"
                 TextWrapping="Wrap" />
+            <Button
+                x:Name="MicrophoneSettingsButton"
+                AutomationProperties.AutomationId="MicrophoneSettingsButton"
+                Content="Microphone Settings"
+                Click="MicrophoneSettingsButton_Click" />
         </StackPanel>
 
         <!--

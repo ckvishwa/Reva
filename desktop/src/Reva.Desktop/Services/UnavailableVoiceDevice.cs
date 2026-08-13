@@ -4,6 +4,10 @@ public sealed class UnavailableVoiceDevice : IVoiceDevice
 {
     public bool IsAvailable => false;
 
+    public Task<VoiceDeviceAvailability> VerifyAvailabilityAsync(
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(VoiceDeviceAvailability.RecordingFailed());
+
     public Task StartRecordingAsync(CancellationToken cancellationToken = default) =>
         throw new InvalidOperationException("Voice capture is unavailable.");
 

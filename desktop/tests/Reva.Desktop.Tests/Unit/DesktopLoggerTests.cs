@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Reva.Desktop.Services;
 
@@ -7,11 +8,11 @@ public class DesktopLoggerTests
 {
     private sealed class CapturingListener : TraceListener
     {
-        public readonly List<string> Lines = new();
+        public readonly ConcurrentQueue<string> Lines = new();
         public override void Write(string? message) { }
         public override void WriteLine(string? message)
         {
-            if (message is not null) Lines.Add(message);
+            if (message is not null) Lines.Enqueue(message);
         }
     }
 
