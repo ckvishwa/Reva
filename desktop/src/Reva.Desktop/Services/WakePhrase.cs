@@ -30,4 +30,13 @@ public static class WakePhraseDefaults
         WakePhrase.RevaWakeUp => "Reva wake up",
         _ => throw new ArgumentOutOfRangeException(nameof(phrase)),
     };
+
+    public static string KeywordSlug(WakePhrase phrase) => phrase switch
+    {
+        WakePhrase.HeyReva => "hey-reva",
+        WakePhrase.YouUpReva => "you-up-reva",
+        WakePhrase.DaddysHome => "daddys-home",
+        WakePhrase.RevaWakeUp => "reva-wake-up",
+        _ => throw new ArgumentOutOfRangeException(nameof(phrase)),
+    };
 }
