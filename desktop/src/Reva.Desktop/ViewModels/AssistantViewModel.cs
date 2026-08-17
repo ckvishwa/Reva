@@ -28,7 +28,6 @@ public sealed class AssistantViewModel : ObservableObject
     private string? _errorMessage;
     private string? _voiceErrorMessage;
     private CancellationTokenSource? _voiceTurnCancellation;
-    private CancellationTokenSource? _speechPlaybackCancellation;
     private Task? _recordingStartTask;
 
     public AssistantViewModel(
@@ -441,12 +440,11 @@ public sealed class AssistantViewModel : ObservableObject
 
     public void StopSpeaking()
     {
-        _speechPlaybackCancellation?.Cancel();
         _voiceDevice.StopPlayback();
         IsSpeaking = false;
         if (!IsMicrophoneActive && _isVoiceAvailable)
         {
-            VoiceStatusText = "Voice Ready";
+            VoiceState = IdleState();
         }
     }
 
