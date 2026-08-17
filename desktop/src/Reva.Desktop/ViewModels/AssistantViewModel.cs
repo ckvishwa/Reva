@@ -16,6 +16,7 @@ public sealed class AssistantViewModel : ObservableObject
     private readonly IRevaCoreClient _coreClient;
     private readonly IVoiceDevice _voiceDevice;
     private readonly IRevaCoreLifecycle? _lifecycle;
+    private readonly ICommandRouter _commandRouter;
     private readonly DispatcherQueue? _dispatcherQueue = TryGetDispatcherQueue();
     private string _composerText = string.Empty;
     private bool _isPending;
@@ -33,11 +34,13 @@ public sealed class AssistantViewModel : ObservableObject
     public AssistantViewModel(
         IRevaCoreClient coreClient,
         IVoiceDevice? voiceDevice = null,
-        IRevaCoreLifecycle? lifecycle = null)
+        IRevaCoreLifecycle? lifecycle = null,
+        ICommandRouter? commandRouter = null)
     {
         _coreClient = coreClient;
         _voiceDevice = voiceDevice ?? new UnavailableVoiceDevice();
         _lifecycle = lifecycle;
+        _commandRouter = commandRouter ?? new NullCommandRouter();
         _isVoiceAvailable = _voiceDevice.IsAvailable;
         _voiceState = _isVoiceAvailable
             ? (IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable)
@@ -486,6 +489,8 @@ public sealed class AssistantViewModel : ObservableObject
             return null;
         }
 
+        var source = _composerSource; // captured before the clear below resets it
+
         ErrorMessage = null;
         IsPending = true;
         RaiseVoiceAvailabilityProperties();
@@ -498,6 +503,18 @@ public sealed class AssistantViewModel : ObservableObject
 
         try
         {
+            var routeResult = await _commandRouter.RouteAsync(trimmed, source, cancellationToken)
+                .ConfigureAwait(true);
+            if (routeResult.Outcome != CommandOutcome.NotACommand)
+            {
+                if (!string.IsNullOrEmpty(routeResult.ResultMessage))
+                {
+                    Messages.Add(AssistantMessage.FromAssistant(routeResult.ResultMessage));
+                }
+
+                return null;
+            }
+
             var result = await _coreClient.SendMessageAsync(trimmed, cancellationToken);
             if (result.IsSuccess)
             {
@@ -510,6 +527,18 @@ public sealed class AssistantViewModel : ObservableObject
                 ErrorMessage = result.Error!.SafeMessage;
                 return null;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // A bug anywhere in this pipeline (most plausibly the command
+            // router — WindowsAppExecutor already catches its own OS-level
+            // failures internally) must not leave Send permanently disabled.
+            ErrorMessage = "Something went wrong sending that message. Try again.";
+            return null;
         }
         finally
         {

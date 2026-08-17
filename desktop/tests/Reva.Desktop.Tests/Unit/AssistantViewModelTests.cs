@@ -191,6 +191,32 @@ public class AssistantViewModelTests
         }
     }
 
+    private sealed class FakeCommandRouter : ICommandRouter
+    {
+        private readonly Func<string, CommandSource, CommandRouteResult> _responder;
+
+        public FakeCommandRouter(Func<string, CommandSource, CommandRouteResult> responder) =>
+            _responder = responder;
+
+        public int CallCount { get; private set; }
+
+        public List<(string Text, CommandSource Source)> Received { get; } = new();
+
+        public Task<CommandRouteResult> RouteAsync(
+            string text, CommandSource source, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            Received.Add((text, source));
+            return Task.FromResult(_responder(text, source));
+        }
+    }
+
+    private static FakeCommandRouter PassthroughRouter() =>
+        new((_, _) => new CommandRouteResult(CommandOutcome.NotACommand, null));
+
+    private static FakeCommandRouter RecognizingRouter(CommandOutcome outcome, string message) =>
+        new((_, _) => new CommandRouteResult(outcome, message));
+
     private static TypedMessageResponse SuccessResponse(string reply) =>
         new(SchemaVersion: 1, CorrelationId: Guid.NewGuid().ToString(), Reply: reply, MemoryCreated: null);
 
@@ -865,5 +891,155 @@ public class AssistantViewModelTests
         await viewModel.SendMessageAsync();
 
         Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterReturnsNotACommand_FallsThroughToCoreUnchanged()
+    {
+        var client = ImmediateSuccessClient("Received: hello");
+        var router = PassthroughRouter();
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "hello REVA" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(1, router.CallCount);
+        Assert.Equal(1, client.CallCount);
+        Assert.Equal(2, viewModel.Messages.Count);
+        Assert.Equal("Received: hello", viewModel.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterRecognizesCommand_NeverCallsCore()
+    {
+        var client = new FakeCoreClient(
+            (_, _) => throw new NotSupportedException("router-recognized command must never reach Core"));
+        var router = RecognizingRouter(CommandOutcome.Executed, "Opened Google Chrome.");
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "open Chrome" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(0, client.CallCount);
+        Assert.Equal(2, viewModel.Messages.Count);
+        Assert.Equal(AssistantMessageRole.User, viewModel.Messages[0].Role);
+        Assert.Equal("open Chrome", viewModel.Messages[0].Text);
+        Assert.Equal(AssistantMessageRole.Assistant, viewModel.Messages[1].Role);
+        Assert.Equal("Opened Google Chrome.", viewModel.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_TypedText_PassesTypedSourceToRouter()
+    {
+        var router = PassthroughRouter();
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), commandRouter: router)
+        {
+            ComposerText = "confirm",
+        };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(CommandSource.Typed, router.Received.Single().Source);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_TranscribedText_PassesTranscribedSourceToRouter()
+    {
+        // The end-to-end proof of the v2 rule: a spoken "confirm" reaches the
+        // router labelled as speech, and the router (Task 2) refuses to let it
+        // resolve a pending close.
+        var client = TranscribingClient("confirm");
+        var router = PassthroughRouter();
+        var viewModel = new AssistantViewModel(
+            client,
+            new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))),
+            commandRouter: router);
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(CommandSource.Transcribed, router.Received.Single().Source);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterRecognizesCommand_ComposerStillClears()
+    {
+        var client = new FakeCoreClient((_, _) => throw new NotSupportedException());
+        var router = RecognizingRouter(CommandOutcome.Executed, "Opened Notepad.");
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "open Notepad" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(string.Empty, viewModel.ComposerText);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterAwaitingConfirmation_ShowsPrompt_NeverCallsCore()
+    {
+        var client = new FakeCoreClient((_, _) => throw new NotSupportedException());
+        var router = RecognizingRouter(
+            CommandOutcome.AwaitingConfirmation,
+            "Close Google Chrome? Unsaved work may be lost. Type 'confirm' or 'cancel'.");
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "close Chrome" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(0, client.CallCount);
+        Assert.Equal(
+            "Close Google Chrome? Unsaved work may be lost. Type 'confirm' or 'cancel'.",
+            viewModel.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterRejects_ShowsRejectionInsteadOfAskingTheAssistant()
+    {
+        var client = new FakeCoreClient((_, _) => throw new NotSupportedException());
+        var router = RecognizingRouter(CommandOutcome.Rejected, "I can't close File Explorer.");
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "close explorer" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(0, client.CallCount);
+        Assert.Equal("I can't close File Explorer.", viewModel.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_NoCommandRouterProvided_BehavesExactlyAsBeforeThisSlice()
+    {
+        var client = ImmediateSuccessClient("Received: hi");
+        var viewModel = new AssistantViewModel(client) { ComposerText = "open Chrome" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(1, client.CallCount);
+        Assert.Equal("Received: hi", viewModel.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_IsPending_ResetsAfterCommandRouted()
+    {
+        var client = new FakeCoreClient((_, _) => throw new NotSupportedException());
+        var router = RecognizingRouter(CommandOutcome.Executed, "Opened Notepad.");
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "open Notepad" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.False(viewModel.IsPending);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterThrows_SurfacesSafeErrorAndClearsPending()
+    {
+        // WindowsAppExecutor catches its own OS exceptions, but a bug in the
+        // router must not leave the UI stuck with Send disabled forever.
+        var router = new FakeCommandRouter((_, _) => throw new InvalidOperationException("boom"));
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), commandRouter: router)
+        {
+            ComposerText = "open chrome",
+        };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.False(viewModel.IsPending);
+        Assert.NotNull(viewModel.ErrorMessage);
     }
 }
