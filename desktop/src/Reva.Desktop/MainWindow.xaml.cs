@@ -16,25 +16,32 @@ public sealed partial class MainWindow : Window
 
     public MemoryViewModel Memory { get; }
 
+    public WakeWordCoordinator? WakeWord { get; }
+
     public MainWindow(
-        IRevaCoreClient coreClient,
-        IRevaCoreLifecycle lifecycle,
-        IVoiceDevice? voiceDevice = null,
-        ICommandRouter? commandRouter = null)
+        ShellViewModel shell,
+        AssistantViewModel assistant,
+        MemoryViewModel memory,
+        WakeWordCoordinator? wakeWord = null)
     {
         InitializeComponent();
-        Shell = new ShellViewModel(lifecycle);
-        Assistant = new AssistantViewModel(coreClient, voiceDevice, lifecycle, commandRouter);
-        Memory = new MemoryViewModel(coreClient);
+        Shell = shell;
+        Assistant = assistant;
+        Memory = memory;
+        WakeWord = wakeWord;
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
         RegisterVoicePointerHandlers();
         Closed += MainWindow_Closed;
     }
 
-    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         Assistant.DetachLifecycle();
+        if (WakeWord is not null)
+        {
+            await WakeWord.DisposeAsync();
+        }
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -120,6 +127,11 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer pressed handler reached");
         e.Handled = true;
         VoiceButton.CapturePointer(e.Pointer);
+        if (WakeWord is not null)
+        {
+            await WakeWord.SuspendForHoldToTalkAsync();
+        }
+
         await Assistant.StartVoiceInputAsync();
     }
 
@@ -128,7 +140,7 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer released handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
-        await Assistant.FinishVoiceInputAsync();
+        await FinishVoiceInputAndResumeWakeAsync();
     }
 
     private async void VoiceButton_PointerCanceled(object sender, PointerRoutedEventArgs e)
@@ -136,7 +148,7 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer canceled handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
-        await Assistant.FinishVoiceInputAsync();
+        await FinishVoiceInputAndResumeWakeAsync();
     }
 
     private async void VoiceButton_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
@@ -144,7 +156,22 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer capture lost handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
-        await Assistant.FinishVoiceInputAsync();
+        await FinishVoiceInputAndResumeWakeAsync();
+    }
+
+    private async Task FinishVoiceInputAndResumeWakeAsync()
+    {
+        try
+        {
+            await Assistant.FinishVoiceInputAsync();
+        }
+        finally
+        {
+            if (WakeWord is not null)
+            {
+                await WakeWord.ResumeAfterHoldToTalkAsync();
+            }
+        }
     }
 
     private void StopSpeakingButton_Click(object sender, RoutedEventArgs e)

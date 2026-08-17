@@ -40,8 +40,25 @@ public partial class App : Application
         _lifecycle = lifecycle;
 
         var commandRouter = new CommandRouter(new WindowsAppExecutor());
+        var microphoneArbiter = new MicrophoneArbiter();
+        var assistant = new ViewModels.AssistantViewModel(
+            coreClient,
+            new ArbiterVoiceDevice(new WindowsVoiceDevice(), microphoneArbiter),
+            lifecycle,
+            commandRouter);
+        var wakeWord = new ViewModels.WakeWordCoordinator(
+            new NullWakeWordDetector(),
+            microphoneArbiter,
+            new WindowsVoiceDevice(),
+            coreClient,
+            assistant,
+            new SilentChimePlayer());
 
-        _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice(), commandRouter);
+        _window = new MainWindow(
+            new ViewModels.ShellViewModel(lifecycle),
+            assistant,
+            new ViewModels.MemoryViewModel(coreClient),
+            wakeWord);
         _window.Activate();
 
         // Deliberately started after Activate(), not awaited before it: the
