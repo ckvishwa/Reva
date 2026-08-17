@@ -78,6 +78,7 @@ public class AssistantViewModelTests
         private readonly TaskCompletionSource? _recordingStarted;
         private readonly TaskCompletionSource? _allowRecordingToStart;
         private readonly Exception? _startException;
+        private readonly VoiceDeviceAvailability? _verifyResult;
 
         public FakeVoiceDevice(
             byte[]? recordedAudio = null,
@@ -86,7 +87,8 @@ public class AssistantViewModelTests
             TaskCompletionSource? recordingStarted = null,
             TaskCompletionSource? allowRecordingToStart = null,
             Exception? startException = null,
-            bool isAvailable = true)
+            bool isAvailable = true,
+            VoiceDeviceAvailability? verifyResult = null)
         {
             RecordedAudio = recordedAudio ?? new byte[] { 1, 2, 3 };
             _playbackStarted = playbackStarted;
@@ -95,8 +97,15 @@ public class AssistantViewModelTests
             _allowRecordingToStart = allowRecordingToStart;
             _startException = startException;
             IsAvailable = isAvailable;
+            _verifyResult = verifyResult;
         }
 
+        // Constructor-time IsAvailable seeds AssistantViewModel's initial
+        // _isVoiceAvailable (mirroring WindowsVoiceDevice.IsAvailable, which
+        // is false until VerifyAvailabilityAsync confirms the mic).
+        // _verifyResult, when supplied, lets a test simulate that real-world
+        // "starts unverified, verification then succeeds/fails independently"
+        // shape instead of VerifyAvailabilityAsync just echoing IsAvailable.
         public bool IsAvailable { get; init; } = true;
 
         public byte[] RecordedAudio { get; }
@@ -111,9 +120,10 @@ public class AssistantViewModelTests
 
         public Task<VoiceDeviceAvailability> VerifyAvailabilityAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(
-                IsAvailable
+                _verifyResult
+                ?? (IsAvailable
                     ? VoiceDeviceAvailability.Ready()
-                    : VoiceDeviceAvailability.NoMicrophoneFound());
+                    : VoiceDeviceAvailability.NoMicrophoneFound()));
 
         public async Task StartRecordingAsync(CancellationToken cancellationToken = default)
         {
@@ -718,5 +728,49 @@ public class AssistantViewModelTests
         lifecycle.RaiseStateChanged();
 
         Assert.NotEqual(VoiceUiState.ReadyToTalk, viewModel.VoiceState);
+    }
+
+    // Regression coverage for the real-world startup sequence:
+    // WindowsVoiceDevice.IsAvailable is false until VerifyAvailabilityAsync
+    // confirms the mic, so the constructor always seeds VoiceState at
+    // CheckingMicrophone. Root_Loaded then calls RefreshVoiceAvailabilityAsync
+    // once at startup. Before the fix, that call updated VoiceStatusText and
+    // _isVoiceAvailable directly but never touched VoiceState, so VoiceState
+    // stayed stuck at CheckingMicrophone forever — which made every later
+    // Core StateChanged event's RefreshIdleVoiceState() no-op (its guard
+    // treats CheckingMicrophone as "leave it alone"), leaving VoiceStatusText
+    // permanently out of sync with CanStartVoiceInput/CanUseVoiceButton.
+    [Fact]
+    public async Task RefreshVoiceAvailabilityAsync_MicBecomesReadyButCoreDisconnected_MovesOffCheckingMicrophone_ToSttUnavailable()
+    {
+        var voiceDevice = new FakeVoiceDevice(isAvailable: false, verifyResult: VoiceDeviceAvailability.Ready());
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Unavailable };
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), voiceDevice, lifecycle);
+
+        // Sanity: constructor seeds CheckingMicrophone because the device
+        // isn't verified yet (mirrors the real device's unverified default).
+        Assert.Equal(VoiceUiState.CheckingMicrophone, viewModel.VoiceState);
+
+        await viewModel.RefreshVoiceAvailabilityAsync();
+
+        Assert.Equal(VoiceUiState.SttUnavailable, viewModel.VoiceState);
+        Assert.Equal("STT Unavailable", viewModel.VoiceStatusText);
+        Assert.False(viewModel.CanStartVoiceInput);
+    }
+
+    [Fact]
+    public async Task RefreshVoiceAvailabilityAsync_MicBecomesReadyAndCoreConnected_MovesOffCheckingMicrophone_ToReadyToTalk()
+    {
+        var voiceDevice = new FakeVoiceDevice(isAvailable: false, verifyResult: VoiceDeviceAvailability.Ready());
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Connected };
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), voiceDevice, lifecycle);
+
+        Assert.Equal(VoiceUiState.CheckingMicrophone, viewModel.VoiceState);
+
+        await viewModel.RefreshVoiceAvailabilityAsync();
+
+        Assert.Equal(VoiceUiState.ReadyToTalk, viewModel.VoiceState);
+        Assert.Equal("Ready to Talk", viewModel.VoiceStatusText);
+        Assert.True(viewModel.CanStartVoiceInput);
     }
 }
