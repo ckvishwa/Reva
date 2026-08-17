@@ -10,6 +10,16 @@ namespace Reva.Desktop.Services;
 /// the UI thread.</summary>
 public sealed class WindowsAppExecutor : IAppExecutor
 {
+    private readonly IWindowsProcessRuntime _processRuntime;
+
+    public WindowsAppExecutor()
+        : this(new SystemWindowsProcessRuntime())
+    {
+    }
+
+    internal WindowsAppExecutor(IWindowsProcessRuntime processRuntime) =>
+        _processRuntime = processRuntime;
+
     public Task<bool> OpenAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default) =>
         Task.Run(
             () =>
@@ -21,7 +31,7 @@ public sealed class WindowsAppExecutor : IAppExecutor
                         FileName = descriptor.OpenTarget,   // fixed literal, never user input
                         UseShellExecute = true,
                     };
-                    using var process = Process.Start(startInfo);
+                    using var process = _processRuntime.Start(startInfo);
 
                     // ms-settings: and other shell protocol handlers legitimately
                     // return null from Process.Start even on success, so a null
@@ -41,15 +51,34 @@ public sealed class WindowsAppExecutor : IAppExecutor
         Task.Run(
             () =>
             {
-                var matches = FindRunningProcesses(descriptor);
-                try
+                var running = false;
+                foreach (var process in GetProcesses(descriptor))
                 {
-                    return matches.Count > 0;
+                    try
+                    {
+                        try
+                        {
+                            running |= process.MainWindowHandle != IntPtr.Zero;
+                        }
+                        catch (Win32Exception)
+                        {
+                            // If Windows says the process exists but refuses
+                            // to expose its window handle, treat it
+                            // conservatively as running.
+                            running = true;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // Exited while we were enumerating.
+                        }
+                    }
+                    finally
+                    {
+                        process.Dispose();
+                    }
                 }
-                finally
-                {
-                    DisposeAll(matches);
-                }
+
+                return running;
             },
             cancellationToken);
 
@@ -57,18 +86,33 @@ public sealed class WindowsAppExecutor : IAppExecutor
         Task.Run(
             () =>
             {
-                var matches = FindRunningProcesses(descriptor);
-                if (matches.Count == 0)
+                var requested = 0;
+                var failed = 0;
+                foreach (var process in GetProcesses(descriptor))
                 {
-                    return AppCloseOutcome.NotRunning;
-                }
-
-                try
-                {
-                    var requested = 0;
-                    var failed = 0;
-                    foreach (var process in matches)
+                    try
                     {
+                        try
+                        {
+                            if (process.MainWindowHandle == IntPtr.Zero)
+                            {
+                                continue;
+                            }
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // Exited before we could inspect it.
+                            continue;
+                        }
+                        catch (Win32Exception)
+                        {
+                            // Existing process, but Windows would not expose
+                            // the window handle. Count it as a close failure
+                            // rather than pretending nothing is running.
+                            failed++;
+                            continue;
+                        }
+
                         try
                         {
                             // Polite request only — the target may ignore it or
@@ -95,55 +139,82 @@ public sealed class WindowsAppExecutor : IAppExecutor
                             failed++;
                         }
                     }
-
-                    if (requested > 0)
+                    finally
                     {
-                        return AppCloseOutcome.CloseRequested;
+                        process.Dispose();
                     }
+                }
 
-                    return failed > 0 ? AppCloseOutcome.Failed : AppCloseOutcome.NotRunning;
-                }
-                finally
+                if (requested > 0)
                 {
-                    DisposeAll(matches);
+                    return AppCloseOutcome.CloseRequested;
                 }
+
+                return failed > 0 ? AppCloseOutcome.Failed : AppCloseOutcome.NotRunning;
             },
             cancellationToken);
 
     private static bool IsShellProtocol(string target) => target.EndsWith(':');
 
-    private static List<Process> FindRunningProcesses(AppDescriptor descriptor)
+    private IReadOnlyList<IWindowsAppProcess> GetProcesses(AppDescriptor descriptor)
     {
-        var matches = new List<Process>();
+        var processes = new List<IWindowsAppProcess>();
         foreach (var name in descriptor.CloseProcessNames ?? Array.Empty<string>())
         {
-            foreach (var process in Process.GetProcessesByName(name))
-            {
-                try
-                {
-                    if (process.MainWindowHandle != IntPtr.Zero)
-                    {
-                        matches.Add(process);
-                        continue;
-                    }
-                }
-                catch (InvalidOperationException)
-                {
-                    // Exited while we were enumerating.
-                }
-
-                process.Dispose();
-            }
+            processes.AddRange(_processRuntime.GetProcessesByName(name));
         }
 
-        return matches;
+        return processes;
+    }
+}
+
+internal interface IWindowsProcessRuntime
+{
+    IWindowsAppProcess? Start(ProcessStartInfo startInfo);
+
+    IReadOnlyList<IWindowsAppProcess> GetProcessesByName(string processName);
+}
+
+internal interface IWindowsAppProcess : IDisposable
+{
+    IntPtr MainWindowHandle { get; }
+
+    bool CloseMainWindow();
+}
+
+internal sealed class SystemWindowsProcessRuntime : IWindowsProcessRuntime
+{
+    public IWindowsAppProcess? Start(ProcessStartInfo startInfo)
+    {
+        var process = Process.Start(startInfo);
+        return process is null ? null : new SystemWindowsAppProcess(process);
     }
 
-    private static void DisposeAll(List<Process> processes)
+    public IReadOnlyList<IWindowsAppProcess> GetProcessesByName(string processName)
     {
-        foreach (var process in processes)
+        var processes = Process.GetProcessesByName(processName);
+        var wrapped = new IWindowsAppProcess[processes.Length];
+        for (var i = 0; i < processes.Length; i++)
         {
-            process.Dispose();
+            wrapped[i] = new SystemWindowsAppProcess(processes[i]);
         }
+
+        return wrapped;
+    }
+}
+
+internal sealed class SystemWindowsAppProcess : IWindowsAppProcess
+{
+    private readonly Process _process;
+
+    public SystemWindowsAppProcess(Process process) => _process = process;
+
+    public IntPtr MainWindowHandle => _process.MainWindowHandle;
+
+    public bool CloseMainWindow() => _process.CloseMainWindow();
+
+    public void Dispose()
+    {
+        _process.Dispose();
     }
 }
