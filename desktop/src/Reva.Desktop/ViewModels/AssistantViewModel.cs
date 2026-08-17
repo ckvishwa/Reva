@@ -241,7 +241,7 @@ public sealed class AssistantViewModel : ObservableObject
         {
             var availability = await _voiceDevice.VerifyAvailabilityAsync(cancellationToken);
             _isVoiceAvailable = availability.IsReady;
-            VoiceStatusText = availability.IsReady ? "Voice Ready" : "Voice Unavailable";
+            VoiceState = MapAvailabilityToVoiceState(availability);
             VoiceErrorMessage = availability.IsReady ? null : availability.SafeMessage;
         }
         catch (OperationCanceledException)
@@ -251,7 +251,7 @@ public sealed class AssistantViewModel : ObservableObject
         catch (Exception)
         {
             _isVoiceAvailable = false;
-            VoiceStatusText = "Voice Unavailable";
+            VoiceState = VoiceUiState.NoMicrophone;
             VoiceErrorMessage = VoiceDeviceAvailability.RecordingFailed().SafeMessage;
         }
         finally
@@ -259,6 +259,22 @@ public sealed class AssistantViewModel : ObservableObject
             RaiseVoiceAvailabilityProperties();
         }
     }
+
+    // Routes the verification outcome through VoiceState (rather than
+    // writing VoiceStatusText directly) so this call site can never desync
+    // status text from button enablement — VoiceState's setter pushes into
+    // VoiceStatusText automatically. This is the real-world startup path:
+    // WindowsVoiceDevice.IsAvailable is false until VerifyAvailabilityAsync
+    // confirms the mic, so the constructor always seeds VoiceState at
+    // CheckingMicrophone; this is what moves it off that value for good.
+    private VoiceUiState MapAvailabilityToVoiceState(VoiceDeviceAvailability availability) => availability.Kind switch
+    {
+        VoiceDeviceAvailabilityKind.Ready => IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable,
+        VoiceDeviceAvailabilityKind.PermissionDenied => VoiceUiState.PermissionDenied,
+        VoiceDeviceAvailabilityKind.NoMicrophoneFound => VoiceUiState.NoMicrophone,
+        VoiceDeviceAvailabilityKind.RecordingFailed => VoiceUiState.NoMicrophone,
+        _ => VoiceUiState.NoMicrophone,
+    };
 
     public async Task SendMessageAsync(CancellationToken cancellationToken = default)
     {
