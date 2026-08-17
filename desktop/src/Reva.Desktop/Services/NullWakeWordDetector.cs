@@ -10,6 +10,12 @@ public sealed class NullWakeWordDetector : IWakeWordDetector
         remove { }
     }
 
+    public event EventHandler<WakeWordFailure>? Faulted
+    {
+        add { }
+        remove { }
+    }
+
     public Task StartAsync(
         WakeWordConfiguration configuration,
         IMicrophoneLease lease,

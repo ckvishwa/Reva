@@ -64,5 +64,7 @@ public class WakeWordKeywordResolverTests
             _paths = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
 
         public bool FileExists(string path) => _paths.Contains(path);
+
+        public string ComputeSha256(string path) => new('0', 64);
     }
 }
