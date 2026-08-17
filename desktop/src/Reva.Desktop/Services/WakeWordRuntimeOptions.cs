@@ -52,7 +52,9 @@ public sealed record WakeWordRuntimeOptions(
         var architecture = environment("REVA_WAKE_WORD_NATIVE_ARCHITECTURE");
         if (string.IsNullOrWhiteSpace(architecture))
         {
-            architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString();
+            architecture = string.IsNullOrWhiteSpace(settings.NativeArchitecture)
+                ? System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString()
+                : settings.NativeArchitecture;
         }
 
         return new WakeWordRuntimeOptions(

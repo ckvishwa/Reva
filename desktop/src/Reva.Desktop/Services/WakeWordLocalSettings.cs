@@ -5,15 +5,18 @@ namespace Reva.Desktop.Services;
 public sealed record WakeWordLocalSettings(
     bool IsEnabled,
     string KeywordSetVersion,
+    string NativeArchitecture,
     IReadOnlyDictionary<string, string> ModelHashes)
 {
     public static WakeWordLocalSettings Disabled { get; } =
-        new(false, string.Empty, new Dictionary<string, string>());
+        new(false, string.Empty, string.Empty, new Dictionary<string, string>());
 }
 
 public interface IWakeWordSettingsStore
 {
     WakeWordLocalSettings Load();
+
+    void Save(WakeWordLocalSettings settings);
 }
 
 public sealed class JsonWakeWordSettingsStore : IWakeWordSettingsStore
@@ -49,5 +52,18 @@ public sealed class JsonWakeWordSettingsStore : IWakeWordSettingsStore
         {
             return WakeWordLocalSettings.Disabled;
         }
+    }
+
+    public void Save(WakeWordLocalSettings settings)
+    {
+        var directory = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(
+            _path,
+            JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
     }
 }
