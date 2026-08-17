@@ -41,18 +41,25 @@ public partial class App : Application
 
         var commandRouter = new CommandRouter(new WindowsAppExecutor());
         var microphoneArbiter = new MicrophoneArbiter();
+        var wakeWordOptions = WakeWordRuntimeOptions.FromEnvironment();
         var assistant = new ViewModels.AssistantViewModel(
             coreClient,
             new ArbiterVoiceDevice(new WindowsVoiceDevice(), microphoneArbiter),
             lifecycle,
             commandRouter);
+        IWakeWordDetector detector = wakeWordOptions.IsEnabled
+            ? new PorcupineWakeWordDetector(
+                wakeWordOptions.AccessKey,
+                wakeWordOptions.KeywordDirectory,
+                new RealFileSystemProbe())
+            : new NullWakeWordDetector();
         var wakeWord = new ViewModels.WakeWordCoordinator(
-            new NullWakeWordDetector(),
+            detector,
             microphoneArbiter,
-            new WindowsVoiceDevice(),
+            new PvRecorderWakeSpeechCapture(),
             coreClient,
             assistant,
-            new SilentChimePlayer());
+            new SystemChimePlayer());
 
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),
@@ -60,6 +67,10 @@ public partial class App : Application
             new ViewModels.MemoryViewModel(coreClient),
             wakeWord);
         _window.Activate();
+        if (wakeWordOptions.IsEnabled)
+        {
+            await wakeWord.EnableAsync(wakeWordOptions.Configuration);
+        }
 
         // Deliberately started after Activate(), not awaited before it: the
         // window (and its "Starting Core…" initial state) must appear
