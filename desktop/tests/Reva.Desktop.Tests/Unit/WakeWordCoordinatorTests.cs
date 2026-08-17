@@ -109,18 +109,18 @@ public class WakeWordCoordinatorTests
         var client = TranscribingClient("Hey Reva open chrome");
         var assistant = new AssistantViewModel(client, commandRouter: new RecordingCommandRouter(
             new CommandRouteResult(CommandOutcome.Executed, "Opened Google Chrome.")));
-        var wakeVoice = new BlockingVoiceDevice();
+        var wakeCapture = new BlockingWakeSpeechCapture();
         var arbiter = new MicrophoneArbiter();
         var holdVoice = new ArbiterVoiceDevice(new FakeVoiceDevice(), arbiter);
-        var coordinator = NewCoordinator(client, assistant, wakeVoice, arbiter, out var detector);
+        var coordinator = NewCoordinator(client, assistant, wakeCapture, arbiter, out var detector);
         await coordinator.EnableAsync(DefaultConfig());
 
         detector.RaiseDetected(WakePhrase.HeyReva);
-        await wakeVoice.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await wakeCapture.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         await Assert.ThrowsAsync<VoiceCaptureException>(() => holdVoice.StartRecordingAsync());
 
-        wakeVoice.AllowStop.SetResult();
+        wakeCapture.AllowStop.SetResult();
         await coordinator.WaitForTurnAsync();
     }
 
@@ -164,8 +164,8 @@ public class WakeWordCoordinatorTests
         var client = TranscribingClient(transcript);
         var assistant = new AssistantViewModel(client, commandRouter: new RecordingCommandRouter(
             new CommandRouteResult(CommandOutcome.NotACommand, null)));
-        var voice = new FakeVoiceDevice(stopException: new InvalidOperationException(exceptionDetail));
-        var coordinator = NewCoordinator(client, assistant, voice, new MicrophoneArbiter(), out var detector);
+        var capture = new FakeWakeSpeechCapture(new InvalidOperationException(exceptionDetail));
+        var coordinator = NewCoordinator(client, assistant, capture, new MicrophoneArbiter(), out var detector);
         using var listener = new CapturingTraceListener();
         Trace.Listeners.Add(listener);
 
@@ -197,7 +197,7 @@ public class WakeWordCoordinatorTests
     {
         arbiter = new MicrophoneArbiter();
         detector = new FakeWakeWordDetector();
-        return NewCoordinator(client, assistant, new FakeVoiceDevice(), arbiter, out detector);
+        return NewCoordinator(client, assistant, new FakeWakeSpeechCapture(), arbiter, out detector);
     }
 
     private static WakeWordCoordinator NewCoordinator(
@@ -211,7 +211,7 @@ public class WakeWordCoordinatorTests
     private static WakeWordCoordinator NewCoordinator(
         FakeCoreClient client,
         AssistantViewModel assistant,
-        IVoiceDevice voiceDevice,
+        IWakeSpeechCapture speechCapture,
         MicrophoneArbiter arbiter,
         out FakeWakeWordDetector detector)
     {
@@ -219,7 +219,7 @@ public class WakeWordCoordinatorTests
         return new WakeWordCoordinator(
             detector,
             arbiter,
-            voiceDevice,
+            speechCapture,
             client,
             assistant,
             new FakeChimePlayer());
@@ -314,35 +314,35 @@ public class WakeWordCoordinatorTests
         }
     }
 
-    private class FakeVoiceDevice : IVoiceDevice
+    private sealed class FakeWakeSpeechCapture : IWakeSpeechCapture
     {
-        private readonly Exception? _stopException;
+        private readonly Exception? _exception;
 
-        public FakeVoiceDevice(Exception? stopException = null) => _stopException = stopException;
+        public FakeWakeSpeechCapture(Exception? exception = null) => _exception = exception;
 
-        public bool IsAvailable => true;
-        public int StartCallCount { get; private set; }
-        public int StopCallCount { get; private set; }
-
-        public Task<VoiceDeviceAvailability> VerifyAvailabilityAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(VoiceDeviceAvailability.Ready());
-
-        public virtual Task StartRecordingAsync(CancellationToken cancellationToken = default)
+        public Task<byte[]> CaptureAsync(CancellationToken cancellationToken = default)
         {
-            StartCallCount++;
-            return Task.CompletedTask;
-        }
-
-        public virtual Task<byte[]> StopRecordingAsync(CancellationToken cancellationToken = default)
-        {
-            StopCallCount++;
-            if (_stopException is not null)
+            if (_exception is not null)
             {
-                throw _stopException;
+                throw _exception;
             }
 
             return Task.FromResult(TestWav.Mono16k(TimeSpan.FromSeconds(1)));
         }
+    }
+
+    private sealed class FakeVoiceDevice : IVoiceDevice
+    {
+        public bool IsAvailable => true;
+
+        public Task<VoiceDeviceAvailability> VerifyAvailabilityAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(VoiceDeviceAvailability.Ready());
+
+        public Task StartRecordingAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<byte[]> StopRecordingAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(TestWav.Mono16k(TimeSpan.FromSeconds(1)));
 
         public Task PlayAsync(byte[] wavAudio, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
@@ -356,19 +356,14 @@ public class WakeWordCoordinatorTests
         }
     }
 
-    private sealed class BlockingVoiceDevice : FakeVoiceDevice
+    private sealed class BlockingWakeSpeechCapture : IWakeSpeechCapture
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource AllowStop { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public override Task StartRecordingAsync(CancellationToken cancellationToken = default)
+        public async Task<byte[]> CaptureAsync(CancellationToken cancellationToken = default)
         {
             Started.SetResult();
-            return Task.CompletedTask;
-        }
-
-        public override async Task<byte[]> StopRecordingAsync(CancellationToken cancellationToken = default)
-        {
             await AllowStop.Task.WaitAsync(cancellationToken);
             return TestWav.Mono16k(TimeSpan.FromSeconds(1));
         }

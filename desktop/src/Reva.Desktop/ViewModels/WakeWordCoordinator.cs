@@ -8,7 +8,7 @@ public sealed class WakeWordCoordinator : ObservableObject, IAsyncDisposable
 {
     private readonly IWakeWordDetector _detector;
     private readonly IMicrophoneArbiter _arbiter;
-    private readonly IVoiceDevice _voiceDevice;
+    private readonly IWakeSpeechCapture _speechCapture;
     private readonly IRevaCoreClient _coreClient;
     private readonly IComposerSink _composerSink;
     private readonly IChimePlayer _chimePlayer;
@@ -25,14 +25,14 @@ public sealed class WakeWordCoordinator : ObservableObject, IAsyncDisposable
     public WakeWordCoordinator(
         IWakeWordDetector detector,
         IMicrophoneArbiter arbiter,
-        IVoiceDevice voiceDevice,
+        IWakeSpeechCapture speechCapture,
         IRevaCoreClient coreClient,
         IComposerSink composerSink,
         IChimePlayer chimePlayer)
     {
         _detector = detector;
         _arbiter = arbiter;
-        _voiceDevice = voiceDevice;
+        _speechCapture = speechCapture;
         _coreClient = coreClient;
         _composerSink = composerSink;
         _chimePlayer = chimePlayer;
@@ -151,18 +151,13 @@ public sealed class WakeWordCoordinator : ObservableObject, IAsyncDisposable
     private async Task RunTurnAsync(WakeWordDetection detection, CancellationToken cancellationToken)
     {
         DesktopLogger.Info($"wakeword.detected phrase={detection.Phrase}");
-        var recordingStarted = false;
         try
         {
             await _detector.StopAsync(cancellationToken).ConfigureAwait(false);
             await _chimePlayer.PlayAsync(cancellationToken).ConfigureAwait(false);
             SetState(WakeWordUiState.Listening);
-            await _voiceDevice.StartRecordingAsync(cancellationToken).ConfigureAwait(false);
-            recordingStarted = true;
-
+            var audio = await _speechCapture.CaptureAsync(cancellationToken).ConfigureAwait(false);
             SetState(WakeWordUiState.Transcribing);
-            var audio = await _voiceDevice.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
-            recordingStarted = false;
 
             if (audio.Length == 0 || !WavAudio.TryGetDurationMs(audio, out var durationMs) || durationMs < 250)
             {
@@ -202,17 +197,6 @@ public sealed class WakeWordCoordinator : ObservableObject, IAsyncDisposable
         }
         finally
         {
-            if (recordingStarted)
-            {
-                try
-                {
-                    _voiceDevice.CancelRecording();
-                }
-                catch
-                {
-                }
-            }
-
             if (IsEnabled && _configuration is not null)
             {
                 await StartDetectorAsync(CancellationToken.None).ConfigureAwait(false);
