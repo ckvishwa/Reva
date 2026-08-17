@@ -162,10 +162,13 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
         catch (OperationCanceledException)
         {
         }
-        catch (Exception)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             DesktopLogger.Info("wakeword.detector.stopped reason=provider_error");
             IsRunning = false;
+        }
+        catch (Exception)
+        {
         }
     }
 

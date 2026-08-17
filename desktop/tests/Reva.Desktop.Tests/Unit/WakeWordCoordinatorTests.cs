@@ -157,6 +157,30 @@ public class WakeWordCoordinatorTests
     }
 
     [Fact]
+    public async Task StartupConfigurationFailure_ShowsSanitizedProviderMessage()
+    {
+        var client = TranscribingClient("Hey Reva open chrome");
+        var assistant = new AssistantViewModel(client, commandRouter: new RecordingCommandRouter(
+            new CommandRouteResult(CommandOutcome.Executed, "Opened Google Chrome.")));
+        var detector = new FakeWakeWordDetector
+        {
+            StartException = new WakeWordConfigurationException("Missing keyword file for Hey Reva."),
+        };
+        var coordinator = new WakeWordCoordinator(
+            detector,
+            new MicrophoneArbiter(),
+            new FakeWakeSpeechCapture(),
+            client,
+            assistant,
+            new FakeChimePlayer());
+
+        await coordinator.EnableAsync(DefaultConfig());
+
+        Assert.Equal(WakeWordUiState.WakeWordError, coordinator.State);
+        Assert.Equal("Missing keyword file for Hey Reva.", coordinator.ErrorMessage);
+    }
+
+    [Fact]
     public async Task Logs_DoNotContainTranscriptAudioOrExceptionDetails()
     {
         const string transcript = "Hey Reva sensitive private transcript";
@@ -272,6 +296,7 @@ public class WakeWordCoordinatorTests
     {
         public event EventHandler<WakeWordDetection>? Detected;
 
+        public Exception? StartException { get; init; }
         public bool IsRunning { get; private set; }
         public int StartCallCount { get; private set; }
         public int StopCallCount { get; private set; }
@@ -282,6 +307,11 @@ public class WakeWordCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             StartCallCount++;
+            if (StartException is not null)
+            {
+                throw StartException;
+            }
+
             IsRunning = true;
             return Task.CompletedTask;
         }

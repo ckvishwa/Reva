@@ -126,6 +126,12 @@ public sealed class WakeWordCoordinator : ObservableObject, IAsyncDisposable
             ErrorMessage = null;
             SetState(WakeWordUiState.Armed);
         }
+        catch (WakeWordConfigurationException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            await ReleaseLeaseAsync().ConfigureAwait(false);
+            ErrorMessage = ex.Message;
+            SetState(WakeWordUiState.WakeWordError);
+        }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             await ReleaseLeaseAsync().ConfigureAwait(false);
