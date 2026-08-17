@@ -2,15 +2,24 @@ using Reva.Desktop.Services;
 
 namespace Reva.Desktop.Tests.Unit;
 
+// Environment variables are process-global and xUnit parallelizes across
+// classes; without this, CreateDefault() called concurrently from another
+// class sees a mutated environment and fails intermittently.
+[CollectionDefinition("EnvironmentVariables", DisableParallelization = true)]
+public class EnvironmentVariablesCollection;
+
+[Collection("EnvironmentVariables")]
 public class DesktopConfigurationTests
 {
+    private const string SttEnvVar = "REVA_DESKTOP_STT_TIMEOUT_SECONDS";
+
     [Theory]
     [InlineData("http://localhost:8756/")]
     [InlineData("http://127.0.0.1:8756/")]
     [InlineData("http://[::1]:8756/")]
     public void Constructor_AcceptsLoopbackUrl(string url)
     {
-        var configuration = new DesktopConfiguration(new Uri(url), "data", TimeSpan.FromSeconds(5));
+        var configuration = new DesktopConfiguration(new Uri(url), "data", TimeSpan.FromSeconds(5), DesktopConfiguration.DefaultSttRequestTimeout);
 
         Assert.Equal(new Uri(url), configuration.CoreBaseUrl);
     }
@@ -23,7 +32,7 @@ public class DesktopConfigurationTests
     public void Constructor_RejectsRemoteUrl(string url)
     {
         Assert.Throws<DesktopConfigurationException>(
-            () => new DesktopConfiguration(new Uri(url), "data", TimeSpan.FromSeconds(5)));
+            () => new DesktopConfiguration(new Uri(url), "data", TimeSpan.FromSeconds(5), DesktopConfiguration.DefaultSttRequestTimeout));
     }
 
     [Theory]
@@ -144,6 +153,55 @@ public class DesktopConfigurationTests
         finally
         {
             Environment.SetEnvironmentVariable("REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS", null);
+        }
+    }
+
+    [Fact]
+    public void CreateDefault_NoOverride_UsesThirtySecondSttTimeout()
+    {
+        var previous = Environment.GetEnvironmentVariable(SttEnvVar);
+        Environment.SetEnvironmentVariable(SttEnvVar, null);
+        try
+        {
+            Assert.Equal(TimeSpan.FromSeconds(30), DesktopConfiguration.CreateDefault().SttRequestTimeout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SttEnvVar, previous);
+        }
+    }
+
+    [Fact]
+    public void CreateDefault_SttTimeoutEnvVarOverride_IsRespected()
+    {
+        var previous = Environment.GetEnvironmentVariable(SttEnvVar);
+        Environment.SetEnvironmentVariable(SttEnvVar, "45");
+        try
+        {
+            Assert.Equal(TimeSpan.FromSeconds(45), DesktopConfiguration.CreateDefault().SttRequestTimeout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SttEnvVar, previous);
+        }
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("banana")]
+    [InlineData("")]
+    public void CreateDefault_InvalidSttTimeoutOverride_FallsBackToDefault(string value)
+    {
+        var previous = Environment.GetEnvironmentVariable(SttEnvVar);
+        Environment.SetEnvironmentVariable(SttEnvVar, value);
+        try
+        {
+            Assert.Equal(TimeSpan.FromSeconds(30), DesktopConfiguration.CreateDefault().SttRequestTimeout);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SttEnvVar, previous);
         }
     }
 }

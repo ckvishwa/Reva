@@ -95,7 +95,7 @@ public class RevaCoreLifecycleTests
     }
 
     private static DesktopConfiguration Configuration() =>
-        new(new Uri("http://127.0.0.1:18756/"), Path.Combine(Path.GetTempPath(), "reva-lifecycle-test"), TimeSpan.FromSeconds(5));
+        new(new Uri("http://127.0.0.1:18756/"), Path.Combine(Path.GetTempPath(), "reva-lifecycle-test"), TimeSpan.FromSeconds(5), DesktopConfiguration.DefaultSttRequestTimeout);
 
     private static HealthStatus Healthy() => new(1, "healthy", 1, DateTimeOffset.UtcNow);
 

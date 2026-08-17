@@ -12,7 +12,13 @@ public sealed class DesktopConfiguration
     private const string CoreUrlEnvironmentVariable = "REVA_DESKTOP_CORE_URL";
     private const string DataDirectoryEnvironmentVariable = "REVA_DATA_DIR";
     private const string RequestTimeoutSecondsEnvironmentVariable = "REVA_DESKTOP_REQUEST_TIMEOUT_SECONDS";
-    private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
+    private const string SttRequestTimeoutSecondsEnvironmentVariable = "REVA_DESKTOP_STT_TIMEOUT_SECONDS";
+
+    // Single source of truth — RevaCoreClient's constructor defaults reference
+    // these rather than redeclaring their own literals (v1 had 10s/30s written
+    // in two files, free to drift).
+    public static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan DefaultSttRequestTimeout = TimeSpan.FromSeconds(30);
 
     public Uri CoreBaseUrl { get; }
 
@@ -28,7 +34,9 @@ public sealed class DesktopConfiguration
 
     public TimeSpan RequestTimeout { get; }
 
-    public DesktopConfiguration(Uri coreBaseUrl, string coreDataDirectory, TimeSpan requestTimeout)
+    public TimeSpan SttRequestTimeout { get; }
+
+    public DesktopConfiguration(Uri coreBaseUrl, string coreDataDirectory, TimeSpan requestTimeout, TimeSpan sttRequestTimeout)
     {
         if (!IsLoopback(coreBaseUrl))
         {
@@ -39,6 +47,7 @@ public sealed class DesktopConfiguration
         CoreBaseUrl = coreBaseUrl;
         CoreDataDirectory = coreDataDirectory;
         RequestTimeout = requestTimeout;
+        SttRequestTimeout = sttRequestTimeout;
     }
 
     public static bool IsLoopback(Uri uri)
@@ -70,10 +79,24 @@ public sealed class DesktopConfiguration
         // deterministic instant echo. The default itself is unchanged.
         var timeoutOverride = Environment.GetEnvironmentVariable(RequestTimeoutSecondsEnvironmentVariable);
         var requestTimeout =
-            double.TryParse(timeoutOverride, out var timeoutSeconds) && timeoutSeconds > 0
+            double.TryParse(
+                timeoutOverride,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var timeoutSeconds) && timeoutSeconds > 0
                 ? TimeSpan.FromSeconds(timeoutSeconds)
                 : DefaultRequestTimeout;
 
-        return new DesktopConfiguration(baseUrl, dataDirectory, requestTimeout);
+        var sttTimeoutOverride = Environment.GetEnvironmentVariable(SttRequestTimeoutSecondsEnvironmentVariable);
+        var sttRequestTimeout =
+            double.TryParse(
+                sttTimeoutOverride,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var sttTimeoutSeconds) && sttTimeoutSeconds > 0
+                ? TimeSpan.FromSeconds(sttTimeoutSeconds)
+                : DefaultSttRequestTimeout;
+
+        return new DesktopConfiguration(baseUrl, dataDirectory, requestTimeout, sttRequestTimeout);
     }
 }

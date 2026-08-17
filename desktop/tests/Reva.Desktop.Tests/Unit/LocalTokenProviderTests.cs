@@ -5,7 +5,7 @@ namespace Reva.Desktop.Tests.Unit;
 public class LocalTokenProviderTests
 {
     private static DesktopConfiguration ConfigurationFor(string dataDirectory) =>
-        new(new Uri("http://127.0.0.1:8756/"), dataDirectory, TimeSpan.FromSeconds(5));
+        new(new Uri("http://127.0.0.1:8756/"), dataDirectory, TimeSpan.FromSeconds(5), DesktopConfiguration.DefaultSttRequestTimeout);
 
     [Fact]
     public async Task GetTokenAsync_ReturnsUnavailable_WhenFileDoesNotExist()
