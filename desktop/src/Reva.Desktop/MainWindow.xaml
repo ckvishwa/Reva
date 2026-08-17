@@ -76,12 +76,18 @@
                     AutomationProperties.AutomationId="VoiceButton"
                     Content="Hold to Talk"
                     IsEnabled="{x:Bind Assistant.CanUseVoiceButton, Mode=OneWay}" />
+                <!-- Hidden for the transcription-only voice slice: TTS playback is never
+                     invoked from the voice path, so CanStopSpeaking is permanently false.
+                     See .superpowers/sdd/2026-08-16-transcription-only-voice-slice/. Bindings
+                     and ViewModel members are intentionally kept so this can be revived when
+                     TTS returns as its own slice. -->
                 <Button
                     x:Name="StopSpeakingButton"
                     AutomationProperties.AutomationId="StopSpeakingButton"
                     Content="Stop Speaking"
                     Click="StopSpeakingButton_Click"
-                    IsEnabled="{x:Bind Assistant.CanStopSpeaking, Mode=OneWay}" />
+                    IsEnabled="{x:Bind Assistant.CanStopSpeaking, Mode=OneWay}"
+                    Visibility="Collapsed" />
                 <TextBlock
                     AutomationProperties.AutomationId="VoiceStatusText"
                     Text="{x:Bind Assistant.VoiceStatusText, Mode=OneWay}"
