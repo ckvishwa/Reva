@@ -66,14 +66,21 @@ public sealed class WindowsAppExecutor : IAppExecutor
                 try
                 {
                     var requested = 0;
+                    var failed = 0;
                     foreach (var process in matches)
                     {
                         try
                         {
                             // Polite request only — the target may ignore it or
                             // raise its own "save changes?" prompt. Never Kill().
-                            process.CloseMainWindow();
-                            requested++;
+                            if (process.CloseMainWindow())
+                            {
+                                requested++;
+                            }
+                            else
+                            {
+                                failed++;
+                            }
                         }
                         catch (InvalidOperationException)
                         {
@@ -84,12 +91,17 @@ public sealed class WindowsAppExecutor : IAppExecutor
                         catch (Win32Exception)
                         {
                             // Access denied or the window is unresponsive.
-                            // Counted as not-requested; the aggregate result
-                            // below decides what the user is told.
+                            // This is a genuine close failure, not a not-running condition.
+                            failed++;
                         }
                     }
 
-                    return requested > 0 ? AppCloseOutcome.CloseRequested : AppCloseOutcome.NotRunning;
+                    if (requested > 0)
+                    {
+                        return AppCloseOutcome.CloseRequested;
+                    }
+
+                    return failed > 0 ? AppCloseOutcome.Failed : AppCloseOutcome.NotRunning;
                 }
                 finally
                 {
