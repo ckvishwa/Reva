@@ -20,11 +20,17 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         Shell = new ShellViewModel(lifecycle);
-        Assistant = new AssistantViewModel(coreClient, voiceDevice);
+        Assistant = new AssistantViewModel(coreClient, voiceDevice, lifecycle);
         Memory = new MemoryViewModel(coreClient);
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
         RegisterVoicePointerHandlers();
+        Closed += MainWindow_Closed;
+    }
+
+    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    {
+        Assistant.DetachLifecycle();
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

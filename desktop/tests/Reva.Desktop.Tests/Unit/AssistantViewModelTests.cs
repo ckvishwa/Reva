@@ -85,7 +85,8 @@ public class AssistantViewModelTests
             TaskCompletionSource? allowPlaybackToComplete = null,
             TaskCompletionSource? recordingStarted = null,
             TaskCompletionSource? allowRecordingToStart = null,
-            Exception? startException = null)
+            Exception? startException = null,
+            bool isAvailable = true)
         {
             RecordedAudio = recordedAudio ?? new byte[] { 1, 2, 3 };
             _playbackStarted = playbackStarted;
@@ -93,6 +94,7 @@ public class AssistantViewModelTests
             _recordingStarted = recordingStarted;
             _allowRecordingToStart = allowRecordingToStart;
             _startException = startException;
+            IsAvailable = isAvailable;
         }
 
         public bool IsAvailable { get; init; } = true;
@@ -150,6 +152,23 @@ public class AssistantViewModelTests
         }
 
         public void CancelRecording()
+        {
+        }
+    }
+
+    private sealed class FakeCoreLifecycle : IRevaCoreLifecycle
+    {
+        public CoreLifecycleState State { get; set; } = CoreLifecycleState.Connected;
+
+        public string StatusText => "Core Connected";
+
+        public event EventHandler? StateChanged;
+
+        public void RaiseStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
+
+        public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public void StopMonitoring()
         {
         }
     }
@@ -628,5 +647,76 @@ public class AssistantViewModelTests
         Assert.False(viewModel.IsSpeaking);
         Assert.True(voiceDevice.StopPlaybackCallCount > 0);
         Assert.Equal("Voice Ready", viewModel.VoiceStatusText);
+    }
+
+    [Fact]
+    public void CanStartVoiceInput_MicReadyButCoreDisconnected_IsFalse()
+    {
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Unavailable };
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), new FakeVoiceDevice(), lifecycle);
+
+        Assert.False(viewModel.CanStartVoiceInput);
+    }
+
+    [Fact]
+    public void VoiceState_MicReadyButCoreDisconnected_ReportsSttUnavailable_NotReadyToTalk()
+    {
+        // The status must explain the disabled button. "Ready to Talk" next to a
+        // greyed-out control is the contradiction this slice removes.
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Unavailable };
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), new FakeVoiceDevice(), lifecycle);
+
+        Assert.Equal(VoiceUiState.SttUnavailable, viewModel.VoiceState);
+        Assert.Equal("STT Unavailable", viewModel.VoiceStatusText);
+    }
+
+    [Fact]
+    public void CanStartVoiceInput_MicReadyAndCoreConnected_IsTrue()
+    {
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Connected };
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), new FakeVoiceDevice(), lifecycle);
+
+        Assert.True(viewModel.CanStartVoiceInput);
+        Assert.Equal(VoiceUiState.ReadyToTalk, viewModel.VoiceState);
+    }
+
+    [Fact]
+    public void CanStartVoiceInput_NoLifecycleProvided_DefaultsToTrueWhenMicReady()
+    {
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), new FakeVoiceDevice());
+
+        Assert.True(viewModel.CanStartVoiceInput);
+    }
+
+    [Fact]
+    public void CoreDisconnectsAfterConstruction_UpdatesButtonAndStatusTogether()
+    {
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Connected };
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), new FakeVoiceDevice(), lifecycle);
+        Assert.True(viewModel.CanStartVoiceInput);
+
+        lifecycle.State = CoreLifecycleState.Unavailable;
+        lifecycle.RaiseStateChanged();
+
+        Assert.False(viewModel.CanStartVoiceInput);
+        Assert.Equal(VoiceUiState.SttUnavailable, viewModel.VoiceState);
+
+        lifecycle.State = CoreLifecycleState.Connected;
+        lifecycle.RaiseStateChanged();
+
+        Assert.True(viewModel.CanStartVoiceInput);
+        Assert.Equal(VoiceUiState.ReadyToTalk, viewModel.VoiceState);
+    }
+
+    [Fact]
+    public void CoreStateChange_DoesNotOverrideMicSpecificFailureStates()
+    {
+        var lifecycle = new FakeCoreLifecycle { State = CoreLifecycleState.Connected };
+        var voiceDevice = new FakeVoiceDevice(isAvailable: false);
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), voiceDevice, lifecycle);
+
+        lifecycle.RaiseStateChanged();
+
+        Assert.NotEqual(VoiceUiState.ReadyToTalk, viewModel.VoiceState);
     }
 }

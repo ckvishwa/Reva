@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Microsoft.UI.Dispatching;
 using Reva.Desktop.Services;
 using Reva.Desktop.State;
 
@@ -14,12 +15,15 @@ public sealed class AssistantViewModel : ObservableObject
 {
     private readonly IRevaCoreClient _coreClient;
     private readonly IVoiceDevice _voiceDevice;
+    private readonly IRevaCoreLifecycle? _lifecycle;
+    private readonly DispatcherQueue? _dispatcherQueue = TryGetDispatcherQueue();
     private string _composerText = string.Empty;
     private bool _isPending;
     private bool _isVoiceAvailable;
     private bool _isVoiceBusy;
     private bool _isListening;
     private bool _isSpeaking;
+    private VoiceUiState _voiceState;
     private string _voiceStatusText = "Voice Unavailable";
     private string? _errorMessage;
     private string? _voiceErrorMessage;
@@ -27,12 +31,103 @@ public sealed class AssistantViewModel : ObservableObject
     private CancellationTokenSource? _speechPlaybackCancellation;
     private Task? _recordingStartTask;
 
-    public AssistantViewModel(IRevaCoreClient coreClient, IVoiceDevice? voiceDevice = null)
+    public AssistantViewModel(
+        IRevaCoreClient coreClient,
+        IVoiceDevice? voiceDevice = null,
+        IRevaCoreLifecycle? lifecycle = null)
     {
         _coreClient = coreClient;
         _voiceDevice = voiceDevice ?? new UnavailableVoiceDevice();
+        _lifecycle = lifecycle;
         _isVoiceAvailable = _voiceDevice.IsAvailable;
-        _voiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+        _voiceState = _isVoiceAvailable
+            ? (IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable)
+            : VoiceUiState.CheckingMicrophone;
+        _voiceStatusText = VoiceUiStateText.For(_voiceState);
+
+        if (_lifecycle is not null)
+        {
+            _lifecycle.StateChanged += OnLifecycleStateChanged;
+        }
+    }
+
+    // Captured on the constructing thread: the UI thread in MainWindow, null
+    // under xUnit. Never throws — a null queue simply means "already on the
+    // right thread, invoke directly."
+    private static DispatcherQueue? TryGetDispatcherQueue()
+    {
+        try
+        {
+            return DispatcherQueue.GetForCurrentThread();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private bool IsCoreConnected => _lifecycle is null || _lifecycle.State == CoreLifecycleState.Connected;
+
+    private void OnLifecycleStateChanged(object? sender, EventArgs e)
+    {
+        // Even though today's RevaCoreLifecycle implementation deliberately
+        // preserves the UI-thread SynchronizationContext via
+        // ConfigureAwait(true) (so StateChanged doesn't actually fire off the
+        // UI thread in production today), nothing at the IRevaCoreLifecycle
+        // interface level guarantees that invariant. Marshal defensively
+        // rather than depending on an implementation detail this class
+        // doesn't own — a stray off-thread PropertyChanged push here would
+        // throw RPC_E_WRONG_THREAD at runtime.
+        if (_dispatcherQueue is not null && !_dispatcherQueue.HasThreadAccess)
+        {
+            _dispatcherQueue.TryEnqueue(ApplyLifecycleChange);
+            return;
+        }
+
+        ApplyLifecycleChange();
+    }
+
+    private void ApplyLifecycleChange()
+    {
+        RefreshIdleVoiceState();
+        RaiseVoiceAvailabilityProperties();
+    }
+
+    // Recomputes the idle status from mic + Core so status and enablement can
+    // never disagree. Deliberately does nothing mid-turn, and never overwrites
+    // a mic-specific failure (which is more informative than "STT Unavailable").
+    private void RefreshIdleVoiceState()
+    {
+        if (IsMicrophoneActive || IsVoiceBusy)
+        {
+            return;
+        }
+
+        if (VoiceState is VoiceUiState.PermissionDenied
+            or VoiceUiState.NoMicrophone
+            or VoiceUiState.CheckingMicrophone)
+        {
+            return;
+        }
+
+        if (!_isVoiceAvailable)
+        {
+            return;
+        }
+
+        VoiceState = IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable;
+        VoiceErrorMessage = IsCoreConnected ? null : "REVA Core is not connected.";
+    }
+
+    /// <summary>Unsubscribes from lifecycle StateChanged. Call from the
+    /// window's Closed handler — an AssistantViewModel outliving its window
+    /// would otherwise keep this instance alive via the event subscription.</summary>
+    public void DetachLifecycle()
+    {
+        if (_lifecycle is not null)
+        {
+            _lifecycle.StateChanged -= OnLifecycleStateChanged;
+        }
     }
 
     public ObservableCollection<AssistantMessage> Messages { get; } = new();
@@ -60,7 +155,7 @@ public sealed class AssistantViewModel : ObservableObject
     /// WinUI types.</summary>
     public bool IsNotPending => !IsPending;
 
-    public bool CanUseVoiceButton => _isVoiceAvailable && !IsPending;
+    public bool CanUseVoiceButton => _isVoiceAvailable && IsCoreConnected && !IsPending;
 
     public bool IsMicrophoneActive
     {
@@ -98,9 +193,26 @@ public sealed class AssistantViewModel : ObservableObject
         }
     }
 
-    public bool CanStartVoiceInput => _isVoiceAvailable && !IsPending && !IsVoiceBusy;
+    public bool CanStartVoiceInput => _isVoiceAvailable && IsCoreConnected && !IsPending && !IsVoiceBusy;
 
     public bool CanStopSpeaking => IsSpeaking;
+
+    /// <summary>The mic+Core readiness state. Authoritative for the idle
+    /// (not-mid-turn) status text — see <see cref="RefreshIdleVoiceState"/>.
+    /// Mid-turn transitions ("Listening…", "Transcribing…", etc.) still set
+    /// <see cref="VoiceStatusText"/> directly; wiring VoiceState through the
+    /// full turn lifecycle is Task 7's job.</summary>
+    public VoiceUiState VoiceState
+    {
+        get => _voiceState;
+        private set
+        {
+            if (SetProperty(ref _voiceState, value))
+            {
+                VoiceStatusText = VoiceUiStateText.For(value);
+            }
+        }
+    }
 
     public string VoiceStatusText
     {
