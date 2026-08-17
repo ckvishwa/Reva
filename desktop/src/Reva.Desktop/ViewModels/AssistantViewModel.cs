@@ -115,9 +115,20 @@ public sealed class AssistantViewModel : ObservableObject
             return;
         }
 
-        VoiceState = IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable;
+        VoiceState = IdleState();
         VoiceErrorMessage = IsCoreConnected ? null : "REVA Core is not connected.";
     }
+
+    // Shared idle computation: what VoiceState should read when nothing is
+    // in flight. Used both by RefreshIdleVoiceState (Core-lifecycle-driven,
+    // with its own no-op guards above) and by RestoreIdleVoiceState (used at
+    // the end of a canceled/interrupted voice turn).
+    private VoiceUiState IdleState() =>
+        !_isVoiceAvailable ? VoiceUiState.NoMicrophone
+        : IsCoreConnected ? VoiceUiState.ReadyToTalk
+        : VoiceUiState.SttUnavailable;
+
+    private void RestoreIdleVoiceState() => VoiceState = IdleState();
 
     /// <summary>Unsubscribes from lifecycle StateChanged. Call from the
     /// window's Closed handler — an AssistantViewModel outliving its window
@@ -305,7 +316,8 @@ public sealed class AssistantViewModel : ObservableObject
         VoiceErrorMessage = null;
         IsVoiceBusy = true;
         IsMicrophoneActive = true;
-        VoiceStatusText = "Listening…";
+        VoiceState = VoiceUiState.Listening;
+        DesktopLogger.Info("voice.state=Listening");
         _voiceTurnCancellation?.Dispose();
         _voiceTurnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -318,7 +330,7 @@ public sealed class AssistantViewModel : ObservableObject
         {
             IsMicrophoneActive = false;
             IsVoiceBusy = false;
-            VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+            RestoreIdleVoiceState();
         }
         catch (VoiceCaptureException ex)
         {
@@ -342,7 +354,8 @@ public sealed class AssistantViewModel : ObservableObject
         var turnCancellation = _voiceTurnCancellation;
         var linkedToken = turnCancellation?.Token ?? cancellationToken;
         IsMicrophoneActive = false;
-        VoiceStatusText = "Transcribing…";
+        VoiceState = VoiceUiState.Transcribing;
+        DesktopLogger.Info("voice.state=Transcribing");
 
         try
         {
@@ -352,10 +365,24 @@ public sealed class AssistantViewModel : ObservableObject
             }
 
             var audio = await _voiceDevice.StopRecordingAsync(linkedToken);
+
             if (audio.Length == 0)
             {
-                VoiceErrorMessage = "No voice audio was captured.";
-                VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+                FailTurn("No voice audio was captured.", "empty_capture");
+                return;
+            }
+
+            if (!WavAudio.TryGetDurationMs(audio, out var durationMs))
+            {
+                FailTurn("The recording could not be read. Try again.", "malformed_wav");
+                return;
+            }
+
+            if (durationMs < MinimumRecordingMs)
+            {
+                FailTurn(
+                    "Recording is too short. Hold the button and speak for at least a quarter second.",
+                    "too_short");
                 return;
             }
 
@@ -366,36 +393,26 @@ public sealed class AssistantViewModel : ObservableObject
                 return;
             }
 
-            VoiceStatusText = "Thinking…";
-            var reply = await SendMessageCoreAsync(
-                transcription.Value!.Text,
-                clearComposer: false,
-                linkedToken);
-            if (reply is null)
+            var text = transcription.Value!.Text?.Trim() ?? string.Empty;
+            if (text.Length == 0)
             {
-                VoiceStatusText = "Voice Ready";
+                // 200 OK with no words — silence, not success. Reporting
+                // "Transcription Ready" over an empty composer is misleading.
+                FailTurn("No speech was recognized. Try again.", "empty_transcript");
                 return;
             }
 
-            VoiceStatusText = "Speaking…";
-            var language = VoiceLanguageResolver.Resolve(reply);
-            var speech = await _coreClient.SynthesizeSpeechAsync(reply, language, linkedToken);
-            if (!speech.IsSuccess)
-            {
-                ApplyVoiceFailure(speech.Error!);
-                return;
-            }
-
-            _speechPlaybackCancellation?.Cancel();
-            _speechPlaybackCancellation?.Dispose();
-            _speechPlaybackCancellation = CancellationTokenSource.CreateLinkedTokenSource(linkedToken);
-            IsSpeaking = true;
-            await _voiceDevice.PlayAsync(speech.Value!, _speechPlaybackCancellation.Token);
-            VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+            ComposerText = string.IsNullOrWhiteSpace(ComposerText)
+                ? text
+                : $"{ComposerText.TrimEnd()} {text}";
+            VoiceErrorMessage = null;
+            VoiceState = VoiceUiState.TranscriptionReady;
+            DesktopLogger.Info("voice.state=TranscriptionReady");
         }
         catch (OperationCanceledException)
         {
-            VoiceStatusText = _isVoiceAvailable ? "Voice Ready" : "Voice Unavailable";
+            RestoreIdleVoiceState();
+            DesktopLogger.Info("voice.state=canceled");
         }
         catch (VoiceCaptureException ex)
         {
@@ -403,14 +420,23 @@ public sealed class AssistantViewModel : ObservableObject
         }
         catch (Exception)
         {
-            ApplyVoiceCaptureFailure(VoiceDeviceAvailability.RecordingFailed());
+            FailTurn(VoiceDeviceAvailability.RecordingFailed().SafeMessage, "recording_failed");
         }
         finally
         {
             _recordingStartTask = null;
-            IsSpeaking = false;
             IsVoiceBusy = false;
         }
+    }
+
+    private const int MinimumRecordingMs = 250;
+
+    // reason is a fixed identifier, never audio or transcript content.
+    private void FailTurn(string safeMessage, string reason)
+    {
+        VoiceErrorMessage = safeMessage;
+        VoiceState = VoiceUiState.TranscriptionFailed;
+        DesktopLogger.Info($"voice.state=TranscriptionFailed reason={reason}");
     }
 
     public void StopSpeaking()
@@ -476,15 +502,16 @@ public sealed class AssistantViewModel : ObservableObject
     private void ApplyVoiceFailure(CoreError error)
     {
         VoiceErrorMessage = error.SafeMessage;
-        VoiceStatusText = error.Kind is CoreErrorKind.CoreUnavailable or CoreErrorKind.CoreTimeout
-            ? "Voice Unavailable"
-            : "Voice Ready";
+        VoiceState = error.Kind is CoreErrorKind.CoreUnavailable or CoreErrorKind.CoreTimeout
+            ? VoiceUiState.SttUnavailable
+            : VoiceUiState.TranscriptionFailed;
+        DesktopLogger.Info($"voice.state={VoiceState} kind={error.Kind}");
     }
 
     private void ApplyVoiceCaptureFailure(VoiceDeviceAvailability availability)
     {
         _isVoiceAvailable = false;
-        VoiceStatusText = "Voice Unavailable";
+        VoiceState = MapAvailabilityToVoiceState(availability);
         VoiceErrorMessage = availability.SafeMessage;
         IsMicrophoneActive = false;
         IsVoiceBusy = false;
