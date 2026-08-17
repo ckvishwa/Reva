@@ -176,7 +176,7 @@ public class WakeWordCoordinatorTests
 
         await coordinator.EnableAsync(DefaultConfig());
 
-        Assert.Equal(WakeWordUiState.WakeWordError, coordinator.State);
+        Assert.Equal(WakeWordUiState.Unavailable, coordinator.State);
         Assert.Equal("Missing keyword file for Hey Reva.", coordinator.ErrorMessage);
     }
 
@@ -295,6 +295,7 @@ public class WakeWordCoordinatorTests
     private sealed class FakeWakeWordDetector : IWakeWordDetector
     {
         public event EventHandler<WakeWordDetection>? Detected;
+        public event EventHandler<WakeWordFailure>? Faulted;
 
         public Exception? StartException { get; init; }
         public bool IsRunning { get; private set; }
@@ -325,6 +326,9 @@ public class WakeWordCoordinatorTests
 
         public void RaiseDetected(WakePhrase phrase) =>
             Detected?.Invoke(this, new WakeWordDetection(phrase, DateTimeOffset.UtcNow));
+
+        public void RaiseFault() =>
+            Faulted?.Invoke(this, new WakeWordFailure(WakeWordFailureKind.DetectorException));
 
         public ValueTask DisposeAsync()
         {

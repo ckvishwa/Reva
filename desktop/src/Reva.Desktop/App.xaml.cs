@@ -42,6 +42,7 @@ public partial class App : Application
         var commandRouter = new CommandRouter(new WindowsAppExecutor());
         var microphoneArbiter = new MicrophoneArbiter();
         var wakeWordOptions = WakeWordRuntimeOptions.FromEnvironment();
+        WakeWordProviderDiagnostics.Create(wakeWordOptions).Log();
         var assistant = new ViewModels.AssistantViewModel(
             coreClient,
             new ArbiterVoiceDevice(new WindowsVoiceDevice(), microphoneArbiter),
@@ -51,7 +52,8 @@ public partial class App : Application
             ? new PorcupineWakeWordDetector(
                 wakeWordOptions.AccessKey,
                 wakeWordOptions.KeywordDirectory,
-                new RealFileSystemProbe())
+                new RealFileSystemProbe(),
+                wakeWordOptions.ModelManifest)
             : new NullWakeWordDetector();
         var wakeWord = new ViewModels.WakeWordCoordinator(
             detector,
@@ -59,7 +61,9 @@ public partial class App : Application
             new PvRecorderWakeSpeechCapture(),
             coreClient,
             assistant,
-            new SystemChimePlayer());
+            new SystemChimePlayer(),
+            lifecycle,
+            new WindowsWakeWordRecoveryEvents());
 
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),

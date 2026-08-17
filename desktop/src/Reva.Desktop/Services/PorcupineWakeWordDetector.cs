@@ -1,5 +1,3 @@
-using Pv;
-
 namespace Reva.Desktop.Services;
 
 public sealed class PorcupineWakeWordDetector : IWakeWordDetector
@@ -7,9 +5,12 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
     private readonly string _accessKey;
     private readonly string _keywordDirectory;
     private readonly IFileSystemProbe _fileSystem;
+    private readonly WakeWordModelManifest _modelManifest;
+    private readonly IWakeWordEngineFactory _engineFactory;
+    private readonly IWakeFrameRecorderFactory _recorderFactory;
     private readonly object _gate = new();
-    private Porcupine? _porcupine;
-    private PvRecorder? _recorder;
+    private IWakeWordEngine? _porcupine;
+    private IWakeFrameRecorder? _recorder;
     private CancellationTokenSource? _loopCancellation;
     private Task? _loopTask;
     private IReadOnlyList<WakePhrase> _phraseOrder = Array.Empty<WakePhrase>();
@@ -17,16 +18,39 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
     public PorcupineWakeWordDetector(
         string accessKey,
         string keywordDirectory,
-        IFileSystemProbe fileSystem)
+        IFileSystemProbe fileSystem,
+        WakeWordModelManifest? modelManifest = null)
+        : this(
+            accessKey,
+            keywordDirectory,
+            fileSystem,
+            modelManifest,
+            new PorcupineEngineFactory(),
+            new PvRecorderFrameRecorderFactory())
+    {
+    }
+
+    internal PorcupineWakeWordDetector(
+        string accessKey,
+        string keywordDirectory,
+        IFileSystemProbe fileSystem,
+        WakeWordModelManifest? modelManifest,
+        IWakeWordEngineFactory engineFactory,
+        IWakeFrameRecorderFactory recorderFactory)
     {
         _accessKey = accessKey;
         _keywordDirectory = keywordDirectory;
         _fileSystem = fileSystem;
+        _modelManifest = modelManifest ?? WakeWordModelManifest.Empty;
+        _engineFactory = engineFactory;
+        _recorderFactory = recorderFactory;
     }
 
     public bool IsRunning { get; private set; }
 
     public event EventHandler<WakeWordDetection>? Detected;
+
+    public event EventHandler<WakeWordFailure>? Faulted;
 
     public Task StartAsync(
         WakeWordConfiguration configuration,
@@ -43,29 +67,39 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
             throw new WakeWordConfigurationException("Wake word requires a configured access key.");
         }
 
-        var resolution = WakeWordKeywordResolver.Resolve(configuration.Phrases, _keywordDirectory, _fileSystem);
+        var resolution = WakeWordKeywordResolver.Resolve(
+            configuration.Phrases,
+            _keywordDirectory,
+            _fileSystem,
+            _modelManifest);
         if (!resolution.IsSuccess)
         {
-            var message = resolution.MissingPhrase is { } missing
-                ? $"Missing keyword file for {WakePhraseDefaults.DisplayName(missing)}."
-                : "No wake phrases are enabled.";
+            var message = resolution.Failure switch
+            {
+                KeywordResolutionFailure.HashMismatch => "Wake word keyword file failed integrity verification.",
+                KeywordResolutionFailure.UnsupportedArchitecture => "Wake word keyword files do not match this Windows architecture.",
+                KeywordResolutionFailure.MissingExpectedHash => "Wake word keyword file is not registered in local settings.",
+                KeywordResolutionFailure.MissingFile when resolution.MissingPhrase is { } missing =>
+                    $"Missing keyword file for {WakePhraseDefaults.DisplayName(missing)}.",
+                _ => "No wake phrases are enabled.",
+            };
             throw new WakeWordConfigurationException(message);
         }
 
-        Porcupine? porcupine = null;
-        PvRecorder? recorder = null;
+        IWakeWordEngine? porcupine = null;
+        IWakeFrameRecorder? recorder = null;
         try
         {
-            porcupine = Porcupine.FromKeywordPaths(
+            porcupine = _engineFactory.Create(
                 _accessKey,
                 resolution.KeywordPaths!,
-                sensitivities: resolution.Sensitivities!);
+                resolution.Sensitivities!);
             if (porcupine.SampleRate != 16000)
             {
                 throw new WakeWordConfigurationException("Wake word provider reported an unsupported sample rate.");
             }
 
-            recorder = PvRecorder.Create(frameLength: porcupine.FrameLength);
+            recorder = _recorderFactory.Create(porcupine.FrameLength);
             recorder.Start();
         }
         catch
@@ -94,8 +128,8 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
     {
         Task? loopTask;
         CancellationTokenSource? loopCancellation;
-        PvRecorder? recorder;
-        Porcupine? porcupine;
+        IWakeFrameRecorder? recorder;
+        IWakeWordEngine? porcupine;
 
         lock (_gate)
         {
@@ -140,8 +174,8 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
     }
 
     private async Task ListenLoopAsync(
-        Porcupine porcupine,
-        PvRecorder recorder,
+        IWakeWordEngine porcupine,
+        IWakeFrameRecorder recorder,
         IReadOnlyList<WakePhrase> phraseOrder,
         CancellationToken cancellationToken)
     {
@@ -166,6 +200,7 @@ public sealed class PorcupineWakeWordDetector : IWakeWordDetector
         {
             DesktopLogger.Info("wakeword.detector.stopped reason=provider_error");
             IsRunning = false;
+            Faulted?.Invoke(this, new WakeWordFailure(WakeWordFailureKind.DetectorException));
         }
         catch (Exception)
         {
