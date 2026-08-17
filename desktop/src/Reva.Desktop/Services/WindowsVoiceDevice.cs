@@ -81,7 +81,23 @@ public sealed class WindowsVoiceDevice : IVoiceDevice, IDisposable
 
             var file = await StorageFile.GetFileFromPathAsync(_recordingPath);
             var profile = MediaEncodingProfile.CreateWav(AudioEncodingQuality.High);
-            _recording = await _capture.PrepareLowLagRecordToStorageFileAsync(profile, file);
+            // Positional args deliberately — the projected WinRT parameter names
+            // are not guaranteed to match the C# names you'd expect.
+            profile.Audio = AudioEncodingProperties.CreatePcm(16000, 1, 16);
+            try
+            {
+                _recording = await _capture.PrepareLowLagRecordToStorageFileAsync(profile, file);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException || ex.HResult == unchecked((int)0xC00D5212))
+            {
+                // Some capture hardware refuses 16kHz mono. Falling back to the
+                // default WAV profile is better than surfacing a generic
+                // recording failure — reva_core's _validate_wav_upload accepts
+                // other rates, it just prefers this one.
+                DesktopLogger.Info("voice.capture.format_fallback");
+                _recording = await _capture.PrepareLowLagRecordToStorageFileAsync(
+                    MediaEncodingProfile.CreateWav(AudioEncodingQuality.High), file);
+            }
             await _recording.StartAsync();
         }
         catch (OperationCanceledException)
