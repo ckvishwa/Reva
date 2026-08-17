@@ -522,7 +522,7 @@ public class AssistantViewModelTests
         Assert.False(viewModel.IsMicrophoneActive);
         Assert.False(viewModel.CanStartVoiceInput);
         Assert.Equal("Voice Unavailable", viewModel.VoiceStatusText);
-        Assert.Equal("Microphone permission denied.", viewModel.VoiceErrorMessage);
+        Assert.Equal("Microphone permission is disabled. Enable it in Windows Settings.", viewModel.VoiceErrorMessage);
     }
 
     [Fact]
