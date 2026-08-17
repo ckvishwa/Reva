@@ -78,6 +78,7 @@ public class AssistantViewModelTests
         private readonly TaskCompletionSource? _recordingStarted;
         private readonly TaskCompletionSource? _allowRecordingToStart;
         private readonly Exception? _startException;
+        private readonly Exception? _stopThrows;
         private readonly VoiceDeviceAvailability? _verifyResult;
 
         public FakeVoiceDevice(
@@ -88,9 +89,10 @@ public class AssistantViewModelTests
             TaskCompletionSource? allowRecordingToStart = null,
             Exception? startException = null,
             bool isAvailable = true,
-            VoiceDeviceAvailability? verifyResult = null)
+            VoiceDeviceAvailability? verifyResult = null,
+            Exception? stopThrows = null)
         {
-            RecordedAudio = recordedAudio ?? new byte[] { 1, 2, 3 };
+            RecordedAudio = recordedAudio ?? TestWav.Mono16k(TimeSpan.FromSeconds(1));
             _playbackStarted = playbackStarted;
             _allowPlaybackToComplete = allowPlaybackToComplete;
             _recordingStarted = recordingStarted;
@@ -98,6 +100,7 @@ public class AssistantViewModelTests
             _startException = startException;
             IsAvailable = isAvailable;
             _verifyResult = verifyResult;
+            _stopThrows = stopThrows;
         }
 
         // Constructor-time IsAvailable seeds AssistantViewModel's initial
@@ -143,6 +146,11 @@ public class AssistantViewModelTests
         public Task<byte[]> StopRecordingAsync(CancellationToken cancellationToken = default)
         {
             StopCallCount++;
+            if (_stopThrows is not null)
+            {
+                throw _stopThrows;
+            }
+
             return Task.FromResult(RecordedAudio);
         }
 
@@ -375,120 +383,115 @@ public class AssistantViewModelTests
     }
 
     [Fact]
-    public async Task VoiceTurn_TranscribesThenUsesExistingMessagePipelineThenSpeaksReply()
-    {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello REVA"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello REVA"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
-        var voiceDevice = new FakeVoiceDevice();
-        var viewModel = new AssistantViewModel(client, voiceDevice);
-
-        await viewModel.StartVoiceInputAsync();
-
-        Assert.True(viewModel.IsMicrophoneActive);
-        Assert.Equal("Listening…", viewModel.VoiceStatusText);
-
-        await viewModel.FinishVoiceInputAsync();
-
-        Assert.Equal(1, voiceDevice.StartCallCount);
-        Assert.Equal(1, voiceDevice.StopCallCount);
-        Assert.Equal(1, client.TranscribeCallCount);
-        Assert.Equal(1, client.CallCount);
-        Assert.Equal(new[] { "hello REVA" }, client.ReceivedContents);
-        Assert.Equal(1, client.SynthesizeCallCount);
-        Assert.Equal(("Received: hello REVA", "en"), client.SpeechRequests.Single());
-        Assert.Equal(1, voiceDevice.PlayCallCount);
-        Assert.Equal(2, viewModel.Messages.Count);
-        Assert.Equal(AssistantMessageRole.User, viewModel.Messages[0].Role);
-        Assert.Equal("hello REVA", viewModel.Messages[0].Text);
-        Assert.Equal("Received: hello REVA", viewModel.Messages[1].Text);
-        Assert.Equal("Voice Ready", viewModel.VoiceStatusText);
-    }
-
-    [Fact]
     public async Task VoiceTurn_PressBeginsRecordingOnce()
     {
-        var client = ImmediateSuccessClient();
         var voiceDevice = new FakeVoiceDevice();
-        var viewModel = new AssistantViewModel(client, voiceDevice);
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), voiceDevice);
 
         await viewModel.StartVoiceInputAsync();
 
         Assert.Equal(1, voiceDevice.StartCallCount);
         Assert.Equal(0, voiceDevice.StopCallCount);
         Assert.True(viewModel.IsMicrophoneActive);
-        Assert.Equal("Listening…", viewModel.VoiceStatusText);
+        Assert.Equal(VoiceUiState.Listening, viewModel.VoiceState);
+        Assert.Equal("Listening", viewModel.VoiceStatusText);
     }
 
     [Fact]
-    public async Task VoiceTurn_ReleaseStopsRecordingOnce()
+    public async Task VoiceTurn_PressClearsStaleErrorFromPreviousTurn()
     {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
-        var voiceDevice = new FakeVoiceDevice();
+        var client = TranscribingClient("hello");
+        var voiceDevice = new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromMilliseconds(100)));
+        var viewModel = new AssistantViewModel(client, voiceDevice);
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync(); // too short — leaves an error
+        Assert.NotNull(viewModel.VoiceErrorMessage);
+
+        await viewModel.StartVoiceInputAsync();
+
+        Assert.Null(viewModel.VoiceErrorMessage);
+        Assert.Equal(VoiceUiState.Listening, viewModel.VoiceState);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_ReleaseStopsOnce_TranscribesOnce_PopulatesComposer_NeverSendsOrSpeaks()
+    {
+        var client = TranscribingClient("hello REVA");
+        var voiceDevice = new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1)));
         var viewModel = new AssistantViewModel(client, voiceDevice);
 
         await viewModel.StartVoiceInputAsync();
         await viewModel.FinishVoiceInputAsync();
 
+        Assert.Equal(1, voiceDevice.StartCallCount);
         Assert.Equal(1, voiceDevice.StopCallCount);
+        Assert.Equal(1, client.TranscribeCallCount);
+        Assert.Equal(0, client.CallCount);
+        Assert.Equal(0, client.SynthesizeCallCount);
+        Assert.Equal(0, voiceDevice.PlayCallCount);
+        Assert.Equal("hello REVA", viewModel.ComposerText);
+        Assert.Empty(viewModel.Messages); // nothing auto-sent to the transcript
+        Assert.Equal(VoiceUiState.TranscriptionReady, viewModel.VoiceState);
+        Assert.Equal("Transcription Ready", viewModel.VoiceStatusText);
+        Assert.False(viewModel.IsMicrophoneActive);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_ExistingComposerDraftIsPreserved_TranscriptIsAppended()
+    {
+        var client = TranscribingClient("and also this");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+        viewModel.ComposerText = "typed draft";
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal("typed draft and also this", viewModel.ComposerText);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_EmptyTranscriptIsTreatedAsFailure_NotReady()
+    {
+        var client = TranscribingClient("   ");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(VoiceUiState.TranscriptionFailed, viewModel.VoiceState);
+        Assert.NotNull(viewModel.VoiceErrorMessage);
+        Assert.Equal(string.Empty, viewModel.ComposerText);
     }
 
     [Fact]
     public async Task VoiceTurn_CanceledPointerStopsSafely()
     {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
-        var voiceDevice = new FakeVoiceDevice();
-        var viewModel = new AssistantViewModel(client, voiceDevice);
+        var viewModel = new AssistantViewModel(
+            TranscribingClient("hello"),
+            new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
 
         await viewModel.StartVoiceInputAsync();
-        await viewModel.FinishVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync(); // pointer-canceled routes through the same method
 
-        Assert.Equal(1, voiceDevice.StopCallCount);
         Assert.False(viewModel.IsMicrophoneActive);
     }
 
     [Fact]
-    public async Task VoiceTurn_CaptureLossStopsSafely()
+    public async Task VoiceTurn_DuplicateReleaseIsIgnored_StopsExactlyOnce()
     {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
-        var voiceDevice = new FakeVoiceDevice();
+        var client = TranscribingClient("hello");
+        var voiceDevice = new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1)));
         var viewModel = new AssistantViewModel(client, voiceDevice);
 
         await viewModel.StartVoiceInputAsync();
         await viewModel.FinishVoiceInputAsync();
-
-        Assert.Equal(1, voiceDevice.StopCallCount);
-        Assert.False(viewModel.IsMicrophoneActive);
-    }
-
-    [Fact]
-    public async Task VoiceTurn_DuplicateReleaseDoesNotSubmitTwice()
-    {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
-        var voiceDevice = new FakeVoiceDevice();
-        var viewModel = new AssistantViewModel(client, voiceDevice);
-
-        await viewModel.StartVoiceInputAsync();
-        await viewModel.FinishVoiceInputAsync();
-        await viewModel.FinishVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync(); // e.g. release followed by capture-lost
 
         Assert.Equal(1, voiceDevice.StopCallCount);
         Assert.Equal(1, client.TranscribeCallCount);
-        Assert.Equal(1, client.CallCount);
-        Assert.Equal(1, client.SynthesizeCallCount);
     }
 
     [Fact]
@@ -496,11 +499,9 @@ public class AssistantViewModelTests
     {
         var recordingStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var allowRecordingToStart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
+        var client = TranscribingClient("hello");
         var voiceDevice = new FakeVoiceDevice(
+            recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1)),
             recordingStarted: recordingStarted,
             allowRecordingToStart: allowRecordingToStart);
         var viewModel = new AssistantViewModel(client, voiceDevice);
@@ -520,12 +521,24 @@ public class AssistantViewModelTests
     }
 
     [Fact]
+    public async Task VoiceTurn_CancellationRestoresReadyState()
+    {
+        var client = TranscribingClient("hello");
+        var voiceDevice = new FakeVoiceDevice(stopThrows: new OperationCanceledException());
+        var viewModel = new AssistantViewModel(client, voiceDevice);
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(VoiceUiState.ReadyToTalk, viewModel.VoiceState);
+        Assert.False(viewModel.IsVoiceBusy);
+        Assert.True(viewModel.CanStartVoiceInput);
+    }
+
+    [Fact]
     public async Task VoiceTurn_EmptyRecordingIsRejectedBeforeTranscription()
     {
-        var client = new FakeCoreClient(
-            (_, _) => throw new NotSupportedException(),
-            (_, _) => throw new NotSupportedException(),
-            (_, _, _) => throw new NotSupportedException());
+        var client = NeverTranscribingClient();
         var voiceDevice = new FakeVoiceDevice(recordedAudio: Array.Empty<byte>());
         var viewModel = new AssistantViewModel(client, voiceDevice);
 
@@ -534,24 +547,84 @@ public class AssistantViewModelTests
 
         Assert.Equal(1, voiceDevice.StopCallCount);
         Assert.Equal(0, client.TranscribeCallCount);
-        Assert.Equal("No voice audio was captured.", viewModel.VoiceErrorMessage);
-        Assert.Equal("Voice Ready", viewModel.VoiceStatusText);
+        Assert.Equal(VoiceUiState.TranscriptionFailed, viewModel.VoiceState);
+        Assert.NotNull(viewModel.VoiceErrorMessage);
+        Assert.Equal(string.Empty, viewModel.ComposerText);
     }
 
     [Fact]
-    public async Task VoiceTurn_InitializationFailureShowsVoiceUnavailable()
+    public async Task VoiceTurn_UnderTwoHundredFiftyMillisecondsIsRejectedBeforeTranscription()
     {
-        var client = ImmediateSuccessClient();
-        var voiceDevice = new FakeVoiceDevice(
-            startException: new VoiceCaptureException(VoiceDeviceAvailability.PermissionDenied()));
-        var viewModel = new AssistantViewModel(client, voiceDevice);
+        var client = NeverTranscribingClient();
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromMilliseconds(100))));
 
         await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
 
-        Assert.False(viewModel.IsMicrophoneActive);
-        Assert.False(viewModel.CanStartVoiceInput);
-        Assert.Equal("Voice Unavailable", viewModel.VoiceStatusText);
-        Assert.Equal("Microphone permission is disabled. Enable it in Windows Settings.", viewModel.VoiceErrorMessage);
+        Assert.Equal(0, client.TranscribeCallCount);
+        Assert.Equal(VoiceUiState.TranscriptionFailed, viewModel.VoiceState);
+        Assert.Contains("too short", viewModel.VoiceErrorMessage!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(string.Empty, viewModel.ComposerText);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_ExactlyTwoHundredFiftyMillisecondsIsAccepted()
+    {
+        var client = TranscribingClient("ok");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromMilliseconds(250))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(1, client.TranscribeCallCount);
+        Assert.Equal(VoiceUiState.TranscriptionReady, viewModel.VoiceState);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_MalformedWavIsRejectedBeforeTranscription()
+    {
+        var client = NeverTranscribingClient();
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(0, client.TranscribeCallCount);
+        Assert.Equal(VoiceUiState.TranscriptionFailed, viewModel.VoiceState);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_TranscriptionFailure_ServiceUnavailable_ShowsSttUnavailable_NeverAddsToChat()
+    {
+        var client = FailingTranscriptionClient(CoreErrorKind.CoreUnavailable, "REVA voice is unavailable.");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Empty(viewModel.Messages);
+        Assert.Equal(0, client.CallCount);
+        Assert.Equal("REVA voice is unavailable.", viewModel.VoiceErrorMessage);
+        Assert.Equal(VoiceUiState.SttUnavailable, viewModel.VoiceState);
+        Assert.Equal(string.Empty, viewModel.ComposerText);
+    }
+
+    [Fact]
+    public async Task VoiceTurn_TranscriptionFailure_Timeout_ShowsSttUnavailable_WithVoiceSpecificMessage()
+    {
+        var client = FailingTranscriptionClient(CoreErrorKind.CoreTimeout, "REVA voice did not respond in time.");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal("REVA voice did not respond in time.", viewModel.VoiceErrorMessage);
+        Assert.Equal(VoiceUiState.SttUnavailable, viewModel.VoiceState);
     }
 
     [Fact]
@@ -566,7 +639,7 @@ public class AssistantViewModelTests
         viewModel.ComposerText = "typed still works";
         await viewModel.SendMessageAsync();
 
-        Assert.Equal("Voice Unavailable", viewModel.VoiceStatusText);
+        Assert.Equal(VoiceUiState.NoMicrophone, viewModel.VoiceState);
         Assert.Equal(1, client.CallCount);
         Assert.Equal(2, viewModel.Messages.Count);
         Assert.Equal("typed still works", viewModel.Messages[0].Text);
@@ -574,90 +647,53 @@ public class AssistantViewModelTests
     }
 
     [Fact]
-    public async Task VoiceTurn_TranscriptionFailure_DoesNotAddRecordingToChat()
+    public async Task VoiceTurn_PermissionDenied_ShowsExactRequiredMessage()
     {
-        var client = new FakeCoreClient(
-            (_, _) => throw new NotSupportedException(),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Failure(
-                CoreErrorKind.CoreUnavailable,
-                "REVA voice is unavailable.")),
-            (_, _, _) => throw new NotSupportedException());
-        var viewModel = new AssistantViewModel(client, new FakeVoiceDevice());
-
-        await viewModel.StartVoiceInputAsync();
-        await viewModel.FinishVoiceInputAsync();
-
-        Assert.Empty(viewModel.Messages);
-        Assert.Equal(0, client.CallCount);
-        Assert.Equal("REVA voice is unavailable.", viewModel.VoiceErrorMessage);
-        Assert.Equal("Voice Unavailable", viewModel.VoiceStatusText);
-    }
-
-    [Fact]
-    public async Task VoiceTurn_SpeechFailure_KeepsAssistantTextVisible()
-    {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Failure(
-                CoreErrorKind.CoreUnavailable,
-                "REVA voice is unavailable.")));
-        var voiceDevice = new FakeVoiceDevice();
-        var viewModel = new AssistantViewModel(client, voiceDevice);
-
-        await viewModel.StartVoiceInputAsync();
-        await viewModel.FinishVoiceInputAsync();
-
-        Assert.Equal(2, viewModel.Messages.Count);
-        Assert.Equal("Received: hello", viewModel.Messages[1].Text);
-        Assert.Equal(0, voiceDevice.PlayCallCount);
-        Assert.Equal("REVA voice is unavailable.", viewModel.VoiceErrorMessage);
-        Assert.Equal("Voice Unavailable", viewModel.VoiceStatusText);
-    }
-
-    [Fact]
-    public async Task VoiceTurn_UsesTeluguLanguageForTeluguDominantAssistantOutput()
-    {
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("ఇది సమాధానం"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
-        var viewModel = new AssistantViewModel(client, new FakeVoiceDevice());
-
-        await viewModel.StartVoiceInputAsync();
-        await viewModel.FinishVoiceInputAsync();
-
-        Assert.Equal(("ఇది సమాధానం", "te"), client.SpeechRequests.Single());
-    }
-
-    [Fact]
-    public async Task StopSpeaking_HaltsActivePlaybackImmediately()
-    {
-        var playbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var allowPlaybackToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new FakeCoreClient(
-            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("Received: hello"))),
-            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
-            (_, _, _) => Task.FromResult(CoreResult<byte[]>.Success(new byte[] { 82, 73, 70, 70 })));
         var voiceDevice = new FakeVoiceDevice(
-            playbackStarted: playbackStarted,
-            allowPlaybackToComplete: allowPlaybackToComplete);
-        var viewModel = new AssistantViewModel(client, voiceDevice);
+            startException: new VoiceCaptureException(VoiceDeviceAvailability.PermissionDenied()));
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), voiceDevice);
 
         await viewModel.StartVoiceInputAsync();
-        var finishTask = viewModel.FinishVoiceInputAsync();
-        await playbackStarted.Task;
 
-        Assert.True(viewModel.IsSpeaking);
-        Assert.Equal("Speaking…", viewModel.VoiceStatusText);
-
-        viewModel.StopSpeaking();
-        await finishTask;
-
-        Assert.False(viewModel.IsSpeaking);
-        Assert.True(voiceDevice.StopPlaybackCallCount > 0);
-        Assert.Equal("Voice Ready", viewModel.VoiceStatusText);
+        Assert.False(viewModel.IsMicrophoneActive);
+        Assert.False(viewModel.CanStartVoiceInput);
+        Assert.Equal(VoiceUiState.PermissionDenied, viewModel.VoiceState);
+        Assert.Equal(
+            "Microphone permission is disabled. Enable it in Windows Settings.",
+            viewModel.VoiceErrorMessage);
     }
+
+    [Fact]
+    public async Task TtsUnavailable_DoesNotDisableVoiceButton()
+    {
+        // No TTS call path exists in this slice — this proves
+        // SynthesizeSpeechAsync is never invoked during a full successful turn,
+        // so whatever state TTS is in cannot gate CanStartVoiceInput.
+        var client = TranscribingClient("hi");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(0, client.SynthesizeCallCount);
+        Assert.True(viewModel.CanStartVoiceInput);
+    }
+
+    private static FakeCoreClient TranscribingClient(string text) => new(
+        (_, _) => throw new NotSupportedException("transcription-only slice must never call SendMessageAsync"),
+        (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription(text))),
+        (_, _, _) => throw new NotSupportedException("transcription-only slice must never call SynthesizeSpeechAsync"));
+
+    private static FakeCoreClient NeverTranscribingClient() => new(
+        (_, _) => throw new NotSupportedException(),
+        (_, _) => throw new NotSupportedException("must be rejected before any Core call"),
+        (_, _, _) => throw new NotSupportedException());
+
+    private static FakeCoreClient FailingTranscriptionClient(CoreErrorKind kind, string message) => new(
+        (_, _) => throw new NotSupportedException(),
+        (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Failure(kind, message)),
+        (_, _, _) => throw new NotSupportedException());
 
     [Fact]
     public void CanStartVoiceInput_MicReadyButCoreDisconnected_IsFalse()
