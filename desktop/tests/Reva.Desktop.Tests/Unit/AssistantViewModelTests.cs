@@ -809,4 +809,61 @@ public class AssistantViewModelTests
         Assert.Equal("Ready to Talk", viewModel.VoiceStatusText);
         Assert.True(viewModel.CanStartVoiceInput);
     }
+
+    [Fact]
+    public void ComposerSource_Initially_IsTyped()
+    {
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient());
+
+        Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task ComposerSource_AfterTranscription_IsTranscribed()
+    {
+        var client = TranscribingClient("confirm");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(CommandSource.Transcribed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task ComposerSource_AfterUserEditsTranscribedText_ReturnsToTyped()
+    {
+        // Editing is an act of authorship — once the user has touched the text
+        // it is theirs, and a typed confirm should work normally.
+        var client = TranscribingClient("confirm");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        viewModel.ComposerText = "confirm";   // simulates SyncComposerTextFromTextBox
+
+        Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task ComposerSource_AfterSend_ResetsToTyped()
+    {
+        // TranscribingClient() can't be reused here — its SendMessageAsync
+        // responder deliberately throws, since every other test using it
+        // asserts the transcription-only slice never sends. This test needs
+        // both paths to succeed: transcribe, then actually send.
+        var client = new FakeCoreClient(
+            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(SuccessResponse("ok"))),
+            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))));
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
 }

@@ -142,10 +142,39 @@ public sealed class AssistantViewModel : ObservableObject
 
     public ObservableCollection<AssistantMessage> Messages { get; } = new();
 
+    private CommandSource _composerSource = CommandSource.Typed;
+
+    public CommandSource ComposerSource => _composerSource;
+
     public string ComposerText
     {
         get => _composerText;
-        set => SetProperty(ref _composerText, value);
+        set
+        {
+            SetProperty(ref _composerText, value);
+
+            // Any write through the public setter is user authorship — the
+            // x:Bind TwoWay path and every test call site land here. This is
+            // unconditional (not gated on SetProperty detecting a change):
+            // re-assigning the same text the user is looking at (e.g. a
+            // TextBox TwoWay sync firing after a no-op edit) still counts as
+            // the user having touched it.
+            _composerSource = CommandSource.Typed;
+        }
+    }
+
+    /// <summary>The transcription path's write. Same append semantics as a
+    /// user edit, but marks the text as machine-authored so a spoken
+    /// "confirm" can't resolve a pending destructive command.</summary>
+    private void AppendTranscribedText(string text)
+    {
+        var merged = string.IsNullOrWhiteSpace(_composerText)
+            ? text
+            : $"{_composerText.TrimEnd()} {text}";
+
+        SetProperty(ref _composerText, merged, nameof(ComposerText));
+
+        _composerSource = CommandSource.Transcribed;   // after the setter, not before
     }
 
     public bool IsPending
@@ -401,9 +430,7 @@ public sealed class AssistantViewModel : ObservableObject
                 return;
             }
 
-            ComposerText = string.IsNullOrWhiteSpace(ComposerText)
-                ? text
-                : $"{ComposerText.TrimEnd()} {text}";
+            AppendTranscribedText(text);
             VoiceErrorMessage = null;
             VoiceState = VoiceUiState.TranscriptionReady;
             DesktopLogger.Info("voice.state=TranscriptionReady");
@@ -466,6 +493,7 @@ public sealed class AssistantViewModel : ObservableObject
         if (clearComposer)
         {
             ComposerText = string.Empty;
+            _composerSource = CommandSource.Typed; // an empty composer has no author
         }
 
         try
