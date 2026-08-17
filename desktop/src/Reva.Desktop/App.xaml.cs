@@ -39,7 +39,9 @@ public partial class App : Application
             coreClient, tokenProvider, new DeveloperModeCoreExecutableLocator(), new CoreProcessLauncher(), configuration);
         _lifecycle = lifecycle;
 
-        _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice());
+        var commandRouter = new CommandRouter(new WindowsAppExecutor());
+
+        _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice(), commandRouter);
         _window.Activate();
 
         // Deliberately started after Activate(), not awaited before it: the
