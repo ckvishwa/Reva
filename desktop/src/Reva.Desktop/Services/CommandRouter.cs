@@ -85,12 +85,16 @@ public sealed class CommandRouter : ICommandRouter
         DesktopLogger.Info(
             $"command.state=Matched action=Open app={descriptor.Key} source={source.ToString().ToLowerInvariant()}");
         var opened = await _executor.OpenAsync(descriptor, cancellationToken).ConfigureAwait(false);
-        DesktopLogger.Info(
-            $"command.state=Executed action=Open app={descriptor.Key} result={(opened ? "success" : "failed")}");
+        if (opened)
+        {
+            DesktopLogger.Info(
+                $"command.state=Executed action=Open app={descriptor.Key} result=success");
+            return new CommandRouteResult(CommandOutcome.Executed, $"Opened {descriptor.DisplayName}.");
+        }
 
-        return opened
-            ? new CommandRouteResult(CommandOutcome.Executed, $"Opened {descriptor.DisplayName}.")
-            : new CommandRouteResult(CommandOutcome.Rejected, $"Couldn't open {descriptor.DisplayName}.");
+        DesktopLogger.Info(
+            $"command.state=Rejected action=Open app={descriptor.Key} reason=launch_failed");
+        return new CommandRouteResult(CommandOutcome.Rejected, $"Couldn't open {descriptor.DisplayName}.");
     }
 
     private async Task<CommandRouteResult> HandleCloseRequestAsync(
@@ -138,7 +142,14 @@ public sealed class CommandRouter : ICommandRouter
         var descriptor = _pending.App;
         _pending = null;
         var outcome = await _executor.CloseAsync(descriptor, cancellationToken).ConfigureAwait(false);
-        DesktopLogger.Info($"command.state=Confirmed action=Close app={descriptor.Key} result={outcome}");
+        var outcomeTag = outcome switch
+        {
+            AppCloseOutcome.CloseRequested => "requested",
+            AppCloseOutcome.NotRunning => "not_running",
+            AppCloseOutcome.Failed => "failed",
+            _ => outcome.ToString(),
+        };
+        DesktopLogger.Info($"command.state=Confirmed action=Close app={descriptor.Key} result={outcomeTag}");
 
         return outcome switch
         {
