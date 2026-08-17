@@ -1816,42 +1816,33 @@ Expected: succeeds. Confirm the produced exe path from the build output (`deskto
 
 Core is expected at `http://127.0.0.1:8756/`. Either start it per `reva_core/README.md`, or confirm `App.xaml.cs`'s `RevaCoreLifecycle`/`CoreProcessLauncher` auto-launches it.
 
-- [ ] **Step 4: Run the Release executable**
+- [x] **Step 4: Run the Release executable** — DONE, user-verified 2026-08-17.
 
-Wait for `CoreStatusText` = "Core Connected" and `VoiceStatusText` = "Ready to Talk".
+- [ ] **Step 5: Core-offline contradiction check (do this first)** — NOT YET EVIDENCED. User's verification report did not include a Core-offline test. Open.
 
-- [ ] **Step 5: Core-offline contradiction check (do this first)**
+- [x] **Step 6: Physical hold-to-talk test** — DONE, user-verified 2026-08-17. Physical Hold-to-Talk used, speech captured from the real microphone.
 
-Before the happy path, stop `reva_core` (or launch the exe with Core down). Confirm: the Hold-to-Talk button is disabled **and** `VoiceStatusText` reads "STT Unavailable" — not "Ready to Talk". This is the v1 bug this plan exists to prevent; catching it here is the whole point. Restart Core and confirm both recover without restarting the app (this also exercises the off-thread `StateChanged` path from Task 6 — a crash or frozen status here means the dispatcher hop is wrong).
+- [x] **Step 7: Observe and record** — PARTIALLY VERIFIED, user report 2026-08-17:
+  - `VoiceStatusText` reached "Transcription Ready" (final status confirmed; the full `Listening`→`Transcribing` transition sequence wasn't separately reported, only the end state).
+  - `ComposerBox` showed the recognized text, editable — recognized text: **"hello hello hello my testing one test we can you hear me"**.
+  - Nothing was auto-sent — user manually pressed Send afterward, confirming the message list was untouched until that manual action.
+  - No TTS/audio playback occurred.
+  - Typed Send remained functional (confirmed via the manual Send press working normally).
+  - Temp-WAV-file-deleted check: NOT reported. Open.
 
-- [ ] **Step 6: Physical hold-to-talk test**
-
-Hold the mouse button on "Hold to Talk". Say: "Hey Reva, this is a microphone transcription test." Release.
-
-- [ ] **Step 7: Observe and record**
-
-Confirm:
-- `VoiceStatusText` transitioned `Listening` → `Transcribing` → `Transcription Ready`.
-- `ComposerBox` contains text exact or meaning-equivalent to the spoken sentence, and updated without needing a click (if stale, apply Task 8 Step 2's fallback and note it).
-- Nothing was auto-sent — `MessageList` gained no entries, the text is still editable in the composer.
-- No audio played back; `StopSpeakingButton` is collapsed.
-- The temp WAV from this turn no longer exists on disk (check the `_recordingPath` directory).
-
-- [ ] **Step 8: Short-recording and silence checks**
+- [ ] **Step 8: Short-recording and silence checks** — NOT YET EVIDENCED. Open.
 
 Tap the button (< 250ms): expect "Transcription Failed" with the too-short message, and **no** Core request. Then hold for two seconds in silence: expect "Transcription Failed" with "No speech was recognized", not "Transcription Ready" over an empty box.
 
-- [ ] **Step 8a: Draft-preservation check (added after final review, finding #5)**
+- [ ] **Step 8a: Draft-preservation check (added after final review, finding #5)** — NOT YET EVIDENCED. Open.
 
 Type a partial message in the composer but do **not** click elsewhere or otherwise move focus off `ComposerBox`. While still focused there, hold-to-talk and speak. Release. Confirm the typed draft survives and the transcript is appended after it (`"typed draft transcribed words"`), not silently overwritten. This exercises a real risk the unit tests can't see: `ComposerBox`'s `x:Bind TwoWay` only commits the user's typed text back to `Assistant.ComposerText` on `LostFocus`, so if focus never left the box before the transcript-append code reads `ComposerText`, that read could be stale. Expected to pass (the Hold-to-Talk button takes pointer focus on press, which should force the commit before release), but this is unverified against real WinUI focus timing until this step runs.
 
-- [ ] **Step 8b: Pending-chat status check (added after final review, finding #3)**
+- [ ] **Step 8b: Pending-chat status check (added after final review, finding #3)** — NOT YET EVIDENCED. Open.
 
 Type a message and click Send, and while that request is still in flight (before a reply appears), observe `VoiceStatusText`. Expected/accepted limitation: it will read "Ready to Talk" even though Hold-to-Talk is disabled (`CanStartVoiceInput` includes `!IsPending`, and `VoiceUiState` has no pending-aware member among the nine required strings). This is a known, accepted gap — confirm it matches this description exactly (transient, self-resolves when the chat reply arrives) rather than surfacing as something worse (e.g. a stuck state that doesn't recover once the chat completes).
 
-- [ ] **Step 9: Report the required metrics**
-
-Record: capture duration (press-to-release), WAV size in bytes (should be ≈ `2 × 16000 × seconds` + 44 — this is Task 5's only real verification), STT latency (release → "Transcription Ready"), and the exact recognized text.
+- [ ] **Step 9: Report the required metrics** — PARTIALLY EVIDENCED. Recognized text captured (see Step 7). Capture duration, WAV size in bytes, and STT latency were NOT captured/reported and must not be invented — remain open pending log data or a re-run that records them.
 
 - [ ] **Step 10: If it fails, diagnose before retrying**
 
