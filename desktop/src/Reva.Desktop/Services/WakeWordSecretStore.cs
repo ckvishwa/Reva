@@ -6,6 +6,10 @@ namespace Reva.Desktop.Services;
 public interface IWakeWordSecretStore
 {
     string? GetAccessKey();
+
+    void SaveAccessKey(string accessKey);
+
+    void DeleteAccessKey();
 }
 
 public sealed class DpapiWakeWordSecretStore : IWakeWordSecretStore
@@ -39,6 +43,38 @@ public sealed class DpapiWakeWordSecretStore : IWakeWordSecretStore
         catch (UnauthorizedAccessException)
         {
             return null;
+        }
+    }
+
+    public void SaveAccessKey(string accessKey)
+    {
+        if (string.IsNullOrWhiteSpace(accessKey))
+        {
+            throw new ArgumentException("AccessKey is required.", nameof(accessKey));
+        }
+
+        var directory = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(accessKey.Trim());
+        var protectedBytes = ProtectedData.Protect(bytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
+        File.WriteAllBytes(_path, protectedBytes);
+    }
+
+    public void DeleteAccessKey()
+    {
+        try
+        {
+            File.Delete(_path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }

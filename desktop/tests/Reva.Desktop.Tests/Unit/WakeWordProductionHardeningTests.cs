@@ -46,6 +46,7 @@ public class WakeWordProductionHardeningTests
         var store = new FakeWakeWordSettingsStore(new WakeWordLocalSettings(
             IsEnabled: true,
             KeywordSetVersion: "2026.08.17",
+            NativeArchitecture: "X64",
             ModelHashes: new Dictionary<string, string> { ["hey-reva"] = ExpectedHash }));
         var secrets = new FakeWakeWordSecretStore("stored-key");
 
@@ -58,6 +59,7 @@ public class WakeWordProductionHardeningTests
         Assert.True(options.IsEnabled);
         Assert.Equal("stored-key", options.AccessKey);
         Assert.Equal("2026.08.17", options.ModelManifest.KeywordSetVersion);
+        Assert.Equal("X64", options.ModelManifest.Architecture);
         Assert.Equal(ExpectedHash, options.ModelManifest.ExpectedSha256[WakePhrase.HeyReva]);
     }
 
@@ -410,6 +412,10 @@ public class WakeWordProductionHardeningTests
         public FakeWakeWordSettingsStore(WakeWordLocalSettings settings) => _settings = settings;
 
         public WakeWordLocalSettings Load() => _settings;
+
+        public void Save(WakeWordLocalSettings settings)
+        {
+        }
     }
 
     private sealed class FakeWakeWordSecretStore : IWakeWordSecretStore
@@ -419,6 +425,14 @@ public class WakeWordProductionHardeningTests
         public FakeWakeWordSecretStore(string? accessKey) => _accessKey = accessKey;
 
         public string? GetAccessKey() => _accessKey;
+
+        public void SaveAccessKey(string accessKey)
+        {
+        }
+
+        public void DeleteAccessKey()
+        {
+        }
     }
 
     private sealed class FakeFileSystemProbe : IFileSystemProbe
