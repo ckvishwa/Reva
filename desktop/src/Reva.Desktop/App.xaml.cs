@@ -25,9 +25,16 @@ public partial class App : Application
         var httpClient = new System.Net.Http.HttpClient
         {
             BaseAddress = configuration.CoreBaseUrl,
-            Timeout = configuration.RequestTimeout,
+            // Backstop only. Every call path enforces its own shorter, per-call
+            // timeout; this exists so a future method added without a CTS
+            // cannot hang forever. Must stay comfortably above the STT timeout
+            // (30s default, env-overridable) so it never pre-empts it. If
+            // REVA_DESKTOP_STT_TIMEOUT_SECONDS is ever set above 300, this
+            // backstop wins.
+            Timeout = TimeSpan.FromSeconds(300),
         };
-        var coreClient = new RevaCoreClient(httpClient, tokenProvider);
+        var coreClient = new RevaCoreClient(
+            httpClient, tokenProvider, configuration.RequestTimeout, configuration.SttRequestTimeout);
         var lifecycle = new RevaCoreLifecycle(
             coreClient, tokenProvider, new DeveloperModeCoreExecutableLocator(), new CoreProcessLauncher(), configuration);
         _lifecycle = lifecycle;

@@ -16,11 +16,19 @@ public sealed class RevaCoreClient : IRevaCoreClient
 
     private readonly HttpClient _httpClient;
     private readonly ILocalTokenProvider _tokenProvider;
+    private readonly TimeSpan _requestTimeout;
+    private readonly TimeSpan _sttRequestTimeout;
 
-    public RevaCoreClient(HttpClient httpClient, ILocalTokenProvider tokenProvider)
+    public RevaCoreClient(
+        HttpClient httpClient,
+        ILocalTokenProvider tokenProvider,
+        TimeSpan? requestTimeout = null,
+        TimeSpan? sttRequestTimeout = null)
     {
         _httpClient = httpClient;
         _tokenProvider = tokenProvider;
+        _requestTimeout = requestTimeout ?? DesktopConfiguration.DefaultRequestTimeout;
+        _sttRequestTimeout = sttRequestTimeout ?? DesktopConfiguration.DefaultSttRequestTimeout;
     }
 
     public Task<CoreResult<HealthStatus>> GetHealthAsync(CancellationToken cancellationToken = default) =>
@@ -61,7 +69,8 @@ public sealed class RevaCoreClient : IRevaCoreClient
             requiresAuth: true,
             cancellationToken,
             body,
-            voiceRequest: true);
+            voiceRequest: true,
+            timeout: _sttRequestTimeout);
     }
 
     public Task<CoreResult<byte[]>> SynthesizeSpeechAsync(
@@ -82,7 +91,8 @@ public sealed class RevaCoreClient : IRevaCoreClient
         bool requiresAuth,
         CancellationToken cancellationToken,
         HttpContent? content = null,
-        bool voiceRequest = false)
+        bool voiceRequest = false,
+        TimeSpan? timeout = null)
     {
         using var request = new HttpRequestMessage(method, relativePath);
         if (content is not null)
@@ -102,17 +112,21 @@ public sealed class RevaCoreClient : IRevaCoreClient
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenResult.Token);
         }
 
+        using var timeoutCts = new CancellationTokenSource(timeout ?? _requestTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await _httpClient.SendAsync(request, linkedCts.Token).ConfigureAwait(false);
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // HttpClient throws TaskCanceledException for its own Timeout,
-            // distinct from caller-requested cancellation (which we let
-            // propagate normally rather than normalizing).
-            return CoreResult<T>.Failure(CoreErrorKind.CoreTimeout, "REVA Core did not respond in time.");
+            // The per-call CTS fired (timeoutCts), distinct from
+            // caller-requested cancellation (cancellationToken), which is
+            // let propagate normally rather than normalized into a result.
+            var message = voiceRequest ? "REVA voice did not respond in time." : "REVA Core did not respond in time.";
+            return CoreResult<T>.Failure(CoreErrorKind.CoreTimeout, message);
         }
         catch (HttpRequestException)
         {
@@ -151,12 +165,15 @@ public sealed class RevaCoreClient : IRevaCoreClient
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenResult.Token);
         }
 
+        using var timeoutCts = new CancellationTokenSource(_requestTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await _httpClient.SendAsync(request, linkedCts.Token).ConfigureAwait(false);
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return CoreResult<byte[]>.Failure(CoreErrorKind.CoreTimeout, "REVA voice did not respond in time.");
         }
