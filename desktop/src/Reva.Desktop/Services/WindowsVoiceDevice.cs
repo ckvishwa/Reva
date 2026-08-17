@@ -118,6 +118,11 @@ public sealed class WindowsVoiceDevice : IVoiceDevice, IDisposable
         }
         catch (Exception ex)
         {
+            // Numeric HResult only — never audio/transcript content — so the
+            // physical acceptance run leaves diagnostic evidence behind when
+            // real hardware throws something outside the format-fallback
+            // filter above.
+            DesktopLogger.Info($"voice.capture.failed hresult=0x{ex.HResult:X8}");
             CancelRecording();
             _microphoneReady = false;
             throw new VoiceCaptureException(VoiceDeviceAvailability.RecordingFailed(), ex);
@@ -136,13 +141,19 @@ public sealed class WindowsVoiceDevice : IVoiceDevice, IDisposable
 
             await _recording.StopAsync();
             await _recording.FinishAsync();
-            _recording = null;
-            _capture?.Dispose();
-            _capture = null;
             return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            // Unconditional teardown: if StopAsync/FinishAsync throws (e.g.
+            // device unplugged mid-recording), _recording must still be
+            // cleared here. Otherwise StartRecordingAsync's "already
+            // recording" guard wedges permanently, and every future
+            // StopRecordingAsync sees a null _recordingPath and silently
+            // returns empty audio forever.
+            _recording = null;
+            _capture?.Dispose();
+            _capture = null;
             _recordingPath = null;
             DeleteIfExists(path);
         }

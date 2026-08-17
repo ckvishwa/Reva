@@ -151,6 +151,14 @@ public sealed partial class MainWindow : Window
     private async void MicrophoneSettingsButton_Click(object sender, RoutedEventArgs e)
     {
         await Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-microphone"));
+
+        // There's no reliable "user came back from Settings" event for this
+        // simple deep-link, so re-probe immediately: it clears a stale
+        // PermissionDenied/NoMicrophone status right away if the OS already
+        // reflects the grant, and otherwise gives the user an obvious,
+        // discoverable retry (click the button again after fixing the
+        // setting) instead of a permanently dead Hold-to-Talk button.
+        await Assistant.RefreshVoiceAvailabilityAsync();
     }
 
     private async void RememberButton_Click(object sender, RoutedEventArgs e)
