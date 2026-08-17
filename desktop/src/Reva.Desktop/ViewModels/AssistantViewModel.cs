@@ -11,7 +11,7 @@ namespace Reva.Desktop.ViewModels;
 /// history reload, no memory creation (that's Slice 4's "Remember this"
 /// action, a deliberately separate, explicit code path — ADR-006).
 /// </summary>
-public sealed class AssistantViewModel : ObservableObject
+public sealed class AssistantViewModel : ObservableObject, IComposerSink
 {
     private readonly IRevaCoreClient _coreClient;
     private readonly IVoiceDevice _voiceDevice;
@@ -169,6 +169,8 @@ public sealed class AssistantViewModel : ObservableObject
     /// <summary>The transcription path's write. Same append semantics as a
     /// user edit, but marks the text as machine-authored so a spoken
     /// "confirm" can't resolve a pending destructive command.</summary>
+    public void AppendTranscription(string text) => AppendTranscribedText(text);
+
     private void AppendTranscribedText(string text)
     {
         var merged = string.IsNullOrWhiteSpace(_composerText)
@@ -329,6 +331,63 @@ public sealed class AssistantViewModel : ObservableObject
 
         var trimmed = ComposerText.Trim();
         await SendMessageCoreAsync(trimmed, clearComposer: true, cancellationToken);
+    }
+
+    public async Task<WakeWordSubmitResult> SubmitTranscriptionAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.Empty);
+        }
+
+        if (IsPending)
+        {
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.Empty);
+        }
+
+        ErrorMessage = null;
+        IsPending = true;
+        RaiseVoiceAvailabilityProperties();
+
+        try
+        {
+            var routeResult = await _commandRouter.RouteAsync(
+                trimmed,
+                CommandSource.Transcribed,
+                cancellationToken).ConfigureAwait(true);
+
+            if (routeResult.Outcome == CommandOutcome.NotACommand)
+            {
+                AppendTranscribedText(trimmed);
+                return new WakeWordSubmitResult(WakeWordSubmitOutcome.ComposerPopulated);
+            }
+
+            Messages.Add(AssistantMessage.FromUser(trimmed));
+            if (!string.IsNullOrEmpty(routeResult.ResultMessage))
+            {
+                Messages.Add(AssistantMessage.FromAssistant(routeResult.ResultMessage));
+            }
+
+            _composerSource = CommandSource.Typed;
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.RoutedCommand);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            ErrorMessage = "Something went wrong sending that message. Try again.";
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.Empty);
+        }
+        finally
+        {
+            IsPending = false;
+            RaiseVoiceAvailabilityProperties();
+        }
     }
 
     public async Task StartVoiceInputAsync(CancellationToken cancellationToken = default)
