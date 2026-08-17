@@ -16,11 +16,15 @@ public sealed partial class MainWindow : Window
 
     public MemoryViewModel Memory { get; }
 
-    public MainWindow(IRevaCoreClient coreClient, IRevaCoreLifecycle lifecycle, IVoiceDevice? voiceDevice = null)
+    public MainWindow(
+        IRevaCoreClient coreClient,
+        IRevaCoreLifecycle lifecycle,
+        IVoiceDevice? voiceDevice = null,
+        ICommandRouter? commandRouter = null)
     {
         InitializeComponent();
         Shell = new ShellViewModel(lifecycle);
-        Assistant = new AssistantViewModel(coreClient, voiceDevice, lifecycle);
+        Assistant = new AssistantViewModel(coreClient, voiceDevice, lifecycle, commandRouter);
         Memory = new MemoryViewModel(coreClient);
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
