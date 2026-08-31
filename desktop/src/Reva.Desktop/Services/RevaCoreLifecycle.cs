@@ -32,6 +32,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     private CancellationTokenSource? _monitorCts;
     private Task? _monitorLoopTask;
     private int _relaunchAttempts;
+    private int _monitorGeneration;
     private bool _disposed;
 
     public RevaCoreLifecycle(
@@ -172,7 +173,14 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         _monitorCts = null;
         if (cts is not null)
         {
-            DesktopLogger.Info("monitor loop stop requested");
+            // Slice 8A-R Task 3 (F1): this line now fires on EVERY
+            // cancellation path, including the self-restart inside
+            // StartMonitor (health-fail-then-pass transitioning back to
+            // Connected) — previously that path cancelled _monitorCts
+            // inline without logging, so the log could show a second
+            // "monitor loop starting" with no paired stop line before it,
+            // making the single-loop invariant unprovable from the log.
+            DesktopLogger.Info($"monitor loop stop requested (gen={_monitorGeneration})");
             cts.Cancel();
         }
     }
@@ -233,13 +241,19 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     {
         // Ownership gates every stop/kill path (rule: never touch a Core
         // this instance merely attached to) — explicit check, not an
-        // inferred null-check on _ownedProcess.
+        // inferred null-check on _ownedProcess. Slice 8A-R Task 1: the
+        // negative case now logs too — a gate that is only ever visible in
+        // the log when it fires is a gate nobody can prove was consulted.
+        var pidText = _ownedProcess?.Pid?.ToString() ?? "none";
         if (Ownership != CoreOwnership.Owned || _ownedProcess is null)
         {
+            DesktopLogger.Info(
+                $"stop-gate: ownership={Ownership}, pid={pidText}, site=StopOwnedProcessIfAny, decision=skip (not owned)");
             return;
         }
 
-        DesktopLogger.Info($"stopping owned Core process (pid={_ownedProcess.Pid?.ToString() ?? "unknown"})");
+        DesktopLogger.Info(
+            $"stop-gate: ownership={Ownership}, pid={pidText}, site=StopOwnedProcessIfAny, decision=stop");
         _ownedProcess.Stop();
         _ownedProcess.Dispose();
         _ownedProcess = null;
@@ -263,13 +277,20 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
     private void StartMonitor()
     {
-        _monitorCts?.Cancel();
+        // Routed through StopMonitoring (not an inline _monitorCts?.Cancel())
+        // so the prior generation's cancellation is always logged — see the
+        // comment in StopMonitoring. This is the self-restart path F1 found
+        // unlogged: RunMonitorIterationAsync's health-success branch calls
+        // FinishConnectingAsync -> StartMonitor while a monitor loop
+        // iteration is still on the stack.
+        StopMonitoring();
         _monitorCts = new CancellationTokenSource();
-        DesktopLogger.Info("monitor loop starting");
-        _monitorLoopTask = RunMonitorLoopAsync(_monitorCts.Token);
+        var generation = ++_monitorGeneration;
+        DesktopLogger.Info($"monitor loop starting (gen={generation})");
+        _monitorLoopTask = RunMonitorLoopAsync(_monitorCts.Token, generation);
     }
 
-    private async Task RunMonitorLoopAsync(CancellationToken cancellationToken)
+    private async Task RunMonitorLoopAsync(CancellationToken cancellationToken, int generation)
     {
         while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
@@ -292,6 +313,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
             await Task.Yield();
             if (cancellationToken.IsCancellationRequested)
             {
+                LogMonitorLoopExited(generation, "cancelled");
                 return;
             }
 
@@ -308,21 +330,39 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 // in production), silently aborting shutdown before it ever
                 // reached the code that actually stops the owned process.
                 // Found via a real physical repro: the window never closed.
+                LogMonitorLoopExited(generation, "cancelled during delay");
                 return;
             }
 
             if (cancellationToken.IsCancellationRequested)
             {
+                LogMonitorLoopExited(generation, "cancelled");
                 return;
             }
 
-            await RunMonitorIterationAsync().ConfigureAwait(true);
+            // Slice 8A-R Task 3 (F1): this generation's RunMonitorIterationAsync
+            // call is only ever reached here, after both cancellation checks
+            // above — so if this generation's cts was cancelled synchronously
+            // by a newer StartMonitor call while this same iteration's prior
+            // await was still on the stack (the F1 scenario), this line never
+            // runs for the stale generation. The test for this asserts exactly
+            // that: no generation issues a health check after being superseded.
+            await RunMonitorIterationAsync(generation).ConfigureAwait(true);
         }
+
+        LogMonitorLoopExited(generation, _disposed ? "disposed" : "cancelled");
     }
 
+    private static void LogMonitorLoopExited(int generation, string reason) =>
+        DesktopLogger.Info($"monitor loop exited (gen={generation}, reason={reason})");
+
     /// <summary>One reconnect check. Public so tests can drive a single
-    /// iteration deterministically instead of racing the real timer loop.</summary>
-    public async Task RunMonitorIterationAsync()
+    /// iteration deterministically instead of racing the real timer loop.
+    /// <paramref name="generation"/> defaults to the current monitor
+    /// generation for direct test calls that aren't loop-driven.</summary>
+    public Task RunMonitorIterationAsync() => RunMonitorIterationAsync(_monitorGeneration);
+
+    private async Task RunMonitorIterationAsync(int generation)
     {
         if (_disposed)
         {
@@ -332,7 +372,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         }
 
         var health = await _coreClient.GetHealthAsync().ConfigureAwait(true);
-        DesktopLogger.Info($"health check (monitor): {(health.IsSuccess ? "pass" : $"fail ({health.Error!.Kind})")}");
+        DesktopLogger.Info($"health check (monitor, gen={generation}): {(health.IsSuccess ? "pass" : $"fail ({health.Error!.Kind})")}");
         if (health.IsSuccess)
         {
             _relaunchAttempts = 0;
