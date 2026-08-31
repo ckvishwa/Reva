@@ -59,15 +59,26 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
 
         Assistant.DetachLifecycle();
-        if (WakeWord is not null)
-        {
-            await WakeWord.DisposeAsync();
-        }
-
-        await Shell.ShutdownAsync();
+        await RunShutdownSequenceAsync(
+            () => Shell.ShutdownAsync(),
+            () => WakeWord is not null ? WakeWord.DisposeAsync().AsTask() : Task.CompletedTask);
 
         _shutdownComplete = true;
         Close();
+    }
+
+    /// <summary>Core stop before wake-word disposal, not after — Core stop
+    /// runs in ~tens of milliseconds; wake-word disposal's latency (mic
+    /// lease release, native detector teardown) is unbounded by anything
+    /// this class controls. Ordering it first means anyone who kills REVA
+    /// from Task Manager during that window still finds the owned Core
+    /// process already stopped, rather than exposed for however long
+    /// wake-word teardown takes. Extracted as a static, WinUI-free method
+    /// so the ordering itself is unit-testable without a live Window.</summary>
+    internal static async Task RunShutdownSequenceAsync(Func<Task> stopCoreAsync, Func<Task> disposeWakeWordAsync)
+    {
+        await stopCoreAsync().ConfigureAwait(true);
+        await disposeWakeWordAsync().ConfigureAwait(true);
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
