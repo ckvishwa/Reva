@@ -30,7 +30,9 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
     private ICoreProcessHandle? _ownedProcess;
     private CancellationTokenSource? _monitorCts;
+    private Task? _monitorLoopTask;
     private int _relaunchAttempts;
+    private bool _disposed;
 
     public RevaCoreLifecycle(
         IRevaCoreClient coreClient,
@@ -50,18 +52,28 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
     public CoreLifecycleState State { get; private set; } = CoreLifecycleState.Starting;
 
+    /// <summary>Defaults to <see cref="CoreOwnership.External"/> — the safe
+    /// value — until <see cref="StartAsync"/> decides otherwise at its one
+    /// attach-or-launch decision point.</summary>
+    public CoreOwnership Ownership { get; private set; } = CoreOwnership.External;
+
     public string StatusText { get; private set; } = "Starting Core…";
 
     public event EventHandler? StateChanged;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
+        var opId = NewOperationId("start");
+        DesktopLogger.Info("startup begin", opId);
         SetState(CoreLifecycleState.Starting);
 
         var probe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+        DesktopLogger.Info($"health check (initial probe): {(probe.IsSuccess ? "pass" : $"fail ({probe.Error!.Kind})")}", opId);
         if (probe.IsSuccess)
         {
-            await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
+            Ownership = CoreOwnership.External;
+            await FinishConnectingAsync(cancellationToken, opId).ConfigureAwait(true);
+            DesktopLogger.Info("startup end (attached, no launch)", opId);
             return;
         }
 
@@ -74,6 +86,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
             // process against an already-occupied port (rule: never kill or
             // collide with a non-REVA listener).
             SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+            DesktopLogger.Info("startup end (unavailable: non-ambiguous probe failure)", opId);
             return;
         }
 
@@ -86,7 +99,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 // within the timeout — fail safe rather than risk launching a
                 // second process against an already-occupied port (the whole
                 // point of this lock).
-                DesktopLogger.Warn("Timed out waiting for the Core start lock; treating Core as unavailable.");
+                DesktopLogger.Warn("Timed out waiting for the Core start lock; treating Core as unavailable.", opId);
                 SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
                 return;
             }
@@ -97,17 +110,21 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 // have already finished launching Core while this instance was
                 // waiting on the mutex.
                 var reprobe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+                DesktopLogger.Info($"health check (post-lock reprobe): {(reprobe.IsSuccess ? "pass" : $"fail ({reprobe.Error!.Kind})")}", opId);
                 if (reprobe.IsSuccess)
                 {
-                    await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
+                    Ownership = CoreOwnership.External;
+                    await FinishConnectingAsync(cancellationToken, opId).ConfigureAwait(true);
+                    DesktopLogger.Info("startup end (attached after lock race, no launch)", opId);
                     return;
                 }
 
                 var resolution = _executableLocator.Resolve();
                 if (!resolution.IsAvailable)
                 {
-                    DesktopLogger.Warn($"REVA Core executable resolution failed: {resolution.FailureReason}");
+                    DesktopLogger.Warn($"REVA Core executable resolution failed: {resolution.FailureReason}", opId);
                     SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+                    DesktopLogger.Info("startup end (unavailable: executable not resolved)", opId);
                     return;
                 }
 
@@ -115,6 +132,8 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 {
                     _ownedProcess = _processLauncher.Launch(
                         resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                    Ownership = CoreOwnership.Owned;
+                    DesktopLogger.Info($"launched owned Core process (pid={_ownedProcess.Pid?.ToString() ?? "unknown"})", opId);
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
@@ -123,8 +142,9 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                     // to Unavailable rather than crashing the app via the
                     // unhandled exception this would otherwise become inside
                     // App.OnLaunched's async void.
-                    DesktopLogger.Warn($"Failed to launch REVA Core: {ex.Message}");
+                    DesktopLogger.Warn($"Failed to launch REVA Core: {ex.Message}", opId);
                     SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+                    DesktopLogger.Info("startup end (unavailable: launch failed)", opId);
                     return;
                 }
             }
@@ -138,30 +158,102 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         if (!becameHealthy)
         {
             SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+            DesktopLogger.Info("startup end (unavailable: launched Core never became healthy)", opId);
             return;
         }
 
-        await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
+        await FinishConnectingAsync(cancellationToken, opId).ConfigureAwait(true);
+        DesktopLogger.Info("startup end (connected)", opId);
     }
 
     public void StopMonitoring()
     {
-        _monitorCts?.Cancel();
+        var cts = _monitorCts;
         _monitorCts = null;
+        if (cts is not null)
+        {
+            DesktopLogger.Info("monitor loop stop requested");
+            cts.Cancel();
+        }
     }
 
+    /// <summary>
+    /// Synchronous best-effort shutdown for <see cref="IDisposable"/>
+    /// callers (test convenience, `using var`). Real app shutdown should
+    /// call <see cref="ShutdownAsync"/> instead — it additionally awaits
+    /// the monitor loop's actual exit before stopping the owned process,
+    /// closing the gap where a loop iteration mid-flight when Dispose is
+    /// called could still be deciding to relaunch. Order matters here too:
+    /// cancel first, then stop — stopping first would let the still-running
+    /// monitor observe the exit and race to relaunch before it sees cancellation.
+    /// </summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var opId = NewOperationId("shutdown");
+        DesktopLogger.Info("shutdown begin", opId);
+        _disposed = true;
         StopMonitoring();
-        _ownedProcess?.Dispose();
+        StopOwnedProcessIfAny();
+        DesktopLogger.Info("shutdown end", opId);
     }
 
-    private async Task FinishConnectingAsync(CancellationToken cancellationToken)
+    /// <summary>The real shutdown path: cancels the lifecycle's background
+    /// work first, awaits the monitor loop's actual exit (so a relaunch
+    /// decision already in flight cannot race a subsequent Stop()), then
+    /// stops the owned process. See <see cref="Dispose"/> for the
+    /// synchronous best-effort fallback used by tests.</summary>
+    public async Task ShutdownAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var opId = NewOperationId("shutdown");
+        DesktopLogger.Info("shutdown begin", opId);
+        _disposed = true;
+        StopMonitoring();
+
+        var loopTask = _monitorLoopTask;
+        if (loopTask is not null)
+        {
+            await loopTask.ConfigureAwait(true);
+        }
+
+        StopOwnedProcessIfAny();
+        DesktopLogger.Info("shutdown end", opId);
+    }
+
+    private void StopOwnedProcessIfAny()
+    {
+        // Ownership gates every stop/kill path (rule: never touch a Core
+        // this instance merely attached to) — explicit check, not an
+        // inferred null-check on _ownedProcess.
+        if (Ownership != CoreOwnership.Owned || _ownedProcess is null)
+        {
+            return;
+        }
+
+        DesktopLogger.Info($"stopping owned Core process (pid={_ownedProcess.Pid?.ToString() ?? "unknown"})");
+        _ownedProcess.Stop();
+        _ownedProcess.Dispose();
+        _ownedProcess = null;
+    }
+
+    private static string NewOperationId(string prefix) => $"{prefix}-{Guid.NewGuid().ToString("N")[..8]}";
+
+    private async Task FinishConnectingAsync(CancellationToken cancellationToken, string? opId = null)
     {
         var tokenAvailable = await WaitForTokenAsync(cancellationToken).ConfigureAwait(true);
         SetState(
             tokenAvailable ? CoreLifecycleState.Connected : CoreLifecycleState.AuthorizationUnavailable,
             tokenAvailable ? "Core Connected" : "REVA authorization unavailable");
+        DesktopLogger.Info($"token wait: {(tokenAvailable ? "available" : "timed out")}", opId);
 
         if (tokenAvailable)
         {
@@ -173,12 +265,13 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     {
         _monitorCts?.Cancel();
         _monitorCts = new CancellationTokenSource();
-        _ = RunMonitorLoopAsync(_monitorCts.Token);
+        DesktopLogger.Info("monitor loop starting");
+        _monitorLoopTask = RunMonitorLoopAsync(_monitorCts.Token);
     }
 
     private async Task RunMonitorLoopAsync(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
             // Task.Yield (not just _delay): guarantees this loop always
             // suspends and returns control to whoever called StartMonitor,
@@ -202,7 +295,22 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 return;
             }
 
-            await _delay(MonitorInterval, cancellationToken).ConfigureAwait(true);
+            try
+            {
+                await _delay(MonitorInterval, cancellationToken).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Real Task.Delay throws on cancellation rather than just
+                // returning — ShutdownAsync awaits this method's Task, so an
+                // uncaught cancellation here would fault it and rethrow into
+                // whatever called ShutdownAsync (an async void event handler
+                // in production), silently aborting shutdown before it ever
+                // reached the code that actually stops the owned process.
+                // Found via a real physical repro: the window never closed.
+                return;
+            }
+
             if (cancellationToken.IsCancellationRequested)
             {
                 return;
@@ -216,7 +324,15 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     /// iteration deterministically instead of racing the real timer loop.</summary>
     public async Task RunMonitorIterationAsync()
     {
+        if (_disposed)
+        {
+            // Cancellation/disposal always wins over restart — never act on
+            // a stray callback that raced Desktop shutdown.
+            return;
+        }
+
         var health = await _coreClient.GetHealthAsync().ConfigureAwait(true);
+        DesktopLogger.Info($"health check (monitor): {(health.IsSuccess ? "pass" : $"fail ({health.Error!.Kind})")}");
         if (health.IsSuccess)
         {
             _relaunchAttempts = 0;
@@ -231,18 +347,30 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
         // Only relaunch a process this instance owns and watched exit —
         // never touch a Core this instance merely attached to (rule: never
-        // kill or replace a process Desktop didn't start).
-        if (_ownedProcess is { HasExited: true } && _relaunchAttempts < MaxRelaunchAttempts)
+        // kill or replace a process Desktop didn't start). Gated on the
+        // explicit Ownership state, not an inferred null-check: an External
+        // Core that stops responding is never adopted as Owned — REVA never
+        // launched it, so REVA never relaunches it (Task 3, Slice 8A).
+        var ownedProcessExited = Ownership == CoreOwnership.Owned && _ownedProcess is { HasExited: true };
+        if (ownedProcessExited)
         {
+            DesktopLogger.Info($"process exit observed (pid={_ownedProcess!.Pid?.ToString() ?? "unknown"}, exitCode={_ownedProcess.ExitCode?.ToString() ?? "unknown"})");
+        }
+
+        if (ownedProcessExited && _relaunchAttempts < MaxRelaunchAttempts)
+        {
+            var opId = NewOperationId("recover");
+            DesktopLogger.Info($"recovery begin (attempt {_relaunchAttempts + 1}/{MaxRelaunchAttempts})", opId);
             _relaunchAttempts++;
             var resolution = _executableLocator.Resolve();
             if (resolution.IsAvailable)
             {
-                _ownedProcess.Dispose();
+                _ownedProcess!.Dispose();
                 try
                 {
                     _ownedProcess = _processLauncher.Launch(
                         resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                    DesktopLogger.Info($"recovery end (relaunched, pid={_ownedProcess.Pid?.ToString() ?? "unknown"})", opId);
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
@@ -250,9 +378,14 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                     // inside the background monitor loop, and an unobserved
                     // exception there would silently end all future reconnect
                     // attempts with no user-visible indication.
-                    DesktopLogger.Warn($"Failed to relaunch REVA Core: {ex.Message}");
+                    DesktopLogger.Warn($"Failed to relaunch REVA Core: {ex.Message}", opId);
                     _ownedProcess = null;
+                    DesktopLogger.Info("recovery end (relaunch failed)", opId);
                 }
+            }
+            else
+            {
+                DesktopLogger.Info("recovery end (executable not resolved)", opId);
             }
         }
     }

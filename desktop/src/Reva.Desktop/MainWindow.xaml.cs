@@ -35,13 +35,39 @@ public sealed partial class MainWindow : Window
         Closed += MainWindow_Closed;
     }
 
+    private bool _shutdownComplete;
+
     private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        // Slice 8A, Task 6 root cause: for an unpackaged WinUI app, the
+        // process's message loop exits as soon as this handler returns —
+        // and `async void` returns at its first `await`, long before the
+        // awaited cleanup (wake-word disposal, Core shutdown) actually
+        // finishes. Every previous version of this handler was fire-and-
+        // forget in practice: the process was gone before ShutdownAsync's
+        // Stop() call ever ran, confirmed by a real launch/close/tasklist
+        // repro that still showed the orphan even after ShutdownAsync
+        // itself was correct in isolation. `Handled = true` cancels this
+        // close so the async work can run to completion; the explicit
+        // Close() below re-fires this handler once, past the `if`, to let
+        // the window actually go away.
+        if (_shutdownComplete)
+        {
+            return;
+        }
+
+        args.Handled = true;
+
         Assistant.DetachLifecycle();
         if (WakeWord is not null)
         {
             await WakeWord.DisposeAsync();
         }
+
+        await Shell.ShutdownAsync();
+
+        _shutdownComplete = true;
+        Close();
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

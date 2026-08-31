@@ -662,10 +662,12 @@ public class WakeWordProductionHardeningTests
     private sealed class FakeCoreLifecycle : IRevaCoreLifecycle
     {
         public CoreLifecycleState State { get; set; } = CoreLifecycleState.Connected;
+        public CoreOwnership Ownership { get; set; } = CoreOwnership.Owned;
         public string StatusText => State.ToString();
         public event EventHandler? StateChanged;
         public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void StopMonitoring() { }
+        public Task ShutdownAsync() => Task.CompletedTask;
         public void RaiseStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
