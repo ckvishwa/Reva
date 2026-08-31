@@ -53,13 +53,49 @@ public sealed class CoreProcessLauncher : ICoreProcessLauncher
     private sealed class CoreProcessHandle : ICoreProcessHandle
     {
         private readonly Process _process;
+        private readonly int? _pid;
 
-        public CoreProcessHandle(Process process) => _process = process;
+        public CoreProcessHandle(Process process)
+        {
+            _process = process;
+            // Captured at construction: reading Process.Id after the process
+            // has exited throws, and diagnostics may want the pid at that point.
+            _pid = TryGetId(process);
+        }
 
         public bool HasExited => _process.HasExited;
 
         public int? ExitCode => _process.HasExited ? _process.ExitCode : null;
 
+        public int? Pid => _pid;
+
+        public void Stop()
+        {
+            try
+            {
+                if (!_process.HasExited)
+                {
+                    _process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Process already exited between the HasExited check and Kill.
+            }
+        }
+
         public void Dispose() => _process.Dispose();
+
+        private static int? TryGetId(Process process)
+        {
+            try
+            {
+                return process.Id;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
     }
 }

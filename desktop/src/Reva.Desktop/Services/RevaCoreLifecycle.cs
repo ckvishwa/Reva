@@ -6,8 +6,20 @@ namespace Reva.Desktop.Services;
 /// Owns Core process lifecycle only — no memory/policy/agent semantics.
 /// StartAsync: probe an existing Core first; attach if healthy; otherwise
 /// resolve and launch a local Core, then wait for health and for
-/// local_auth_token to appear. See Task 5 (this same class) for the
-/// background reconnect monitor and duplicate-launch guard.
+/// local_auth_token to appear. Also runs the background reconnect monitor
+/// and the duplicate-launch guard (a process-scoped named Mutex).
+///
+/// Root-cause fix (Slice 8A): a single ambiguous health-probe result
+/// (CoreTimeout, or CoreUnavailable while a sibling Desktop instance's
+/// freshly-launched Core is still booting) used to be treated as proof
+/// Core was gone — both at startup (causing a duplicate process launched
+/// against an already-occupied port) and in the steady-state monitor
+/// (causing Connected/Unavailable to flap on every isolated slow health
+/// poll, respawning the monitor loop each time). Both paths now require
+/// <see cref="ConsecutiveFailureThreshold"/> consecutive ambiguous
+/// failures before concluding Core is actually gone. A genuine owned-
+/// process exit (<see cref="ICoreProcessHandle.HasExited"/>) is real
+/// evidence and still acts immediately, bypassing the threshold.
 /// </summary>
 public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 {
@@ -19,7 +31,32 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     private const string StartLockName = @"Local\Reva.Desktop.CoreLifecycle.Start";
     private static readonly TimeSpan StartLockTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(5);
-    private const int MaxRelaunchAttempts = 3;
+    private static readonly TimeSpan ProbeRetryInterval = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>How many consecutive ambiguous (CoreUnavailable/CoreTimeout)
+    /// health results are required before Core is classified as actually
+    /// gone. A single such result proves nothing — Core may just be slow,
+    /// or (during startup racing) still booting.</summary>
+    private const int ConsecutiveFailureThreshold = 3;
+
+    /// <summary>Bounded exponential backoff applied before each relaunch of
+    /// a genuinely-exited owned process. Once exhausted, automatic
+    /// restarting stops and Core is left in the safe (never falsely
+    /// "Connected") Unavailable status.</summary>
+    private static readonly TimeSpan[] RelaunchBackoffSchedule =
+    {
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(30),
+    };
+
+    /// <summary>How long a connection must stay healthy before a prior
+    /// restart streak is forgiven. Prevents a Core that crashes, recovers
+    /// briefly, then crashes again from getting a full fresh backoff
+    /// budget for what is really one ongoing failure.</summary>
+    private static readonly TimeSpan StableConnectionInterval = TimeSpan.FromSeconds(30);
 
     private readonly IRevaCoreClient _coreClient;
     private readonly ILocalTokenProvider _tokenProvider;
@@ -27,10 +64,13 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     private readonly ICoreProcessLauncher _processLauncher;
     private readonly DesktopConfiguration _configuration;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly TimeProvider _timeProvider;
 
     private ICoreProcessHandle? _ownedProcess;
     private CancellationTokenSource? _monitorCts;
-    private int _relaunchAttempts;
+    private int _consecutiveHealthFailures;
+    private DateTimeOffset? _recoveredAt;
+    private bool _disposed;
 
     public RevaCoreLifecycle(
         IRevaCoreClient coreClient,
@@ -38,7 +78,8 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         ICoreExecutableLocator executableLocator,
         ICoreProcessLauncher processLauncher,
         DesktopConfiguration configuration,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        TimeProvider? timeProvider = null)
     {
         _coreClient = coreClient;
         _tokenProvider = tokenProvider;
@@ -46,11 +87,19 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         _processLauncher = processLauncher;
         _configuration = configuration;
         _delay = delay ?? ((span, token) => Task.Delay(span, token));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public CoreLifecycleState State { get; private set; } = CoreLifecycleState.Starting;
 
     public string StatusText { get; private set; } = "Starting Core…";
+
+    /// <summary>Number of relaunch attempts made against the current
+    /// failure streak. Exposed for diagnostics and for tests proving
+    /// bounded backoff / stable-interval reset — not part of
+    /// <see cref="IRevaCoreLifecycle"/>, since callers outside this class
+    /// have no legitimate use for it.</summary>
+    public int RestartAttemptCount { get; private set; }
 
     public event EventHandler? StateChanged;
 
@@ -58,14 +107,14 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     {
         SetState(CoreLifecycleState.Starting);
 
-        var probe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+        var probe = await ProbeReachabilityAsync(cancellationToken).ConfigureAwait(true);
         if (probe.IsSuccess)
         {
             await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 
-        if (probe.Error!.Kind != CoreErrorKind.CoreUnavailable && probe.Error.Kind != CoreErrorKind.CoreTimeout)
+        if (!probe.IsAmbiguous)
         {
             // Something responded on the configured port but not with a
             // shape RevaCoreClient recognizes as REVA Core (CoreInvalidResponse),
@@ -94,12 +143,20 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
             try
             {
                 // Re-probe after acquiring the lock: whoever got here first may
-                // have already finished launching Core while this instance was
-                // waiting on the mutex.
-                var reprobe = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+                // have already finished launching Core (or still be booting
+                // it) while this instance was waiting on the mutex — retried
+                // with the same threshold as the initial probe, since "still
+                // booting" looks identical to "not started" for one attempt.
+                var reprobe = await ProbeReachabilityAsync(cancellationToken).ConfigureAwait(true);
                 if (reprobe.IsSuccess)
                 {
                     await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
+                    return;
+                }
+
+                if (!reprobe.IsAmbiguous)
+                {
+                    SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
                     return;
                 }
 
@@ -115,6 +172,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 {
                     _ownedProcess = _processLauncher.Launch(
                         resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                    DesktopLogger.Info($"Core lifecycle: launched owned Core (pid={_ownedProcess.Pid?.ToString() ?? "unknown"}).");
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
@@ -144,16 +202,73 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
         await FinishConnectingAsync(cancellationToken).ConfigureAwait(true);
     }
 
+    private readonly record struct ReachabilityProbeResult(bool IsSuccess, bool IsAmbiguous);
+
+    /// <summary>
+    /// Root-cause fix: a single ambiguous health result (CoreUnavailable or
+    /// CoreTimeout) proves nothing — Core may be merely slow, or (during a
+    /// startup race between two Desktop instances) still booting. Retries
+    /// up to <see cref="ConsecutiveFailureThreshold"/> times before
+    /// concluding Core is actually not reachable. A non-ambiguous failure
+    /// (something else is listening on the port, or a real server error)
+    /// returns immediately — retrying that would not change the classification.
+    /// </summary>
+    private async Task<ReachabilityProbeResult> ProbeReachabilityAsync(CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; attempt <= ConsecutiveFailureThreshold; attempt++)
+        {
+            var result = await _coreClient.GetHealthAsync(cancellationToken).ConfigureAwait(true);
+            if (result.IsSuccess)
+            {
+                return new ReachabilityProbeResult(IsSuccess: true, IsAmbiguous: false);
+            }
+
+            var ambiguous = result.Error!.Kind is CoreErrorKind.CoreUnavailable or CoreErrorKind.CoreTimeout;
+            if (!ambiguous)
+            {
+                return new ReachabilityProbeResult(IsSuccess: false, IsAmbiguous: false);
+            }
+
+            if (attempt < ConsecutiveFailureThreshold)
+            {
+                await _delay(ProbeRetryInterval, cancellationToken).ConfigureAwait(true);
+            }
+        }
+
+        return new ReachabilityProbeResult(IsSuccess: false, IsAmbiguous: true);
+    }
+
     public void StopMonitoring()
     {
-        _monitorCts?.Cancel();
+        var cts = _monitorCts;
         _monitorCts = null;
+        if (cts is not null)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
     }
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         StopMonitoring();
-        _ownedProcess?.Dispose();
+
+        // Only ever stop a process this instance itself launched — never an
+        // externally-started Core it merely attached to (rule: Desktop may
+        // stop/restart only an owned Core).
+        if (_ownedProcess is not null)
+        {
+            DesktopLogger.Info($"Core lifecycle: stopping owned Core (pid={_ownedProcess.Pid?.ToString() ?? "unknown"}) on shutdown.");
+            _ownedProcess.Stop();
+            _ownedProcess.Dispose();
+            _ownedProcess = null;
+        }
     }
 
     private async Task FinishConnectingAsync(CancellationToken cancellationToken)
@@ -171,14 +286,19 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
 
     private void StartMonitor()
     {
-        _monitorCts?.Cancel();
+        if (_disposed)
+        {
+            return;
+        }
+
+        StopMonitoring();
         _monitorCts = new CancellationTokenSource();
         _ = RunMonitorLoopAsync(_monitorCts.Token);
     }
 
     private async Task RunMonitorLoopAsync(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
             // Task.Yield (not just _delay): guarantees this loop always
             // suspends and returns control to whoever called StartMonitor,
@@ -216,10 +336,18 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
     /// iteration deterministically instead of racing the real timer loop.</summary>
     public async Task RunMonitorIterationAsync()
     {
+        if (_disposed)
+        {
+            // Cancellation/disposal always wins over restart — never act on
+            // a stray callback that raced Desktop shutdown.
+            return;
+        }
+
         var health = await _coreClient.GetHealthAsync().ConfigureAwait(true);
         if (health.IsSuccess)
         {
-            _relaunchAttempts = 0;
+            _consecutiveHealthFailures = 0;
+            MaybeForgiveRestartStreak();
             if (State != CoreLifecycleState.Connected)
             {
                 await FinishConnectingAsync(CancellationToken.None).ConfigureAwait(true);
@@ -227,14 +355,45 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
             return;
         }
 
+        // Real evidence the process is gone, independent of the health-probe
+        // threshold below: HasExited is not a guess.
+        var ownedProcessExited = _ownedProcess is { HasExited: true };
+        if (!ownedProcessExited)
+        {
+            _consecutiveHealthFailures++;
+            if (_consecutiveHealthFailures < ConsecutiveFailureThreshold)
+            {
+                // Root-cause fix: one (or two) isolated slow/failed health
+                // polls do not prove Core is dead — a process we know
+                // nothing changed about keeps showing its last-known state
+                // instead of flapping to Unavailable and back.
+                DesktopLogger.Info(
+                    $"Core lifecycle: health check failed ({health.Error!.Kind}), " +
+                    $"{_consecutiveHealthFailures}/{ConsecutiveFailureThreshold} consecutive — not yet classifying as dead.");
+                return;
+            }
+        }
+
         SetState(CoreLifecycleState.Unavailable, "Core Unavailable");
+        _recoveredAt = null;
 
         // Only relaunch a process this instance owns and watched exit —
         // never touch a Core this instance merely attached to (rule: never
         // kill or replace a process Desktop didn't start).
-        if (_ownedProcess is { HasExited: true } && _relaunchAttempts < MaxRelaunchAttempts)
+        if (ownedProcessExited && RestartAttemptCount < RelaunchBackoffSchedule.Length)
         {
-            _relaunchAttempts++;
+            var backoff = RelaunchBackoffSchedule[RestartAttemptCount];
+            RestartAttemptCount++;
+            DesktopLogger.Info(
+                $"Core lifecycle: owned Core exited (exit code={_ownedProcess!.ExitCode?.ToString() ?? "unknown"}), " +
+                $"restart attempt {RestartAttemptCount}/{RelaunchBackoffSchedule.Length}, backoff={backoff}.");
+
+            await _delay(backoff, CancellationToken.None).ConfigureAwait(true);
+            if (_disposed)
+            {
+                return;
+            }
+
             var resolution = _executableLocator.Resolve();
             if (resolution.IsAvailable)
             {
@@ -243,6 +402,7 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                 {
                     _ownedProcess = _processLauncher.Launch(
                         resolution, _configuration.CoreDataDirectory, _configuration.CoreBaseUrl.Port);
+                    DesktopLogger.Info($"Core lifecycle: relaunched owned Core (pid={_ownedProcess.Pid?.ToString() ?? "unknown"}).");
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
@@ -254,6 +414,37 @@ public sealed class RevaCoreLifecycle : IRevaCoreLifecycle, IDisposable
                     _ownedProcess = null;
                 }
             }
+        }
+        else if (ownedProcessExited)
+        {
+            DesktopLogger.Warn(
+                $"Core lifecycle: owned Core exited but restart budget ({RelaunchBackoffSchedule.Length}) is exhausted — " +
+                "leaving Core Unavailable rather than restarting indefinitely.");
+        }
+    }
+
+    /// <summary>Resets the restart-attempt budget only once the connection
+    /// has been healthy for a full <see cref="StableConnectionInterval"/> —
+    /// a Core that crashes, recovers briefly, then crashes again is one
+    /// ongoing failure, not a fresh problem entitled to a fresh backoff budget.</summary>
+    private void MaybeForgiveRestartStreak()
+    {
+        if (RestartAttemptCount == 0)
+        {
+            return;
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        if (_recoveredAt is null)
+        {
+            _recoveredAt = now;
+            return;
+        }
+
+        if (now - _recoveredAt.Value >= StableConnectionInterval)
+        {
+            RestartAttemptCount = 0;
+            _recoveredAt = null;
         }
     }
 
