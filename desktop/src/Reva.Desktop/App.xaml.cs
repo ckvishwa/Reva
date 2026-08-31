@@ -20,6 +20,7 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        DesktopLogger.EnsureFileLoggingInitialized();
         var configuration = DesktopConfiguration.CreateDefault();
         var tokenProvider = new LocalTokenProvider(configuration);
         var httpClient = new System.Net.Http.HttpClient
