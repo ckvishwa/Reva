@@ -35,6 +35,18 @@ public class RevaCoreLifecycleTests
             _healthResults.Enqueue(CoreResult<HealthStatus>.Failure(CoreErrorKind.CoreUnavailable, "not reachable"));
         }
 
+        public void QueueSingleFailure()
+        {
+            _healthResults.Clear();
+            _healthResults.Enqueue(CoreResult<HealthStatus>.Failure(CoreErrorKind.CoreUnavailable, "not reachable"));
+        }
+
+        public void QueueSingleSuccess()
+        {
+            _healthResults.Clear();
+            _healthResults.Enqueue(CoreResult<HealthStatus>.Success(Healthy()));
+        }
+
         public Task<CoreResult<VersionInfo>> GetVersionAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -652,5 +664,83 @@ public class RevaCoreLifecycleTests
         var exception = await Record.ExceptionAsync(() => lifecycle.ShutdownAsync());
 
         Assert.Null(exception);
+    }
+
+    private sealed class CapturingListener : TraceListener
+    {
+        public readonly System.Collections.Concurrent.ConcurrentQueue<string> Lines = new();
+        public override void Write(string? message) { }
+        public override void WriteLine(string? message)
+        {
+            if (message is not null)
+            {
+                Lines.Enqueue(message);
+            }
+        }
+    }
+
+    // Slice 8A-R Task 3 (F1): recon 0.5 claimed exactly one monitor loop can
+    // exist by construction. This drives the exact 16:54:40 -> 16:54:45
+    // field sequence — a transient health failure immediately followed by a
+    // pass, which re-enters FinishConnectingAsync -> StartMonitor while the
+    // triggering iteration is still on the call stack — and proves the
+    // claim from generation ids in the log, not from tick spacing.
+    [Fact]
+    public async Task Monitor_TransientFailureThenPass_ProducesExactlyOneNewGeneration_AndStaleGenerationNeverIteratesAgain()
+    {
+        var listener = new CapturingListener();
+        Trace.Listeners.Add(listener);
+        try
+        {
+            var client = new FakeCoreClient(CoreResult<HealthStatus>.Success(Healthy()));
+            var lifecycle = new RevaCoreLifecycle(
+                client, new FakeTokenProvider(TokenLoadResult.Available("tok")),
+                new FakeExecutableLocator(AvailableResolution()), new FakeProcessLauncher(), Configuration(),
+                delay: (_, _) => Task.CompletedTask);
+
+            await lifecycle.StartAsync();
+            Assert.Equal(CoreLifecycleState.Connected, lifecycle.State);
+            // Silence the auto-started background loop (gen=1) before driving
+            // iterations by hand — same precedent as the existing relaunch
+            // test: with an instant delay stub it would otherwise spin.
+            lifecycle.StopMonitoring();
+
+            client.QueueSingleFailure();
+            await lifecycle.RunMonitorIterationAsync(); // gen=1: health fail -> Unavailable
+            Assert.Equal(CoreLifecycleState.Unavailable, lifecycle.State);
+
+            client.QueueSingleSuccess();
+            await lifecycle.RunMonitorIterationAsync(); // gen=1: health pass, State != Connected -> self-restart -> gen=2 starts
+            // gen=2's background loop is now live with the instant delay stub — silence it immediately.
+            lifecycle.StopMonitoring();
+            Assert.Equal(CoreLifecycleState.Connected, lifecycle.State);
+
+            var lines = listener.Lines.ToList();
+
+            var gen1Started = lines.Any(l => l.Contains("monitor loop starting (gen=1)"));
+            var gen1StopRequested = lines.Any(l => l.Contains("monitor loop stop requested (gen=1)"));
+            var gen2Started = lines.Any(l => l.Contains("monitor loop starting (gen=2)"));
+            var gen3Started = lines.Any(l => l.Contains("monitor loop starting (gen=3)"));
+
+            Assert.True(gen1Started, "gen=1 must have started (initial connect).");
+            Assert.True(gen1StopRequested, "gen=1's cancellation must be logged, including the self-restart path.");
+            Assert.True(gen2Started, "the health-fail-then-pass transition must start exactly one new generation.");
+            Assert.False(gen3Started, "no more than one new generation may start from a single transition.");
+
+            // The provability claim itself: gen=1 must never log a health
+            // check AFTER gen=2 started — if it did, two loops would be
+            // concurrently polling Core, which is the exact race recon 0.5
+            // asserted cannot happen.
+            var gen2StartIndex = lines.FindIndex(l => l.Contains("monitor loop starting (gen=2)"));
+            var gen1HealthChecksAfterGen2Start = lines
+                .Skip(gen2StartIndex + 1)
+                .Count(l => l.Contains("health check (monitor, gen=1)"));
+
+            Assert.Equal(0, gen1HealthChecksAfterGen2Start);
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
     }
 }
