@@ -178,6 +178,8 @@ public class AssistantViewModelTests
     {
         public CoreLifecycleState State { get; set; } = CoreLifecycleState.Connected;
 
+        public CoreOwnership Ownership { get; set; } = CoreOwnership.Owned;
+
         public string StatusText => "Core Connected";
 
         public event EventHandler? StateChanged;
@@ -189,6 +191,8 @@ public class AssistantViewModelTests
         public void StopMonitoring()
         {
         }
+
+        public Task ShutdownAsync() => Task.CompletedTask;
     }
 
     private sealed class FakeCommandRouter : ICommandRouter
