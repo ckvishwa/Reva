@@ -1,0 +1,45 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.TodayCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views">
+
+    <!-- Today summary (Finance part): budget left this month, bills in the next 7 days. -->
+    <Border
+        Style="{StaticResource RevaSmallCard}"
+        AutomationProperties.Name="{x:Bind ViewModel.AccessibleSummary, Mode=OneWay, FallbackValue='Today, Finance'}"
+        AutomationProperties.AutomationId="TodayCard">
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="24">
+            <StackPanel Spacing="6">
+                <TextBlock Text="Today · Finance" Style="{StaticResource RevaCaptionText}" />
+                <TextBlock Text="{x:Bind ViewModel.BudgetLeftText, Mode=OneWay}" Style="{StaticResource RevaBigNumberText}" AutomationProperties.AutomationId="TodayBudgetLeft" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.BudgetOfText, Mode=OneWay}"
+                    Style="{StaticResource RevaCaptionText}"
+                    Visibility="{x:Bind local:Vis.ShowText(ViewModel.BudgetOfText), Mode=OneWay}" />
+                <ProgressBar
+                    Minimum="0"
+                    Maximum="1"
+                    Value="{x:Bind ViewModel.BudgetFraction, Mode=OneWay}"
+                    Height="8"
+                    MinHeight="8"
+                    CornerRadius="4"
+                    Background="{StaticResource RevaTrackBrush}"
+                    Foreground="{x:Bind local:Vis.BarBrush(ViewModel.BudgetNearLimit), Mode=OneWay}"
+                    Visibility="{x:Bind local:Vis.Show(ViewModel.HasBudget), Mode=OneWay}"
+                    AutomationProperties.AccessibilityView="Raw" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.OtherCurrenciesText, Mode=OneWay}"
+                    Style="{StaticResource RevaCaptionText}"
+                    Visibility="{x:Bind local:Vis.ShowText(ViewModel.OtherCurrenciesText), Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Bottom">
+                <TextBlock Text="{x:Bind ViewModel.BillsText, Mode=OneWay}" Style="{StaticResource RevaBodyText}" AutomationProperties.AutomationId="TodayBills" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                    Style="{StaticResource RevaErrorText}"
+                    Visibility="{x:Bind local:Vis.ShowText(ViewModel.ErrorMessage), Mode=OneWay}" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

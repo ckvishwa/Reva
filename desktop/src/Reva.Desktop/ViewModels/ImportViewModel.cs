@@ -181,6 +181,28 @@ public sealed class ImportViewModel : ObservableObject
     public string ConfirmText => Report is { Accepted: > 0 } r ? $"Import {r.Accepted} rows" : "Import";
 
     /// <summary>Loads a file's bytes and, for CSV, proposes a column mapping.</summary>
+    /// <summary>Core refuses bigger imports (8 MiB); say so before reading the file at all.</summary>
+    public const long MaxFileBytes = 8 * 1024 * 1024;
+
+    public void RejectTooLarge(string fileName) => Reject(
+        fileName, "That file is larger than 8 MB, which is more than REVA imports in one go. Split it and import the parts.");
+
+    public void RejectUnreadable(string fileName) => Reject(fileName, "REVA could not read that file.");
+
+    private void Reject(string fileName, string message)
+    {
+        _data = null;
+        FileName = fileName;
+        Format = string.Empty;
+        Report = null;
+        ResultText = null;
+        ReportRows.Clear();
+        Headers.Clear();
+        RaisePropertyChanged(nameof(HasFile));
+        RaisePropertyChanged(nameof(CanCheck));
+        Error = message;
+    }
+
     public void LoadFile(string fileName, byte[] data)
     {
         _data = data;

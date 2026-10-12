@@ -1,0 +1,281 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Design tokens from docs/design/REVA Windows App.html. Dark only. -->
+    <Color x:Key="RevaGroundColor">#0E1013</Color>
+    <Color x:Key="RevaNavColor">#121519</Color>
+    <Color x:Key="RevaSurfaceColor">#15181D</Color>
+    <Color x:Key="RevaBorderColor">#23282F</Color>
+    <Color x:Key="RevaInputColor">#0F1215</Color>
+    <Color x:Key="RevaOutlineColor">#3A414B</Color>
+    <Color x:Key="RevaTrackColor">#262B32</Color>
+    <Color x:Key="RevaTextColor">#ECEEF1</Color>
+    <Color x:Key="RevaSecondaryColor">#C9D0D8</Color>
+    <Color x:Key="RevaMutedColor">#9AA3AE</Color>
+    <Color x:Key="RevaAccentColor">#F2A65A</Color>
+    <Color x:Key="RevaAccentLightColor">#FFC48A</Color>
+    <Color x:Key="RevaListeningColor">#6CC4D9</Color>
+    <Color x:Key="RevaSuccessColor">#8FD3A6</Color>
+    <Color x:Key="RevaErrorColor">#F0A0A0</Color>
+
+    <SolidColorBrush x:Key="RevaGroundBrush" Color="{StaticResource RevaGroundColor}" />
+    <SolidColorBrush x:Key="RevaNavBrush" Color="{StaticResource RevaNavColor}" />
+    <SolidColorBrush x:Key="RevaSurfaceBrush" Color="{StaticResource RevaSurfaceColor}" />
+    <SolidColorBrush x:Key="RevaBorderBrush" Color="{StaticResource RevaBorderColor}" />
+    <SolidColorBrush x:Key="RevaInputBrush" Color="{StaticResource RevaInputColor}" />
+    <SolidColorBrush x:Key="RevaOutlineBrush" Color="{StaticResource RevaOutlineColor}" />
+    <SolidColorBrush x:Key="RevaTrackBrush" Color="{StaticResource RevaTrackColor}" />
+    <SolidColorBrush x:Key="RevaTextBrush" Color="{StaticResource RevaTextColor}" />
+    <SolidColorBrush x:Key="RevaSecondaryBrush" Color="{StaticResource RevaSecondaryColor}" />
+    <SolidColorBrush x:Key="RevaMutedBrush" Color="{StaticResource RevaMutedColor}" />
+    <SolidColorBrush x:Key="RevaAccentBrush" Color="{StaticResource RevaAccentColor}" />
+    <SolidColorBrush x:Key="RevaAccentLightBrush" Color="{StaticResource RevaAccentLightColor}" />
+    <SolidColorBrush x:Key="RevaListeningBrush" Color="{StaticResource RevaListeningColor}" />
+    <SolidColorBrush x:Key="RevaSuccessBrush" Color="{StaticResource RevaSuccessColor}" />
+    <SolidColorBrush x:Key="RevaErrorBrush" Color="{StaticResource RevaErrorColor}" />
+    <SolidColorBrush x:Key="RevaNoteBorderBrush" Color="#2E343C" />
+    <SolidColorBrush x:Key="RevaConflictBackgroundBrush" Color="#1F1A12" />
+    <SolidColorBrush x:Key="RevaAccentHoverBrush" Color="#F7B97C" />
+    <SolidColorBrush x:Key="RevaAccentPressedBrush" Color="#E09446" />
+    <SolidColorBrush x:Key="RevaOutlineHoverBrush" Color="#1B2027" />
+    <SolidColorBrush x:Key="RevaOutlinePressedBrush" Color="#222830" />
+
+    <!-- Fonts are bundled (Assets/Fonts, OFL). Per-weight files: the family after # is the file's own family name. -->
+    <FontFamily x:Key="RevaSans">ms-appx:///Assets/Fonts/IBMPlexSans-Regular.ttf#IBM Plex Sans</FontFamily>
+    <FontFamily x:Key="RevaSansMedium">ms-appx:///Assets/Fonts/IBMPlexSans-Medium.ttf#IBM Plex Sans Medm</FontFamily>
+    <FontFamily x:Key="RevaSansSemiBold">ms-appx:///Assets/Fonts/IBMPlexSans-SemiBold.ttf#IBM Plex Sans SmBld</FontFamily>
+    <FontFamily x:Key="RevaMono">ms-appx:///Assets/Fonts/IBMPlexMono-Regular.ttf#IBM Plex Mono</FontFamily>
+    <FontFamily x:Key="RevaMonoMedium">ms-appx:///Assets/Fonts/IBMPlexMono-Medium.ttf#IBM Plex Mono Medium</FontFamily>
+
+    <CornerRadius x:Key="RevaCardRadius">16</CornerRadius>
+    <CornerRadius x:Key="RevaSmallCardRadius">14</CornerRadius>
+    <CornerRadius x:Key="RevaButtonRadius">10</CornerRadius>
+    <CornerRadius x:Key="RevaInputRadius">8</CornerRadius>
+    <x:Double x:Key="RevaMinTarget">44</x:Double>
+
+    <!-- Accent-coloured checkboxes (design: privacy switches). Lightweight-styling resource overrides. -->
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="{StaticResource RevaAccentColor}" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#F7B97C" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#E09446" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="{StaticResource RevaAccentColor}" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" Color="#F7B97C" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" Color="#E09446" />
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="{StaticResource RevaGroundColor}" />
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="{StaticResource RevaGroundColor}" />
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="{StaticResource RevaGroundColor}" />
+
+    <!-- Text -->
+    <Style x:Key="RevaBodyText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource RevaSans}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource RevaTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="RevaMutedText" TargetType="TextBlock" BasedOn="{StaticResource RevaBodyText}">
+        <Setter Property="Foreground" Value="{StaticResource RevaMutedBrush}" />
+    </Style>
+    <Style x:Key="RevaCaptionText" TargetType="TextBlock" BasedOn="{StaticResource RevaMutedText}">
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style x:Key="RevaMonoText" TargetType="TextBlock" BasedOn="{StaticResource RevaBodyText}">
+        <Setter Property="FontFamily" Value="{StaticResource RevaMono}" />
+        <Setter Property="Foreground" Value="{StaticResource RevaSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+    <Style x:Key="RevaBigNumberText" TargetType="TextBlock" BasedOn="{StaticResource RevaMonoText}">
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="Foreground" Value="{StaticResource RevaTextBrush}" />
+    </Style>
+    <Style x:Key="RevaTitleText" TargetType="TextBlock" BasedOn="{StaticResource RevaBodyText}">
+        <Setter Property="FontFamily" Value="{StaticResource RevaSansMedium}" />
+        <Setter Property="FontSize" Value="28" />
+        <Setter Property="AutomationProperties.HeadingLevel" Value="Level1" />
+    </Style>
+    <Style x:Key="RevaSectionTitleText" TargetType="TextBlock" BasedOn="{StaticResource RevaBodyText}">
+        <Setter Property="FontFamily" Value="{StaticResource RevaSansSemiBold}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="AutomationProperties.HeadingLevel" Value="Level2" />
+    </Style>
+
+    <!-- Cards -->
+    <Style x:Key="RevaCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource RevaSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource RevaBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RevaCardRadius}" />
+        <Setter Property="Padding" Value="20" />
+    </Style>
+    <Style x:Key="RevaSmallCard" TargetType="Border" BasedOn="{StaticResource RevaCard}">
+        <Setter Property="CornerRadius" Value="{StaticResource RevaSmallCardRadius}" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <!-- Buttons: custom templates so hover/pressed keep the design colours (the stock template recolours them). -->
+    <Style x:Key="RevaPrimaryButton" TargetType="Button">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="FontFamily" Value="{StaticResource RevaSansSemiBold}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource RevaGroundBrush}" />
+        <Setter Property="Background" Value="{StaticResource RevaAccentBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RevaButtonRadius}" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource RevaAccentHoverBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource RevaAccentPressedBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Opacity" Value="0.45" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}"
+                            AutomationProperties.AccessibilityView="Raw" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="RevaSecondaryButton" TargetType="Button">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="FontFamily" Value="{StaticResource RevaSans}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource RevaTextBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource RevaOutlineBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RevaButtonRadius}" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid
+                        x:Name="Root"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource RevaOutlineHoverBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource RevaOutlinePressedBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Opacity" Value="0.45" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Foreground="{TemplateBinding Foreground}"
+                            AutomationProperties.AccessibilityView="Raw" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Outlined in the accent colour: the "Keep PC / Keep phone" buttons. -->
+    <Style x:Key="RevaAccentOutlineButton" TargetType="Button" BasedOn="{StaticResource RevaSecondaryButton}">
+        <Setter Property="Foreground" Value="{StaticResource RevaAccentBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource RevaAccentBrush}" />
+    </Style>
+
+    <!-- Nav item: a full-width button. Selected state is set by the caller via Tag="selected". -->
+    <Style x:Key="RevaNavButton" TargetType="Button">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="FontFamily" Value="{StaticResource RevaSans}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource RevaSecondaryBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Overlay.Opacity" Value="0.07" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Overlay.Opacity" Value="0.14" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled" />
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Border x:Name="Overlay" Background="White" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}" />
+                        <ContentPresenter
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Center"
+                            AutomationProperties.AccessibilityView="Raw" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Inputs -->
+    <Style x:Key="RevaTextBox" TargetType="TextBox">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="FontFamily" Value="{StaticResource RevaSans}" />
+        <Setter Property="Foreground" Value="{StaticResource RevaTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource RevaInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource RevaOutlineBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RevaInputRadius}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Padding" Value="10,11,10,0" />
+    </Style>
+
+    <Style x:Key="RevaErrorText" TargetType="TextBlock" BasedOn="{StaticResource RevaBodyText}">
+        <Setter Property="Foreground" Value="{StaticResource RevaErrorBrush}" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+</ResourceDictionary>

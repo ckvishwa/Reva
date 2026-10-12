@@ -12,6 +12,8 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 ## Current state (update this section at the end of every slice)
 
+- FIN-2 (branch `feat/fin-2-finance-ui`): WinUI Finance page + Today card + nav (non-built sections say coming soon), Core support (`source` column, `conflict.resolve`, privacy store, `REVA_DOMAIN_KEYSTORE=memory` test-only). .NET 518 passed; FlaUI smoke in `desktop/tests/Reva.Desktop.UiTests` is opt-in (`REVA_RUN_UI_TESTS=1`, needs `REVA_CORE_PYTHON_EXE`). Fixtures regenerate with `tools/desktop/generate_finance_fixtures.py`.
+
 - S03-lite is done: spec pack in `docs/spec/REVA_v2.0/`, persona in `docs/persona/`, `kernel/ android/ avatar/ contracts/` skeleton, LFS attributes, pytest env guard, evidence ledger, CI lanes (`python`, `csharp-desktop`, `contracts`, `kernel` and `android` placeholders). `reva_core/` and `desktop/` were not moved; the full `core/ windows/` restructure is still open.
 - Baseline (Oct 11 audit): Python 326 passed / 2 skipped, .NET 334 passed. Clean worktree at the S03 tag (2026-10-11): Python 340 passed / 2 skipped, .NET 344 passed, `ruff format --check .`, `ruff check .`, `mypy reva_core` and the contracts check all clean.
 - S00 (tags `archive/pre-merge-2026-10-11/*`, bundle, backup), S01 (wake-word resolver fails closed) and S02 (owned/external Core shutdown, 10 real cycles) are committed on `fixing-things`. Evidence: `docs/archive/`.

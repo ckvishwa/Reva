@@ -79,6 +79,19 @@ public class ImportViewModelTests
     }
 
     [Fact]
+    public void A_file_over_the_core_limit_is_refused_up_front()
+    {
+        var vm = Create();
+        vm.LoadFile("a.csv", Bytes(BankCsv));
+        vm.RejectTooLarge("huge.csv");
+
+        Assert.False(vm.HasFile);
+        Assert.False(vm.CanCheck);
+        Assert.Contains("larger than 8 MB", vm.Error);
+        Assert.Empty(vm.Headers);
+    }
+
+    [Fact]
     public async Task Check_runs_a_dry_run_with_the_mapping_and_saves_nothing()
     {
         var api = new FakeFinanceApi { ImportResponder = dry => Report(dry) };

@@ -1,0 +1,61 @@
+<ContentDialog
+    x:Class="Reva.Desktop.Views.AddAccountDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views"
+    Title="Add account"
+    PrimaryButtonText="Add"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    Background="{StaticResource RevaSurfaceBrush}"
+    BorderBrush="{StaticResource RevaBorderBrush}"
+    CornerRadius="16"
+    PrimaryButtonStyle="{StaticResource RevaPrimaryButton}"
+    CloseButtonStyle="{StaticResource RevaSecondaryButton}"
+    PrimaryButtonClick="Save_Click"
+    AutomationProperties.AutomationId="AddAccountDialog">
+
+    <StackPanel MinWidth="420" Spacing="12">
+        <StackPanel Spacing="4">
+            <TextBox
+                x:Name="NameBox"
+                Header="Name"
+                PlaceholderText="Checking"
+                Style="{StaticResource RevaTextBox}"
+                Text="{x:Bind Vm.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                AutomationProperties.AutomationId="AccountName" />
+            <TextBlock Text="{x:Bind Vm.NameError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.NameError), Mode=OneWay}" AutomationProperties.LiveSetting="Assertive" />
+        </StackPanel>
+
+        <ComboBox
+            Header="Type"
+            HorizontalAlignment="Stretch"
+            MinHeight="44"
+            ItemsSource="{x:Bind local:AddAccountDialog.Kinds}"
+            SelectedItem="{x:Bind Vm.Kind, Mode=TwoWay}"
+            AutomationProperties.AutomationId="AccountKind" />
+
+        <StackPanel Spacing="4">
+            <TextBox
+                Header="Currency"
+                MaxLength="3"
+                Style="{StaticResource RevaTextBox}"
+                Text="{x:Bind Vm.Currency, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                AutomationProperties.AutomationId="AccountCurrency" />
+            <TextBlock Text="{x:Bind Vm.CurrencyError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.CurrencyError), Mode=OneWay}" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+            <TextBox
+                Header="Opening balance"
+                PlaceholderText="0.00"
+                Style="{StaticResource RevaTextBox}"
+                Text="{x:Bind Vm.OpeningText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                AutomationProperties.AutomationId="AccountOpening" />
+            <TextBlock Text="{x:Bind Vm.OpeningHint, Mode=OneWay}" Style="{StaticResource RevaCaptionText}" />
+            <TextBlock Text="{x:Bind Vm.OpeningError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.OpeningError), Mode=OneWay}" />
+        </StackPanel>
+
+        <TextBlock Text="{x:Bind Vm.GeneralError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.GeneralError), Mode=OneWay}" AutomationProperties.LiveSetting="Assertive" />
+    </StackPanel>
+</ContentDialog>
