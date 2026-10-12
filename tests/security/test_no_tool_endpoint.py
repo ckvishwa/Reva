@@ -10,6 +10,17 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("GET", "/v1/audit-events"),
     ("POST", "/v1/voice/speech"),
     ("POST", "/v1/voice/transcriptions"),
+    ("GET", "/v1/domains"),
+    ("GET", "/v1/domains/{domain}/export"),
+    ("POST", "/v1/domains/{domain}/import"),
+    ("GET", "/v1/domains/{domain}/reports/{name}"),
+    ("GET", "/v1/domains/{domain}/{collection}"),
+    ("POST", "/v1/domains/{domain}/{collection}"),
+    ("GET", "/v1/domains/{domain}/{collection}/{item_id}"),
+    ("PATCH", "/v1/domains/{domain}/{collection}/{item_id}"),
+    ("DELETE", "/v1/domains/{domain}/{collection}/{item_id}"),
+    ("POST", "/v1/domains/finance/bills/{item_id}/mark-paid"),
+    ("GET", "/v1/today"),
 }
 
 _ALLOWED_NON_DOMAIN_PREFIXES = {

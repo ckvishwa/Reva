@@ -22,6 +22,14 @@ _ALLOWED_PATHS = {
     "/v1/audit-events",
     "/v1/voice/speech",
     "/v1/voice/transcriptions",
+    "/v1/domains",
+    "/v1/domains/{domain}/export",
+    "/v1/domains/{domain}/import",
+    "/v1/domains/{domain}/reports/{name}",
+    "/v1/domains/{domain}/{collection}",
+    "/v1/domains/{domain}/{collection}/{item_id}",
+    "/v1/domains/finance/bills/{item_id}/mark-paid",
+    "/v1/today",
 }
 
 
