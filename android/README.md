@@ -1,3 +1,7 @@
-Status: PLANNED
-Target phase: Phase 4 — Android companion
-Responsibility: Flutter companion app — pairing, typed chat, push-to-talk capture, quick capture, reminder notifications, encrypted local cache, read-only activity/sync summaries. A companion, not a duplicate of the desktop surface; owns no Core business logic and talks to REVA Core only through the authenticated HTTPS/WebSocket boundary defined in Phase 5 (ADR-010, ADR-011).
+# android/
+
+Kotlin/Compose Android app. It works on its own and pairs with the PC through the pairing gateway.
+
+Status: empty placeholder. Slices S11 to S15 create the project. Spec: `docs/spec/REVA_v2.0/02_ARD/ARD-200_Cross_Platform_App_v2.0.md`.
+
+This replaces the earlier Phase 4 placeholder, which described a Flutter companion app. v2.0 uses Kotlin/Compose (see CLAUDE.md); the old text is in git history.
