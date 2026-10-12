@@ -260,3 +260,31 @@ fn ofx_with_non_ascii_text_does_not_misalign_offsets() {
     assert!(descriptions.contains(&"Straße Café ŉ ß".to_string()), "{descriptions:?}");
     assert!(descriptions.contains(&"Zweite ß Zeile".to_string()));
 }
+
+#[test]
+fn json_import_rejects_malformed_carried_fields_and_snapshots() {
+    let (_d, h) = setup();
+    let doc = json!({
+        "format": "reva-finance-export", "version": 1,
+        "accounts": [
+            {"id": "acct-good-01", "name": "Good", "currency": "USD", "kind": "checking", "opening_balance_minor": 0, "archived": "yes"},
+            {"id": "acct-good-02", "name": "Also good", "currency": "USD", "kind": "checking", "opening_balance_minor": 0, "created_at": "not a timestamp"}
+        ],
+        "bills": [
+            {"id": "bill-zero-01", "name": "Zero day", "amount_minor": 100, "currency": "USD", "recurrence": "monthly", "due_date": "2026-11-01", "anchor_day": 0}
+        ],
+        "transactions": [
+            {"id": "tx-badfp-001", "account_id": "acct-good-01", "date": "2026-10-01", "amount_minor": -1, "currency": "USD", "description": "x", "fingerprint": "zz"}
+        ],
+        "networth_snapshots": [
+            {"id": "nw-bad-0001", "as_of": "2026-10-01", "by_currency": {"USD": {"assets_minor": "lots"}}},
+            {"id": "nw-bad-0002", "as_of": "2026-10-01", "by_currency": {"usd": {"assets_minor": 1, "liabilities_minor": 0, "net_minor": 1}}},
+            {"id": "nw-good-001", "as_of": "2026-10-01", "by_currency": {"USD": {"assets_minor": 1, "liabilities_minor": 0, "net_minor": 1}}}
+        ]
+    });
+    let r = h.import_data("json".into(), doc.to_string().into_bytes(), "{}".into()).unwrap();
+    assert_eq!(r.accepted, 1, "only the well-formed snapshot is accepted: {:?}", r.rejected);
+    assert_eq!(r.rejected.len(), 6);
+    assert_eq!(rows(&h, "list_accounts", json!({})).len(), 1, "only the account from setup()");
+    assert_eq!(rows(&h, "list_bills", json!({})).len(), 0);
+}
