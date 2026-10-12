@@ -1,0 +1,13 @@
+[package]
+name = "reva-kernel-bindgen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Generates the Python and Kotlin bindings for reva-kernel (build tool, never shipped)."
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/main.rs"
+
+[dependencies]
+uniffi = { version = "0.28", features = ["cli"] }

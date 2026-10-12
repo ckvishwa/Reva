@@ -71,3 +71,7 @@ tools/voice-lab/**/analysis/
 tools/voice-lab/**/outputs/
 tools/revi-prototype/**/outputs/
 tests/voice-evals/outputs/
+
+# Domain Kernel build output and generated bindings (never hand-edited, rebuilt by tools/kernel/build_bindings.py)
+/target/
+/kernel/bindings/
