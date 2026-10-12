@@ -1,0 +1,20 @@
+{
+  "collection": "conflicts",
+  "domain": "finance",
+  "items": [
+    {
+      "aggregate_id": "tx-market-001",
+      "aggregate_type": "transaction",
+      "currency": "USD",
+      "detected_at": "2026-01-01T00:00:00.000Z",
+      "field": "amount_minor",
+      "id": 1,
+      "label": "Market",
+      "local_event_id": "00000000-0000-0000-0000-000000000006",
+      "local_value": "-8449",
+      "remote_event_id": "00000000-0000-0000-0000-000000000007",
+      "remote_value": "-8540",
+      "resolved": false
+    }
+  ]
+}
