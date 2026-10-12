@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Where the generated Domain Kernel Python binding lives (`tools/kernel/build_bindings.py`).
     # `REVA_KERNEL_BINDINGS` overrides it. None = `kernel/bindings/python` in the checkout.
     kernel_bindings_dir: Path | None = None
+    # Where Domain Kernel keys live. "windows" = Windows Credential Manager (the only choice
+    # for real use). "memory" keeps keys in the Core process and loses them at exit: it exists
+    # only so UI and end-to-end tests never create entries in the user's real vault, and it is
+    # refused unless the data directory is inside the system temp directory.
+    domain_keystore: Literal["windows", "memory"] = "windows"
 
     # Placeholder for a future real provider credential. Never a real key in
     # Phase 0 — no provider integration exists yet. Documented future path:
@@ -107,4 +112,14 @@ def load_settings(**overrides: object) -> Settings:
             f"REVA_API_HOST must be a loopback address, got {settings.api_host!r}. "
             "REVA Core is never publicly exposed (security invariant #2)."
         )
+    if settings.domain_keystore == "memory":
+        import tempfile
+
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        data_dir = settings.data_dir.resolve()
+        if temp_root not in data_dir.parents:
+            raise ConfigurationError(
+                "REVA_DOMAIN_KEYSTORE=memory is only allowed with a data directory "
+                "inside the temp directory."
+            )
     return settings

@@ -165,7 +165,10 @@ class _UnavailableKeyProvider:
         raise KeyStoreError("no OS key vault is available on this platform")
 
 
-def default_key_provider() -> DomainKeyProvider:
+def default_key_provider(keystore: str = "windows") -> DomainKeyProvider:
+    if keystore == "memory":
+        # Allowed only for a temp data directory (see `load_settings`).
+        return InMemoryKeyProvider()
     # Tests must inject their own provider; they may never create or read the user's real keys.
     if "PYTEST_CURRENT_TEST" in os.environ:
         return _UnavailableKeyProvider()

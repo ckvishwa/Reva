@@ -103,7 +103,7 @@ pub fn run(conn: &Connection, name: &str, params: &Value) -> DomainResult<QueryO
         "list_networth_snapshots" => list_all(conn, "networth_snapshot", "ORDER BY as_of, id"),
         "get" => get(conn, params),
         "resolve_category" => resolve_category_query(conn, params),
-        "conflicts" => conflicts(conn),
+        "conflicts" => conflicts(conn, params),
         other => Err(DomainError::validation("query", format!("unknown finance query {other:?}"))),
     }
 }
@@ -122,7 +122,16 @@ fn get(conn: &Connection, params: &Value) -> DomainResult<QueryOut> {
         return Err(DomainError::Deleted { detail: format!("{aggregate_type} {id}") });
     }
     match schema::load(conn, aggregate_type, id)? {
-        Some(row) => Ok(QueryOut { rows: json!([row]), source_ids: vec![id.to_string()] }),
+        Some(row) => {
+            let mut rows = vec![row];
+            if aggregate_type == "transaction" {
+                enrich_transactions(conn, &mut rows)?;
+            }
+            Ok(QueryOut {
+                rows: Value::Array(rows.into_iter().map(Value::Object).collect()),
+                source_ids: vec![id.to_string()],
+            })
+        }
         None => Err(DomainError::not_found(format!("{aggregate_type} {id}"))),
     }
 }
@@ -157,11 +166,14 @@ fn resolve_category_query(conn: &Connection, params: &Value) -> DomainResult<Que
     Ok(QueryOut { rows: json!([{ "text": q, "category_id": id }]), source_ids: id.into_iter().collect() })
 }
 
-fn conflicts(conn: &Connection) -> DomainResult<QueryOut> {
-    let mut stmt = conn.prepare(
+fn conflicts(conn: &Connection, params: &Value) -> DomainResult<QueryOut> {
+    let include_resolved = params.get("include_resolved").and_then(Value::as_bool).unwrap_or(false);
+    let sql = format!(
         "SELECT id, aggregate_type, aggregate_id, field, local_event_id, remote_event_id, local_value, remote_value, detected_at, resolved
-           FROM conflicts ORDER BY id",
-    )?;
+           FROM conflicts {} ORDER BY id",
+        if include_resolved { "" } else { "WHERE resolved = 0" }
+    );
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([], |r| {
         Ok(json!({
             "id": r.get::<_, i64>(0)?, "aggregate_type": r.get::<_, String>(1)?, "aggregate_id": r.get::<_, String>(2)?,
@@ -172,10 +184,54 @@ fn conflicts(conn: &Connection) -> DomainResult<QueryOut> {
     })?;
     let mut out = Vec::new();
     for row in rows {
-        out.push(row?);
+        let mut row = row?;
+        // What the conflict is about, for display: the record's name and currency.
+        let aggregate_type = row["aggregate_type"].as_str().unwrap_or("").to_string();
+        let aggregate_id = row["aggregate_id"].as_str().unwrap_or("").to_string();
+        if let Some(record) = schema::load(conn, &aggregate_type, &aggregate_id)? {
+            let label = record
+                .get("description")
+                .or_else(|| record.get("name"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            row["label"] = Value::String(label);
+            row["currency"] = record.get("currency").cloned().unwrap_or(Value::Null);
+        }
+        out.push(row);
     }
     let ids = out.iter().filter_map(|v| v.get("aggregate_id").and_then(Value::as_str).map(str::to_string)).collect();
     Ok(QueryOut { rows: Value::Array(out), source_ids: ids })
+}
+
+/// Add `source_kind` to transaction rows: where each one came from, as the UI shows it.
+/// `csv`/`ofx`/`json` imports, `voice`, `manual`, or `phone` (first recorded by another device).
+/// The stored `source` stays as written; rows from before schema v3 have none, so the kind is
+/// derived from the import batch and the device that first recorded the transaction.
+fn enrich_transactions(conn: &Connection, rows: &mut [Map<String, Value>]) -> DomainResult<()> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let local_device = crate::store::meta_get(conn, "device_id")?.unwrap_or_default();
+    let mut stmt = conn.prepare(
+        "SELECT origin_device_id FROM events
+          WHERE aggregate_type = 'transaction' AND aggregate_id = ?1 ORDER BY lamport, origin_device_id, seq LIMIT 1",
+    )?;
+    for row in rows.iter_mut() {
+        let id = row.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let stored = row.get("source").and_then(Value::as_str).map(str::to_string);
+        let imported = row.get("import_batch_id").map(|v| !v.is_null()).unwrap_or(false);
+        let origin: Option<String> = stmt.query_row([&id], |r| r.get(0)).ok();
+        let kind = match stored.as_deref() {
+            Some(kind @ ("csv" | "ofx" | "json")) => kind.to_string(),
+            _ if imported => "import".to_string(),
+            _ if origin.as_deref().is_some_and(|o| o != local_device) => "phone".to_string(),
+            Some(kind) => kind.to_string(),
+            None => "manual".to_string(),
+        };
+        row.insert("source_kind".to_string(), Value::String(kind));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -396,7 +452,8 @@ fn list_transactions(conn: &Connection, params: &Value) -> DomainResult<QueryOut
         tail.push_str(&format!("WHERE {} ", clauses.join(" AND ")));
     }
     tail.push_str(&format!("ORDER BY date DESC, created_at DESC, id LIMIT {limit} OFFSET {offset}"));
-    let rows = schema::select(conn, "transaction", &tail, args)?;
+    let mut rows = schema::select(conn, "transaction", &tail, args)?;
+    enrich_transactions(conn, &mut rows)?;
     let ids = rows.iter().filter_map(|r| r["id"].as_str().map(str::to_string)).collect();
     Ok(QueryOut { rows: Value::Array(rows.into_iter().map(Value::Object).collect()), source_ids: ids })
 }

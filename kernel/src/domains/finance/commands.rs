@@ -37,6 +37,7 @@ pub const COMMANDS: &[&str] = &[
     "bill.delete",
     "networth_snapshot.create",
     "networth_snapshot.delete",
+    "conflict.resolve",
 ];
 
 const ACCOUNT_KINDS: &[&str] = &["checking", "savings", "credit", "cash", "investment", "loan", "other"];
@@ -218,6 +219,7 @@ pub fn handle(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<Ve
         "bill.delete" => simple_delete(conn, "bill", payload),
         "networth_snapshot.create" => networth_create(conn, payload, &now),
         "networth_snapshot.delete" => simple_delete(conn, "networth_snapshot", payload),
+        "conflict.resolve" => conflict_resolve(conn, payload, &now),
         other => Err(DomainError::validation("kind", format!("unknown finance command {other:?}"))),
     }
 }
@@ -453,6 +455,7 @@ pub struct NewTransaction {
     pub notes: Option<String>,
     pub import_batch_id: Option<String>,
     pub fingerprint: Option<String>,
+    pub source: Option<String>,
 }
 
 /// Validate and build the full state of a new transaction. Also used by import.
@@ -488,6 +491,7 @@ pub fn build_transaction(conn: &Connection, nt: NewTransaction, now: &str) -> Do
     set(&mut s, "notes", nt.notes.map(Value::from).unwrap_or(Value::Null));
     set(&mut s, "import_batch_id", nt.import_batch_id.map(Value::from).unwrap_or(Value::Null));
     set(&mut s, "fingerprint", nt.fingerprint.map(Value::from).unwrap_or(Value::Null));
+    set(&mut s, "source", nt.source.map(Value::from).unwrap_or(Value::Null));
     set(&mut s, "created_at", now);
     set(&mut s, "updated_at", now);
     Ok((id, s))
@@ -531,9 +535,11 @@ fn transaction_create(conn: &Connection, payload: &Value, now: &str) -> DomainRe
             "category",
             "category_id",
             "notes",
+            "source",
         ],
     )?;
     let category_id = category_from_input(conn, map)?.flatten();
+    let source = enum_field(map, "source", &["manual", "voice"])?.unwrap_or_else(|| "manual".to_string());
     let nt = NewTransaction {
         id: text_field(map, "id", 64, false)?,
         account_id: id_of(map, "account_id")?,
@@ -546,6 +552,7 @@ fn transaction_create(conn: &Connection, payload: &Value, now: &str) -> DomainRe
         notes: text_field(map, "notes", 2000, false)?,
         import_batch_id: None,
         fingerprint: None,
+        source: Some(source),
     };
     let (id, state) = build_transaction(conn, nt, now)?;
     Ok(vec![draft("transaction", &id, "created", state)])
@@ -828,6 +835,7 @@ fn bill_mark_paid(conn: &Connection, payload: &Value, now: &str) -> DomainResult
             notes: Some(format!("Recorded from bill {id}")),
             import_batch_id: None,
             fingerprint: None,
+            source: Some("manual".to_string()),
         };
         let (tid, state) = build_transaction(conn, nt, now)?;
         drafts.push(draft("transaction", &tid, "created", state));
@@ -852,4 +860,58 @@ fn networth_create(conn: &Connection, payload: &Value, now: &str) -> DomainResul
     set(&mut s, "created_at", now);
     set(&mut s, "updated_at", now);
     Ok(vec![draft("networth_snapshot", &id, "created", s)])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sync conflicts
+
+/// Fields a conflict can be about, mirrored from `handle::CONFLICT_FIELDS`.
+const CONFLICT_RESOLVABLE: &[(&str, &str)] = &[
+    ("transaction", "amount_minor"),
+    ("bill", "amount_minor"),
+    ("budget", "amount_minor"),
+    ("account", "opening_balance_minor"),
+];
+
+/// Resolve a recorded amount conflict by writing a new event with the chosen value (`local` =
+/// this device's value, `remote` = the other device's). The event carries `resolves_conflict` so
+/// every device that replays it marks the conflict resolved.
+fn conflict_resolve(conn: &Connection, payload: &Value, now: &str) -> DomainResult<Vec<EventDraft>> {
+    let map = object(payload)?;
+    reject_unknown(map, &["conflict_id", "keep"])?;
+    let conflict_id = int_field(map, "conflict_id", true)?.unwrap_or(0);
+    let keep =
+        enum_field(map, "keep", &["local", "remote"])?.ok_or_else(|| DomainError::validation("keep", "required"))?;
+    type Row = (String, String, String, String, String, String, String, i64);
+    let row: Option<Row> = conn
+        .query_row(
+            "SELECT aggregate_type, aggregate_id, field, local_event_id, remote_event_id, local_value, remote_value, resolved
+               FROM conflicts WHERE id = ?1",
+            [conflict_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?)),
+        )
+        .ok();
+    let Some((aggregate_type, aggregate_id, field, local_event, remote_event, local_value, remote_value, resolved)) =
+        row
+    else {
+        return Err(DomainError::not_found(format!("conflict {conflict_id}")));
+    };
+    if resolved != 0 {
+        return Err(DomainError::conflict("this conflict is already resolved"));
+    }
+    if !CONFLICT_RESOLVABLE.iter().any(|(t, f)| *t == aggregate_type && *f == field) {
+        return Err(DomainError::internal("conflict is about a field that cannot be resolved here"));
+    }
+    let chosen: i64 = (if keep == "local" { local_value } else { remote_value })
+        .parse()
+        .map_err(|_| DomainError::internal("conflict holds a non-integer amount"))?;
+    let mut state = require_live(conn, &aggregate_type, &aggregate_id)?;
+    set(&mut state, &field, chosen);
+    set(&mut state, "updated_at", now);
+    set(
+        &mut state,
+        "resolves_conflict",
+        serde_json::json!({ "local_event_id": local_event, "remote_event_id": remote_event }),
+    );
+    Ok(vec![draft(&aggregate_type, &aggregate_id, "updated", state)])
 }

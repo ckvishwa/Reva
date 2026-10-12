@@ -13,5 +13,5 @@ use crate::store::Migration;
 pub const DOMAIN: &str = "finance";
 
 pub fn migrations() -> Vec<Migration> {
-    vec![schema::MIGRATION_V2]
+    vec![schema::MIGRATION_V2, schema::MIGRATION_V3]
 }
