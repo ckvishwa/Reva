@@ -54,6 +54,38 @@ const CARRY: &[(&str, &[&str])] = &[
     ("networth_snapshot", &["created_at", "updated_at"]),
 ];
 
+fn is_timestamp(value: &Value) -> bool {
+    value.as_str().is_some_and(|s| s.len() <= 40 && crate::civil::Date::parse(s.get(0..10).unwrap_or("")).is_some())
+}
+
+/// Fields copied verbatim from the file must still be well-formed: a crafted export must not be
+/// able to store a value the rest of the Kernel would later choke on.
+fn carried_value_ok(key: &str, value: &Value) -> bool {
+    if value.is_null() {
+        return matches!(key, "last_paid_date" | "import_batch_id" | "fingerprint");
+    }
+    match key {
+        "created_at" | "updated_at" => is_timestamp(value),
+        "archived" | "active" => value.is_boolean(),
+        "anchor_day" => value.as_i64().is_some_and(|d| (1..=31).contains(&d)),
+        "last_paid_date" => value.as_str().and_then(crate::civil::Date::parse).is_some(),
+        "import_batch_id" => value.as_str().is_some_and(commands::valid_id),
+        "fingerprint" => value.as_str().is_some_and(|f| f.len() == 64 && f.bytes().all(|b| b.is_ascii_hexdigit())),
+        _ => false,
+    }
+}
+
+fn snapshot_ok(by_currency: &Value) -> bool {
+    let Some(map) = by_currency.as_object() else { return false };
+    map.len() <= 50
+        && map.iter().all(|(currency, entry)| {
+            crate::domains::finance::money::valid_currency(currency)
+                && ["assets_minor", "liabilities_minor", "net_minor"]
+                    .iter()
+                    .all(|k| entry.get(*k).is_some_and(Value::is_i64))
+        })
+}
+
 pub fn run(conn: &Connection, ctx: &EventCtx, bytes: &[u8], options: &Options, now: &str) -> DomainResult<Report> {
     if bytes.len() > MAX_FILE_BYTES {
         return Err(DomainError::validation("file", "larger than 8 MB"));
@@ -116,7 +148,7 @@ pub fn run(conn: &Connection, ctx: &EventCtx, bytes: &[u8], options: &Options, n
                     state.insert(key.to_string(), obj.get(key).cloned().unwrap_or(Value::Null));
                 }
                 if crate::civil::Date::parse(state["as_of"].as_str().unwrap_or("")).is_none()
-                    || !state["by_currency"].is_object()
+                    || !snapshot_ok(&state["by_currency"])
                 {
                     rows.push(row("rejected", Some("as_of or by_currency is invalid".to_string())));
                     continue;
@@ -152,6 +184,23 @@ pub fn run(conn: &Connection, ctx: &EventCtx, bytes: &[u8], options: &Options, n
                     Err(other) => return Err(other),
                 }
             };
+
+            let carried_ok = drafts.iter().all(|d| {
+                CARRY
+                    .iter()
+                    .find(|(t, _)| *t == d.aggregate_type)
+                    .is_none_or(|(_, carry)| carry.iter().all(|k| obj.get(*k).is_none_or(|v| carried_value_ok(k, v))))
+            });
+            if !carried_ok {
+                rows.push(row(
+                    "rejected",
+                    Some(
+                        "a carried field is malformed (timestamp, flag, anchor day, fingerprint or batch id)"
+                            .to_string(),
+                    ),
+                ));
+                continue;
+            }
 
             for mut d in drafts {
                 if let (Some(state), Some((_, carry))) =
