@@ -26,6 +26,9 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
   - The merge script pattern misses `LDR*` names.
   - The working tree still holds uncommitted PIPE-1 and planner files that are also on the branches above.
 
+- **FIN-1 (S04 + Finance) is built on branch `feat/fin-1-kernel`, tagged `v2.0.0-alpha.1`:** Rust Domain Kernel with the Finance domain; one 97-step conformance suite passes natively, through Python and through Kotlin (JVM); Android arm64-v8a and x86_64 libraries build (not yet run on a device); Core has a Windows Credential Manager key provider (`reva.domain.finance`), `/v1/domains/*` and `/v1/today`. Details: `kernel/README.md`, ledger rows dated 2026-10-12. Not merged into `fixing-things` yet: it needs the PIPE-1 and planner branches merged around it (shared files: `app.py`, `lifecycle.py`, `settings.py`, the two route-whitelist tests, `pyproject.toml`).
+- FIN-1 Part C (your existing data) is discovery only: nothing imported. See the FIN-1 report: the old local `reva-finance.sqlite3` is a plaintext, near-empty profile; Aura-Prod Supabase is paused; `F:\reva-data\finance-import\` does not exist.
+
 ## Working rules (non-negotiable)
 
 1. **One Claude Code session per working tree.** For parallel work, use `git worktree add ../Reva-<slice> -b <branch>`. If `git status` shows changes you didn't make, stop and report them. Never reformat, reorder or "fix" them.
@@ -66,7 +69,7 @@ Real layout after S03-lite (the `core/` and `windows/` renames are not done).
 ```
 reva_core/   Python Core (api, agent, memory, models, orchestration, security, storage). Moves to core/ later.
 desktop/     WinUI 3 app and tests (NAudio capture/playback, WebView2 avatar host, executor). Moves to windows/ later.
-kernel/      Rust Domain Kernel + UniFFI bindings (placeholder until S04)
+kernel/      Rust Domain Kernel (crate reva-kernel: SQLCipher, event log, Finance) + UniFFI bindings (generated)
 android/     Kotlin/Compose app (placeholder until S11)
 avatar/      three.js + three-vrm web package (placeholder until S08)
 contracts/   JSON Schemas, capability registry (copy of docs/spec/REVA_v2.0/08_CONTRACTS, checked by CI)
@@ -84,7 +87,8 @@ Run from the repo root. `.venv\Scripts\python -m ...` is the Core environment.
 - Python: `python -m pytest -q` (the env guard sets a temp `REVA_DATA_DIR`; a non-temp value or a non-localhost DB URL aborts the run) · `ruff check <files>` · `ruff format <your files only>` · `mypy reva_core`
 - Contracts: `python tools/ci/check_contracts.py` (needs `jsonschema`)
 - .NET: `dotnet build desktop\Reva.Desktop.sln` · `dotnet test desktop\Reva.Desktop.sln` (run with `REVA_DATA_DIR` unset)
-- Rust (after S04): `cargo test -p reva-kernel` · `cargo clippy`
+- Rust: `cargo test -p reva-kernel` · `cargo clippy --workspace --all-targets -- -D warnings` · `cargo fmt --all`
+- Kernel bindings: `python tools/kernel/build_bindings.py` · `python -m pytest tests/cross_binding` · `python tools/kernel/run_kotlin_conformance.py` · `python tools/kernel/build_android.py`
 - Android (after S11): `./gradlew lint testDebugUnitTest`
 
 ## Skills to use in this repo
