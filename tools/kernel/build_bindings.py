@@ -11,6 +11,7 @@ On Windows the vendored OpenSSL build needs Perl (Strawberry Perl) on PATH.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -40,7 +41,7 @@ def main() -> int:
     flag = ["--release"] if args.release else []
 
     run(["cargo", "build", "-p", "reva-kernel", "-p", "reva-kernel-bindgen", *flag])
-    target = ROOT / "target" / profile
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or ROOT / "target") / profile
     library = target / library_name()
     bindgen = target / (
         "uniffi-bindgen.exe" if sys.platform.startswith("win") else "uniffi-bindgen"

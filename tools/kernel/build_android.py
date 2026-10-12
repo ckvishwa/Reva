@@ -91,9 +91,10 @@ def main() -> int:
         out = subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
         return out.stdout.lower()
 
+    target_dir = Path(os.environ.get("CARGO_TARGET_DIR") or ROOT / "target")
     failures = 0
     for abi, (triple, machine) in ABIS.items():
-        library = ROOT / "target" / triple / "release" / "libreva_kernel.so"
+        library = target_dir / triple / "release" / "libreva_kernel.so"
         if not library.exists():
             print(f"FAIL {abi}: {library} missing")
             failures += 1
