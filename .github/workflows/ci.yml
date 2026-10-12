@@ -89,3 +89,49 @@ jobs:
 
       - name: Test
         run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build
+
+  contracts:
+    # Every schema in contracts/ must be a valid JSON Schema, and contracts/
+    # must match docs/spec/REVA_v2.0/08_CONTRACTS.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install jsonschema
+        run: python -m pip install "jsonschema>=4.22,<5"
+
+      - name: Validate contracts
+        run: python tools/ci/check_contracts.py
+
+  kernel:
+    # Placeholder until S04 creates the Rust crate. Replace with
+    # `cargo test -p reva-kernel` and `cargo clippy` then.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kernel placeholder
+        run: |
+          test -f kernel/README.md
+          if [ -f kernel/Cargo.toml ]; then echo "kernel/Cargo.toml exists: replace this placeholder lane (S04)" && exit 1; fi
+          echo "kernel lane is a placeholder until S04"
+
+  android:
+    # Placeholder until S11 creates the Gradle project. Replace with
+    # `./gradlew lint testDebugUnitTest` then.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Android placeholder
+        run: |
+          test -f android/README.md
+          if [ -f android/gradlew ]; then echo "android/gradlew exists: replace this placeholder lane (S11)" && exit 1; fi
+          echo "android lane is a placeholder until S11"
