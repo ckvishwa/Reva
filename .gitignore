@@ -75,3 +75,11 @@ tests/voice-evals/outputs/
 # Domain Kernel build output and generated bindings (never hand-edited, rebuilt by tools/kernel/build_bindings.py)
 /target/
 /kernel/bindings/
+
+# Android
+/android/.gradle/
+/android/local.properties
+/android/app/build/
+/android/build/
+*.keystore
+!/android/gradle/wrapper/gradle-wrapper.jar
