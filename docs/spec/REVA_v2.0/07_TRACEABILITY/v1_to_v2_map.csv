@@ -1,0 +1,223 @@
+v1_id,v1_stage,v2_status,v2_owner,v2_requirement_ids,first_slice,evidence_status,v1_text
+FR-001,R1,KEPT,ARD-100,AR-WIN-010,S07,PLANNED,User can initiate and stop voice explicitly on Windows.
+FR-002,R2,KEPT,ARD-200,,S07,PLANNED,User can initiate and stop voice explicitly on Android.
+FR-003,R1,KEPT,ARD-400,,S07,PLANNED,Voice input produces visible finalized and optional partial transcript.
+FR-004,R1,AMENDED,ARD-400,,S05,PLANNED,REVA responds with audible speech and visible text.
+FR-005,R1,KEPT,ARD-400,,S07,PLANNED,"Session controller supports Listening, Processing, Speaking, Interrupted, Error and Idle."
+FR-006,R1,KEPT,ARD-400,,S07,PLANNED,User can interrupt TTS by voice or Stop button.
+FR-007,R1,KEPT,ARD-400,,S07,PLANNED,VAD/endpointing handles pauses without premature send in fixture suite.
+FR-008,R1,KEPT,ARD-300,AR-CORE-002,S07,PLANNED,"Every session has cancel and timeout controls for STT, LLM and TTS."
+FR-009,R1,KEPT,ARD-100,AR-WIN-015,S07,PLANNED,Audio devices can be selected and device-loss handled.
+FR-010,R1,KEPT,ARD-100,AR-WIN-015,S07,PLANNED,Microphone mute and speaker mute are separately available.
+FR-011,R2,KEPT,ARD-200,AR-AND-002,S12,PLANNED,"Android foreground voice session has persistent, visible notification where required."
+FR-012,R2,KEPT,ARD-200,AR-AND-003,S12,PLANNED,Android voice path checks on-device STT capability before selecting it.
+FR-013,R2,AMENDED,ARD-200,,S12,PLANNED,"Android TTS voice, rate and accessibility controls follow system availability."
+FR-014,R2,KEPT,ARD-400,,S12,PLANNED,Voice/typed turns share conversation history.
+FR-015,R3,KEPT,ARD-400,,S24,PLANNED,Session continuity after network disconnect is explicit.
+FR-016,R3,KEPT,ARD-400,,S24,PLANNED,"Duplex and noise suppression are selectable as capabilities, not mandatory."
+FR-017,R3,KEPT,ARD-450,AR-LANG-016,S24,PLANNED,Multilingual STT/TTS support includes explicit active language and fallback.
+FR-018,Future,DEFERRED (Future),ARD-200,,Future,PLANNED,Always-on wake word on Android only with reviewed platform-feasible mode.
+FR-019,R1,KEPT,ARD-100,AR-WIN-001,S01,PLANNED,Wake-word feature on Windows remains default-off and integrity-checked.
+FR-020,R4,KEPT,ARD-400,,S27,PLANNED,"Voice recording history defaults to off, configurable only by consent."
+FR-021,R1,KEPT,ARD-600,,S09,PLANNED,Model-independent assistant interface supports deterministic test provider and opted-in real provider.
+FR-022,R1,KEPT,ARD-600,,S09,PLANNED,Dialog planner distinguishes answer vs tool proposal vs clarification.
+FR-023,R1,KEPT,ARD-600,AR-AGT-002,S09,PLANNED,Typed/tool payloads are validated against versioned schemas.
+FR-024,R1,KEPT,ARD-600,,S09,PLANNED,"Windows actions use explicit allowlist, fixed targets and device context."
+FR-025,R1,KEPT,ARD-600,AR-AGT-006,S09,PLANNED,"Close, delete, send, or other high-risk operations require explicit confirmation."
+FR-026,R1,KEPT,ARD-600,,S09,PLANNED,Every tool execution returns attempted/succeeded/failed/cancelled and evidence.
+FR-027,R1,KEPT,ARD-600,,S09,PLANNED,Policy engine denies by default on unknown capability/device or absent permission.
+FR-028,R2,KEPT,ARD-200,,S12,PLANNED,"Phone actions use Android platform APIs/intents, not arbitrary shell."
+FR-029,R2,KEPT,ARD-600,,S15,PLANNED,"Cross-device commands identify initiator, target and approval device."
+FR-030,R3,KEPT,ARD-600,,S21,PLANNED,"Multi-step task plans run with bounded steps, budget and abort button."
+FR-031,R3,KEPT,ARD-600,,S21,PLANNED,Tools can be disabled individually in Settings.
+FR-032,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,Email/calendar integrations use least-scope delegated auth.
+FR-033,R4,KEPT,ARD-600,AR-AGT-010,S27,PLANNED,"REVA can explain which action it executed, on which device, and when."
+FR-034,Future,DEFERRED (Future),ARD-600,,Future,PLANNED,Third-party plugins run within scoped capability/approval boundary.
+FR-035,R1,KEPT,ARD-700,,S10,PLANNED,User can create and query explicit memories.
+FR-036,R1,KEPT,ARD-700,,S10,PLANNED,"User can list, edit, archive, delete and export their saved memories."
+FR-037,R1,KEPT,ARD-700,,S10,PLANNED,Memory is not silently saved from every conversation.
+FR-038,R1,KEPT,ARD-700,,S10,PLANNED,Hybrid search combines lexical and semantic retrieval with safe fallback.
+FR-039,R1,KEPT,ARD-700,,S10,PLANNED,Conversation history can be cleared independently of memories.
+FR-040,R2,KEPT,ARD-200,AR-AND-010,S11,PLANNED,Local Android data uses encrypted-at-rest protection for tokens/secrets.
+FR-041,R2,KEPT,ARD-500,,S13,PLANNED,"Paired sync has per-device identity, revocation and permission scopes."
+FR-042,R2,KEPT,ARD-500,,S13,PLANNED,Pairing requires proximity/verification with an explicit one-time handshake.
+FR-043,R3,KEPT,ARD-500,,S22,PLANNED,"Data sync is resumable, idempotent and conflict-aware."
+FR-044,R3,KEPT,ARD-500,,S22,PLANNED,Deletes take precedence over older updates.
+FR-045,R3,KEPT,ARD-500,,S22,PLANNED,User can choose which data classes sync.
+FR-046,R3,KEPT,ARD-500,,S22,PLANNED,Conversations and preferences are usable with both devices online or offline.
+FR-047,R4,KEPT,ARD-500,AR-DATA-017,S27,PLANNED,Complete export and deletion paths exist for supported local/synced data.
+FR-048,Future,AMENDED,ARD-500,AR-DATA-013,S22,PLANNED,Optional encrypted relay supports off-LAN connections.
+FR-049,Future,SUPERSEDED,ARD-700,,Future,PLANNED,Life-memory entities Person/Event/Commitment can be opt-in.
+FR-050,R1,KEPT,ARD-800,AR-REL-010,S27,PLANNED,"Desktop has accessible voice controls, transcript and typed fallback."
+FR-051,R2,AMENDED,ARD-200,,S11,PLANNED,"APK has home, voice, text, memory, device, settings and permissions screens."
+FR-052,R2,KEPT,ARD-300,,S13,PLANNED,User can inspect provider/connection availability.
+FR-053,R2,KEPT,ARD-500,,S13,PLANNED,Pair/Unpair/Approve remote access can be completed in-app.
+FR-054,R3,KEPT,ARD-300,,S20,PLANNED,Settings disclose local/cloud processing for each active provider.
+FR-055,R3,KEPT,ARD-300,,S20,PLANNED,Conversation search and pinned sessions.
+FR-056,R3,KEPT,ARD-700,,S20,PLANNED,Local reminders and notifications support opt-in scheduling.
+FR-057,R4,KEPT,ARD-100,AR-WIN-013,S25,PLANNED,Windows installer includes runtime and supports uninstall/upgrade.
+FR-058,R4,KEPT,ARD-200,AR-AND-016,S26,PLANNED,Android signed APK installs; Play distribution uses AAB.
+FR-059,R4,KEPT,ARD-300,,S27,PLANNED,Crash recovery shows unsent action status without duplicate execution.
+FR-060,R4,KEPT,ARD-500,AR-DATA-016,S27,PLANNED,User can wipe local state and revoke pairing.
+NFR-001,R1,KEPT,ARD-300,AR-CORE-007,S06,PLANNED,All network endpoints bind loopback by default; no LAN listener unless pairing explicitly enabled.
+NFR-002,R2,KEPT,ARD-500,,S13,PLANNED,Cross-device traffic uses TLS with authenticated device identity; reject unsigned/expired/revoked sessions.
+NFR-003,R1,KEPT,ARD-100,AR-WIN-003,S07,PLANNED,Audio and model work must not block the WinUI UI thread; backpressure and bounded queues required.
+NFR-004,R2,KEPT,ARD-200,AR-AND-018,S11,PLANNED,Phone capture/recognition must not block Compose main thread; service lifecycle cleaned up.
+NFR-005,R1,KEPT,ARD-100,,S07,PLANNED,Secrets never stored in plaintext config files or logged; migrate local Core token to OS secret storage before R4.
+NFR-006,R2,KEPT,ARD-200,,S12,PLANNED,"Local mobile security uses OWASP MASVS controls for storage, authentication, crypto, network, platform, privacy."
+NFR-007,R1,KEPT,ARD-300,,S06,PLANNED,Cancelled sessions do not execute pending tools or play stale TTS.
+NFR-008,R1,KEPT,ARD-300,AR-CORE-004,S03,PLANNED,Test runs never point to a user's real REVA_DATA_DIR; fixtures are isolated.
+NFR-009,R3,KEPT,ARD-000,,S20,PLANNED,Errors are typed and actionable; preserve correlation IDs across clients and Core without recording microphone bytes.
+NFR-010,R4,KEPT,ARD-800,AR-REL-008,S27,PLANNED,"p50, p95, memory, CPU, battery and thermal behavior profiled on documented devices."
+NFR-011,R4,KEPT,ARD-800,AR-REL-005,S25,PLANNED,"Dependencies pinned, SBOM published, release artifacts signed and checksummed."
+NFR-012,R4,KEPT,ARD-200,,S26,PLANNED,No permanent permission requirement for phone microphone; revoke during session handled.
+NFR-013,R1,KEPT,ARD-600,AR-AGT-015,S09,PLANNED,Model and tool prompts treated as untrusted; retrieved memory/webpage text never grants permissions.
+NFR-014,R2,KEPT,ARD-500,,S13,PLANNED,Access checks enforce user × device × capability × session × action risk on server and target.
+NFR-015,R3,KEPT,ARD-000,,S20,PLANNED,"Local-first feature behavior documented by connectivity state (offline, LAN, internet)."
+NFR-016,R4,KEPT,ARD-300,AR-CORE-013,S27,PLANNED,A user can turn off telemetry and erase user event traces; security-only local logs have documented retention.
+AR-001,P0,KEPT,ARD-300,,S03,PLANNED,Preserve existing `reva_core` FastAPI routes and WinUI behavior while adding versioned capabilities.
+AR-002,R1,KEPT,ARD-300,,S06,PLANNED,Keep a single process modular Core and internal dependency boundaries.
+AR-003,R1,KEPT,ARD-300,AR-CORE-001,S06,PLANNED,Central `SessionCoordinator` owns exactly one active voice turn per session.
+AR-004,R1,KEPT,ARD-300,AR-CORE-005,S06,PLANNED,"Session IDs, turn IDs and correlation IDs propagate through STT/LLM/TTS/tool events."
+AR-005,R1,KEPT,ARD-300,,S06,PLANNED,"Typed event schema includes `schema_version`, `event_id`, `sequence`, `timestamp`, `device_id`, `session_id`, `turn_id`, `kind` and `payload`."
+AR-006,R1,AMENDED,ARD-300,AR-CORE-006,S06,PLANNED,Protocol evolution is additive within a major version; unknown required major is rejected.
+AR-007,R1,KEPT,ARD-300,AR-CORE-001,S06,PLANNED,Cancellation token/epoch invalidates all older pending provider responses.
+AR-008,R1,KEPT,ARD-300,AR-CORE-002,S06,PLANNED,"Provider deadlines exist separately for VAD/STT, model, tool and TTS."
+AR-009,R1,AMENDED,ARD-100,AR-WIN-012,S07,PLANNED,No client takes a database file handle outside its owning device process.
+AR-010,R2,KEPT,ARD-300,AR-CORE-007,S13,PLANNED,Windows Core API remains loopback and bearer-auth protected; remote access only through paired gateway.
+AR-011,R2,KEPT,ARD-300,,S13,PLANNED,Android contracts generated/shared from versioned JSON Schema/OpenAPI; no handwritten divergent event types.
+AR-012,R3,KEPT,ARD-300,AR-CORE-008,S20,PLANNED,Configuration resolution is explicit per user/device/provider with encrypted secrets.
+AR-013,R4,KEPT,ARD-300,"AR-CORE-011, AR-REL-009",S25,PLANNED,Graceful upgrade migrates schemas without losing data; rollback compatibility declared.
+AR-014,R1,KEPT,ARD-400,AR-VA-001,S07,PLANNED,Audio capture and TTS playback are pluggable native adapters.
+AR-015,R1,KEPT,ARD-300,"AR-CORE-012, AR-VA-002",S06,PLANNED,Bounded audio input/output buffers prevent OOM; drop strategy never silently executes partial commands.
+AR-016,R1,KEPT,ARD-400,"AR-VA-003, AR-WIN-001",S01,PLANNED,"Voice session has one active audio producer per selected microphone, arbitrated with wake word."
+AR-017,R1,KEPT,ARD-400,"AR-VA-004, AR-WIN-005",S06,PLANNED,TTS output carries the originating `turn_epoch`; on interrupt obsolete frames are discarded.
+AR-018,R1,KEPT,ARD-450,"AR-LANG-001, AR-VA-005",S07,PLANNED,Partial transcript must not trigger sensitive actions; only stabilized final user intent enters policy.
+AR-019,R1,KEPT,ARD-300,AR-CORE-003,S05,PLANNED,Provider-specific STT/TTS types remain behind protocol interfaces; selection driven by capability.
+AR-020,R1,KEPT,ARD-300,AR-CORE-001,S06,PLANNED,"Stale provider response cannot rewrite current composer, history or spoken output."
+AR-021,R1,KEPT,ARD-400,AR-VA-006,S07,PLANNED,"Low-confidence tool phrase results in clarification, not speculative execution."
+AR-022,R1,KEPT,ARD-400,AR-VA-007,S07,PLANNED,Pre-recorded clips are used for deterministic transcript/turn regression; physical-mic suite opt-in.
+AR-023,R1,KEPT,ARD-100,AR-WIN-004,S07,PLANNED,"Microphone activation indicator derived from actual resource state, not only UI requested state."
+AR-024,R2,KEPT,ARD-400,,S12,PLANNED,Android checks on-device STT availability and discloses use of fallback recognizer.
+AR-025,R2,KEPT,ARD-400,,S12,PLANNED,Android stops mic promptly when activity/foreground-service lifecycle disallows access.
+AR-026,R3,KEPT,ARD-400,AR-VA-014,S24,PLANNED,Network media events are authenticated and have ordered stream recovery or clean session restart.
+AR-027,R3,KEPT,ARD-400,AR-VA-015,S24,PLANNED,Turn-end and barge-in thresholds configurable and measured by device/provider.
+AR-028,R4,KEPT,ARD-400,AR-VA-016,S27,PLANNED,"Record per-turn timings: user speech end, STT final, LLM first token, TTS first byte, playback first sample."
+AR-029,R4,KEPT,ARD-400,AR-VA-017,S27,PLANNED,"Background/noise test corpora include silence, overlap, echo, accents, short commands, long utterances."
+AR-030,R1,KEPT,ARD-600,AR-AGT-001,S09,PLANNED,Model can request only registered capabilities; tool calls are not raw shell commands.
+AR-031,R1,KEPT,ARD-600,"AR-AGT-002, AR-LANG-007",S09,PLANNED,Action proposal is schema-validated and normalized before policy check.
+AR-032,R1,KEPT,ARD-600,AR-AGT-003,S09,PLANNED,Risk tier calculated independently of model-provided hints.
+AR-033,R1,KEPT,ARD-600,"AR-AGT-004, AR-WIN-008",S09,PLANNED,"Approval binds action ID, canonical arguments, target ID, scope and TTL."
+AR-034,R1,KEPT,ARD-600,AR-AGT-005,S09,PLANNED,"Executor records success with actual OS/provider evidence, failure and unknown outcomes."
+AR-035,R1,KEPT,ARD-600,"AR-AGT-006, AR-LANG-007",S09,PLANNED,"Unsafe action is denied when confirmation absent, stale, ambiguous or sourced only from speech for sensitive tier."
+AR-036,R2,KEPT,ARD-500,AR-DATA-006,S13,PLANNED,Paired phone never obtains PC OS process handles or a generic remote-execute API.
+AR-037,R2,KEPT,ARD-600,"AR-AGT-007, AR-AND-008",S15,PLANNED,Remote operations are authorized against sender identity AND target policy.
+AR-038,R2,KEPT,ARD-600,AR-AGT-008,S21,PLANNED,Android actions use sanctioned platform APIs and respect runtime grants.
+AR-039,R3,KEPT,ARD-600,AR-AGT-009,S21,PLANNED,"Multi-step plans carry max steps, max runtime, total tool budget and cancel propagation."
+AR-040,R4,KEPT,ARD-600,AR-AGT-010,S27,PLANNED,Action ledger has immutable outcome record and redacted arguments with user-facing inspection.
+AR-041,R2,KEPT,ARD-200,"AR-AND-007, AR-DATA-001",S13,PLANNED,Pairing key agreement authenticated by explicit user-approved QR/fingerprint.
+AR-042,R2,KEPT,ARD-200,"AR-AND-007, AR-DATA-002",S13,PLANNED,Gateway TLS and device auth required for any paired connection.
+AR-043,R2,KEPT,ARD-500,AR-DATA-003,S13,PLANNED,Paired keys scoped to only approved actions/data classes.
+AR-044,R2,KEPT,ARD-500,AR-DATA-004,S13,PLANNED,Pairing grants revocable with atomic check before dispatch.
+AR-045,R2,KEPT,ARD-500,AR-DATA-005,S13,PLANNED,Gateway binds to LAN only when user enables remote access and reports interface/port.
+AR-046,R2,KEPT,ARD-500,AR-DATA-006,S13,PLANNED,No remote caller can invoke Core unrestricted `/v1/*` API.
+AR-047,R3,KEPT,ARD-500,AR-DATA-007,S22,PLANNED,Stream reconnect requires authenticated resume token and deduplicates prior events.
+AR-048,R3,KEPT,ARD-500,AR-DATA-008,S22,PLANNED,Credentials rotate and support device-key compromise recovery.
+AR-049,R4,KEPT,ARD-500,AR-DATA-009,S27,PLANNED,"Security logs record which device made each data/tool request, without raw secrets."
+AR-050,R1,KEPT,ARD-700,,S10,PLANNED,Core memory repository supports explicit create/query/update/archive/delete/export.
+AR-051,R1,KEPT,ARD-600,AR-AGT-019,S09,PLANNED,"Deletion removes retrieval eligibility, removes/invalidate embeddings and records redacted audit."
+AR-052,R1,KEPT,ARD-700,,S10,PLANNED,Hybrid retrieval falls back to lexical on embedding/Ollama failures.
+AR-053,R1,KEPT,ARD-500,AR-DATA-018,S07,PLANNED,Local user files and voice temporary buffers have bounded lifecycle.
+AR-054,R2,AMENDED,ARD-200,AR-AND-010,S11,PLANNED,"Android caches only scoped, needed records; keys live in Keystore."
+AR-055,R2,KEPT,ARD-300,AR-CORE-011,S13,PLANNED,"Schema migrations are transactional, versioned and testable with copied DB."
+AR-056,R3,KEPT,ARD-500,AR-DATA-010,S14,PLANNED,Sync applies per-record idempotent events and durable outbox acknowledgment.
+AR-057,R3,KEPT,ARD-200,"AR-AND-014, AR-DATA-011",S14,PLANNED,Conflict policy avoids wall-clock-only last-write-wins for deletes.
+AR-058,R3,KEPT,ARD-500,AR-DATA-012,S20,PLANNED,Data-scope settings apply to sync send and receive sides.
+AR-059,R4,KEPT,ARD-500,AR-DATA-017,S27,PLANNED,Export includes human-readable memory/conversation data and documented omissions.
+AR-060,R4,KEPT,ARD-500,AR-DATA-016,S27,PLANNED,Wipe and unpair revoke credentials and clear queue/embeddings/local caches.
+AR-061,R2,AMENDED,ARD-200,AR-AND-017,S11,PLANNED,"Android minSdk and targetSdk determined by device support + current Play requirements, recorded in build."
+AR-062,R2,KEPT,ARD-200,AR-AND-001,S12,PLANNED,Runtime microphone permission requested only on explicit user gesture.
+AR-063,R2,KEPT,ARD-200,AR-AND-002,S12,PLANNED,Foreground service type/notification and background-start restrictions honored by API level.
+AR-064,R2,KEPT,ARD-200,AR-AND-003,S12,PLANNED,Use on-device recognizer only when availability check passes; otherwise disclose fallback.
+AR-065,R2,KEPT,ARD-200,AR-AND-004,S12,PLANNED,Recognizer and TTS lifecycle destroyed/shut down on completion.
+AR-066,R2,KEPT,ARD-200,AR-AND-006,S12,PLANNED,"No `QUERY_ALL_PACKAGES`, Accessibility automation or privileged settings as a shortcut."
+AR-067,R2,KEPT,ARD-200,AR-AND-001,S12,PLANNED,Local app functions survive permanent denial of microphone permission.
+AR-068,R3,KEPT,ARD-200,AR-AND-011,S21,PLANNED,Phone can select independent model provider instead of paired PC.
+AR-069,R3,KEPT,ARD-200,,S21,PLANNED,Standalone AI mode communicates data-processing route and network requirements.
+AR-070,R4,KEPT,ARD-200,AR-AND-016,S26,PLANNED,"Signed release APK/AAB validated for installation, upgrade and rollback behavior."
+AR-071,R1,KEPT,ARD-100,AR-WIN-003,S07,PLANNED,UI/main threads remain responsive under slow STT/LLM/TTS.
+AR-072,R1,KEPT,ARD-100,AR-WIN-002,S02,PLANNED,Python Core process lifecycle distinguishes owned vs external.
+AR-073,R1,KEPT,ARD-500,AR-DATA-019,S07,PLANNED,No raw microphone byte payloads in normal logs.
+AR-074,R2,KEPT,ARD-300,,S13,PLANNED,Connection and model capability changes cause explicit UI statuses.
+AR-075,R2,KEPT,ARD-300,AR-CORE-012,S13,PLANNED,Every queue has documented upper bound and handling on saturation.
+AR-076,R3,KEPT,ARD-800,AR-REL-007,S24,PLANNED,End-to-end voice trace latency budgets recorded per device/provider.
+AR-077,R3,KEPT,ARD-200,AR-AND-015,S24,PLANNED,Battery and heat budget measured for active and background-allowed voice mode.
+AR-078,R4,KEPT,ARD-800,"AR-REL-004, AR-WIN-013",S25,PLANNED,Windows packaging includes Core interpreter/runtime and model-install guidance.
+AR-079,R4,KEPT,ARD-800,"AR-REL-005, AR-WIN-014",S25,PLANNED,Release build signs artifacts and generates SBOM/checksums.
+AR-080,R4,KEPT,ARD-500,AR-DATA-020,S27,PLANNED,"Security signoff covers Android MASVS, transport, policy, secrets and privacy."
+AR-081,R4,KEPT,ARD-800,AR-REL-006,S24,PLANNED,"Reliability tests exercise disconnect, service kill, permission loss, device sleep and stale actions."
+AR-082,R4,KEPT,ARD-300,AR-CORE-013,S27,PLANNED,"Structured telemetry is opt-in, scoped and redacted, and can be removed by user."
+FR-AI-001,R1,KEPT,ARD-600,,S09,PLANNED,"User can ask a free-form question and receive a response from a selected, disclosed real model; fake model clearly marked developer-only."
+FR-AI-002,R1,KEPT,ARD-600,,S09,PLANNED,"Tool-calling LLM returns strictly validated `answer`, `clarify`, `propose_action`, or `propose_plan`; malformed output is refused, not executed."
+FR-AI-003,R1,KEPT,ARD-600,,S09,PLANNED,"REVA recognizes direct, allowlisted open/close requests without a slow LLM call when rules are unambiguous."
+FR-AI-004,R1,KEPT,ARD-600,,S09,PLANNED,"User can use a voice command to launch Chrome, Notepad, VS Code or another explicitly configured supported app; app-open result must be observed."
+FR-AI-005,R1,KEPT,ARD-600,,S09,PLANNED,"User sees and can stop AI thinking, STT, tool and TTS states; cancelled turns cannot resume previous tools or audio."
+FR-AI-006,R1,KEPT,ARD-600,,S09,PLANNED,"User can ask what REVA can currently control; response derives from live device capabilities, not model guesses."
+FR-AI-007,R1,KEPT,ARD-450,"AR-LANG-009, AR-WIN-009",S10,PLANNED,"Voice assistant only speaks “done” if native executor returned verified success, otherwise reports the limitation."
+FR-AI-008,R1,KEPT,ARD-600,,S09,PLANNED,"Sensitive actions require explicit, targeted confirmation and cannot be approved solely by model-generated text or untrusted UI content."
+FR-AI-009,R1,AMENDED,ARD-600,,S09,PLANNED,User can select local vs provider reasoning and see whether audio/screens/text leave device.
+FR-AI-010,R1,KEPT,ARD-600,,S09,PLANNED,"Per-turn source-provenance and redacted activity history disclose tool proposals, approvals, observed outcomes and timeouts."
+FR-AI-011,R2,KEPT,ARD-600,,S23,PLANNED,Windows user can explicitly invoke “inspect this window” and see the accessible UI tree with sensitive fields redacted and scope indicator.
+FR-AI-012,R2,KEPT,ARD-600,,S23,PLANNED,"Windows user can say “click [named visible control]” in a supported app; REVA grounds to a current UIA element, rejects ambiguity and checks postcondition."
+FR-AI-013,R2,KEPT,ARD-600,,S15,PLANNED,REVA prefers an app-specific supported API/intent over UI clicks where available; unsupported app does not trigger blind coordinate clicks.
+FR-AI-014,R2,KEPT,ARD-600,,S23,PLANNED,"Untrusted screen/document text is treated as data, not system instructions; injected UI content cannot change authorization or granted tools."
+FR-AI-015,R2,KEPT,ARD-600,,S15,PLANNED,"Android APK supports voice, answers, app launch via intents, and clearly scoped local device actions; denial is recoverable."
+FR-AI-016,R2,KEPT,ARD-600,,S15,PLANNED,"Pairing a phone to PC presents device identity, action scope, confirmation target and revocation; phone never obtains PC unrestricted shell access."
+FR-AI-017,R2,KEPT,ARD-600,,S15,PLANNED,Windows and Android report their distinct tool support; phone never claims to support PC-only controls or vice versa.
+FR-AI-018,R2,KEPT,ARD-600,,S15,PLANNED,"Screen screenshots are captured only within an active, consented task and erased when no longer necessary; sensitive contents excluded where APIs allow."
+FR-AI-019,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,An explicitly activated bounded Windows workflow supports at least three dependent steps with independent verification and a cancel button.
+FR-AI-020,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,"“Find a file and attach it to a draft” remains a **draft** until a separate send approval; approval binds exact recipient, attachment and destination."
+FR-AI-021,R3,KEPT,ARD-600,,S21,PLANNED,"A failed or ambiguous UI action halts the plan or asks for help, never blindly repeats potentially non-idempotent actions."
+FR-AI-022,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,VLM can locate unlabeled Windows UI targets using on-demand screenshots after semantic UIA lookup fails; it never silently authorizes clicks.
+FR-AI-023,R3,KEPT,ARD-600,,S21,PLANNED,Android Play distribution does not rely on autonomous AI planning+execution through AccessibilityService unless legitimately eligible under the current verified exception.
+FR-AI-024,R3,KEPT,ARD-200,"AR-AND-011, AR-AND-012",S21,PLANNED,Android on-device or hosted reasoning continues to answer basic questions even when paired Windows PC is offline.
+FR-AI-025,R4,KEPT,ARD-600,,S27,PLANNED,"Agent capabilities, language/vision models and providers are empirically benchmarked by hardware class, privacy mode and task success."
+FR-AI-026,R4,DEFERRED (Future),ARD-600,,Future,PLANNED,REVA explains which screen element it used and why it stopped when a task cannot be grounded.
+FR-AI-027,Research,DEFERRED (Future),ARD-600,,Future,PLANNED,"Advanced Android UI control via AccessibilityService is available only after product-purpose, legal/store-policy and user-consent review; never assumed universal."
+FR-AI-028,Research,DEFERRED (Future),ARD-600,,Future,PLANNED,Hands-free always-listening Android wake word is offered only when technically and policy permitted for the device/session state.
+AR-AI-001,R1,KEPT,ARD-300,AR-CORE-003,S05,PLANNED,"`ModelProvider` interface supports `complete`, optional streaming, typed tool responses, timeout, cancel, model identity."
+AR-AI-002,R1,KEPT,ARD-600,"AR-AGT-011, AR-LANG-006",S09,PLANNED,"`Planner` consumes user turn, sanitized context, retrieved memory, live capability registry; not raw OS authority."
+AR-AI-003,R1,KEPT,ARD-600,AR-AGT-001,S09,PLANNED,"Only schema-approved action kinds enter `ActionPolicy`; free-form shell, executable path and arbitrary URL/script are rejected."
+AR-AI-004,R1,KEPT,ARD-600,AR-AGT-003,S09,PLANNED,"Policy derives action risk from registered capability + normalized args, not LLM-proposed tier."
+AR-AI-005,R1,KEPT,ARD-600,AR-AGT-004,S09,PLANNED,"Approval is cryptographically or equivalent securely bound to operation, canonical args, user, device, expiry and request ID."
+AR-AI-006,R1,KEPT,ARD-300,AR-CORE-001,S06,PLANNED,"Session coordinator owns cancel epoch and ignores late STT, model and tool results."
+AR-AI-007,R1,KEPT,ARD-600,"AR-AGT-005, AR-WIN-009",S09,PLANNED,"`ExecutionResult` separates attempted, observed, verified, failed, denied, unknown; fabricated success prohibited."
+AR-AI-008,R1,KEPT,ARD-600,"AR-AGT-012, AR-LANG-003",S09,PLANNED,Direct known commands may be deterministic to reduce model latency and hallucinations.
+AR-AI-009,R1,KEPT,ARD-600,AR-AGT-009,S09,PLANNED,A single bounded LLM planning loop suffices initially; no swarm/agent-to-agent privilege delegation.
+AR-AI-010,R1,KEPT,ARD-600,AR-AGT-013,S07,PLANNED,"Model selection depends on measured tool-call accuracy, latency, footprint, privacy and hardware; no unbenchmarked “best model” label."
+AR-AI-011,R1,KEPT,ARD-600,AR-AGT-014,S09,PLANNED,Critical observations are never promoted from an unverified model narration; executor supplies evidence.
+AR-AI-012,R1,KEPT,ARD-600,AR-AGT-015,S09,PLANNED,"Screen and tool output strings are marked untrusted, delimited, redacted and excluded from policy instructions."
+AR-AI-013,R1,KEPT,ARD-400,AR-VA-019,S06,PLANNED,"Streaming voice events carry turn ID, sequence, cancellation ID and trace timings."
+AR-AI-014,R1,KEPT,ARD-400,AR-VA-018,S07,PLANNED,Audio path can fall back from streamed chunks to buffered transcription/TTS with declared UX change.
+AR-AI-015,R1,KEPT,ARD-400,AR-VA-007,S07,PLANNED,Existing real-STT and TTS opt-in tests remain gated and must not be reported as hardware proof when skipped.
+AR-AI-016,R2,KEPT,ARD-100,AR-WIN-016,S23,PLANNED,"Windows native executor owns process launch, UIA tree, InvokePattern/ValuePattern and postcondition verification."
+AR-AI-017,R2,KEPT,ARD-100,,S23,PLANNED,"UI target reference includes short-lived snapshot ID, target app/window identity, element identifier and timestamp."
+AR-AI-018,R2,KEPT,ARD-100,,S23,PLANNED,UIA and safe OS integration are preferred; coordinate injection only after fresh grounding and explicit interactive session.
+AR-AI-019,R2,KEPT,ARD-100,AR-WIN-011,S23,PLANNED,Input events are never sent to the wrong foreground window; elevated/secure desktops fail closed.
+AR-AI-020,R2,KEPT,ARD-100,AR-WIN-011,S23,PLANNED,"Password fields, OTPs, private notifications and secure screens are masked or excluded from model observations when feasible; never intentionally bypass OS safeguards."
+AR-AI-021,R2,DEFERRED (Future),ARD-100,,Future,PLANNED,"VLM screenshot request is an independent consented, bounded capture; no passive screen recording or raw screenshot logging."
+AR-AI-022,R2,KEPT,ARD-600,AR-AGT-008,S21,PLANNED,Android `Intent`/public app APIs and content URIs take precedence over AccessibilityService.
+AR-AI-023,R2,KEPT,ARD-600,AR-AGT-008,S21,PLANNED,"Android UI and screen APIs require appropriate foreground lifecycle, runtime permissions and disclosure."
+AR-AI-024,R2,DEFERRED (Future),ARD-200,,Future,PLANNED,"Accessibility use is feature-gated to store-policy-reviewed narrow, user-directed workflows; do not ship unrestricted agentic control."
+AR-AI-025,R2,DEFERRED (Future),ARD-200,,Future,PLANNED,MediaProjection is opt-in per session and follows foreground-service/system-consent requirements.
+AR-AI-026,R2,KEPT,ARD-600,AR-AGT-007,S15,PLANNED,"Remote pairing gateway checks peer identity, scope, replay, TTL and per-device revocation before any PC operation."
+AR-AI-027,R2,KEPT,ARD-600,AR-AGT-017,S15,PLANNED,Native adapter transport is an implementation detail; model decisions share typed semantics over existing HTTP/WebSocket or later verified gRPC.
+AR-AI-028,R2,KEPT,ARD-600,"AR-AGT-016, AR-WIN-008",S15,PLANNED,"Adapter execution grants are issued by trusted policy component; executors validate binding to action, target, expiry, actor and idempotency key."
+AR-AI-029,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,"Task engine supports DAG/ordered steps, step cap, wall-clock cap, memory/tool token budget, cancel and human checkpoints."
+AR-AI-030,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,Each state-changing step has a declared precondition and postcondition; non-idempotent steps never auto-replay after unknown outcome.
+AR-AI-031,R3,DEFERRED (Future),ARD-600,,Future,PLANNED,VLM is a **grounding fallback** and returns candidate elements with uncertainty; separate policy+native execution still governs actuation.
+AR-AI-032,R3,KEPT,ARD-600,AR-AGT-019,S21,PLANNED,RAG only retrieves explicit retained user memory and consented resources; deletion removes embedding/FTS exposure.
+AR-AI-033,R3,KEPT,ARD-200,AR-AND-011,S21,PLANNED,"Android standalone model or hosted provider is separately configured with consent, minimum device capacity and explicit fallback."
+AR-AI-034,R4,KEPT,ARD-600,AR-AGT-020,S27,PLANNED,"Benchmarks report task-completion, tool call schema validity, action false-success, ASR WER, first audible response and barge-in."
+AR-AI-035,R4,KEPT,ARD-600,"AR-AGT-021, AR-LANG-014",S27,PLANNED,Evaluation splits synthetic/consented fixtures from live physical runs; model/provider versions pinned in evidence.
+AR-AI-036,R4,KEPT,ARD-600,AR-AGT-022,S27,PLANNED,"Prompt templates, model config, capability registry, policy tables and data retention are versioned as artifacts."

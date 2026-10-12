@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/domain-event/1.0",
+  "title": "REVA Domain Kernel event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_schema",
+    "event_id",
+    "domain",
+    "aggregate_type",
+    "aggregate_id",
+    "version",
+    "origin_device_id",
+    "lamport",
+    "kind",
+    "created_at",
+    "tombstone",
+    "payload",
+    "signature"
+  ],
+  "properties": {
+    "event_schema": {
+      "const": "1.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "domain": {
+      "enum": [
+        "memory",
+        "finance",
+        "health",
+        "coach",
+        "career",
+        "learn",
+        "cyber",
+        "personal"
+      ]
+    },
+    "aggregate_type": {
+      "type": "string",
+      "pattern": "^[a-z_]{2,40}$"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "origin_device_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "lamport": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z_]+\\.(created|updated|deleted|imported)$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tombstone": {
+      "type": "boolean"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "signature": {
+      "type": "string",
+      "description": "origin device key signature over canonical event bytes"
+    }
+  }
+}
