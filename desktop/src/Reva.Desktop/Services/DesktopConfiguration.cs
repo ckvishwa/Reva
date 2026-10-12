@@ -18,6 +18,8 @@ public sealed class DesktopConfiguration
     // these rather than redeclaring their own literals (v1 had 10s/30s written
     // in two files, free to drift).
     public static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
+    // Cloud (30s) followed by local (30s), plus transport headroom.
+    public static readonly TimeSpan DefaultMessageTimeout = TimeSpan.FromSeconds(70);
     public static readonly TimeSpan DefaultSttRequestTimeout = TimeSpan.FromSeconds(30);
 
     public Uri CoreBaseUrl { get; }

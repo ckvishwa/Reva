@@ -8,7 +8,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
+    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
@@ -142,6 +142,26 @@
                 AutomationProperties.AutomationId="MemorySearchResultText"
                 Text="{x:Bind Memory.SearchResultText, Mode=OneWay}"
                 TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="8" Margin="0,16,0,0" Spacing="6">
+            <TextBlock Text="Settings" FontSize="16" FontWeight="SemiBold" />
+            <ToggleSwitch x:Name="CloudReasoningToggle"
+                          Header="Cloud reasoning"
+                          AutomationProperties.AutomationId="CloudReasoningToggle"
+                          Toggled="CloudReasoningToggle_Toggled" />
+            <TextBlock x:Name="CloudReasoningStatus" Text="Cloud reasoning: off"
+                       AutomationProperties.AutomationId="CloudReasoningStatus" />
+            <TextBlock Text="When on, the final transcript and capability list (names and argument schemas) go to Anthropic. Audio, screens, memory, and domain data stay on this device."
+                       TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <PasswordBox x:Name="AnthropicKeyBox" Width="320"
+                             PlaceholderText="Anthropic API key"
+                             AutomationProperties.AutomationId="AnthropicKeyBox" />
+                <Button Content="Save key" Click="SaveAnthropicKey_Click"
+                        AutomationProperties.AutomationId="SaveAnthropicKeyButton" />
+            </StackPanel>
+            <TextBlock x:Name="ReasoningSettingsMessage" TextWrapping="Wrap" />
         </StackPanel>
 
     </Grid>

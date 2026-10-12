@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, ConfigDict, Field
+from pydantic import AfterValidator, ConfigDict, Field, SecretStr
 
 from reva_core.audit.events import AuditEvent
 from reva_core.shared.contracts.base import UtcDatetime, VersionedModel
@@ -63,6 +63,19 @@ class TypedResponse(ApiModel):
     correlation_id: CorrelationId
     reply: str
     memory_created: EntityId | None = None
+
+
+class CloudReasoningPatch(ApiModel):
+    cloud_reasoning: bool
+
+
+class CloudReasoningResponse(ApiModel):
+    cloud_reasoning: bool
+    leaves_device: dict[str, str]
+
+
+class AnthropicKeyRequest(ApiModel):
+    api_key: SecretStr = Field(min_length=1, max_length=4096)
 
 
 class ExplicitMemoryCreateRequest(ApiModel):

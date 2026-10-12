@@ -79,6 +79,7 @@ public class CommandRouterTests
     [InlineData("  open   chrome  ")]
     [InlineData("launch Notepad")]
     [InlineData("start Calculator")]
+    [InlineData("open calculator")]
     public async Task RouteAsync_RecognizedOpenCommand_CallsExecutorOnce(string text)
     {
         var executor = new FakeAppExecutor();

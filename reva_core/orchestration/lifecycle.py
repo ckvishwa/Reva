@@ -21,6 +21,8 @@ from reva_core.models.embedding_providers import OllamaEmbeddingProvider
 from reva_core.models.faster_whisper_stt import FasterWhisperSTTProvider
 from reva_core.models.stt import SpeechToTextProvider
 from reva_core.models.tts import TextToSpeechProvider
+from reva_core.planner.cloud_settings import CloudReasoningSettings
+from reva_core.planner.pipeline import ActionExecutor
 from reva_core.security.local_token import ensure_local_token
 from reva_core.shared.contracts.health import CoreStatus, HealthStatus
 from reva_core.shared.errors import StorageError
@@ -39,6 +41,7 @@ class CoreLifecycle:
         settings: Settings,
         text_to_speech_provider: TextToSpeechProvider | None = None,
         speech_to_text_provider: SpeechToTextProvider | None = None,
+        planner_executor: ActionExecutor | None = None,
     ) -> None:
         self._settings = settings
         self._conn: sqlite3.Connection | None = None
@@ -51,7 +54,9 @@ class CoreLifecycle:
         self._embedding_provider: EmbeddingProvider | None = None
         self._text_to_speech_provider = text_to_speech_provider
         self._speech_to_text_provider = speech_to_text_provider
+        self._planner_executor = planner_executor
         self._ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG
+        self._cloud_reasoning = CloudReasoningSettings(settings.data_dir)
 
     def startup(self) -> HealthStatus:
         self._status = CoreStatus.STARTING
@@ -66,6 +71,41 @@ class CoreLifecycle:
         self._build_speech_to_text_provider()
         self._build_text_to_speech_provider()
         self._run_startup_backfill()
+        if self._settings.assistant_orchestrator == "planner":
+            from reva_core.planner.credentials import read_anthropic_key
+            from reva_core.planner.orchestrator import PlannerAssistantOrchestrator
+            from reva_core.planner.pipeline import PlannerPipeline
+            from reva_core.planner.providers import (
+                AnthropicDecisionProvider,
+                OllamaDecisionProvider,
+            )
+            from reva_core.planner.windows_executor import (
+                WindowsActionExecutor,
+                build_windows_registry,
+            )
+
+            self._assistant_orchestrator = PlannerAssistantOrchestrator(
+                PlannerPipeline(
+                    local=OllamaDecisionProvider(
+                        model=self._settings.planner_model,
+                        base_url=self._settings.planner_model_api_base,
+                        timeout_seconds=self._settings.planner_timeout_seconds,
+                    ),
+                    cloud=AnthropicDecisionProvider(
+                        key_reader=read_anthropic_key,
+                        model=self._settings.anthropic_model,
+                        timeout_seconds=self._settings.planner_timeout_seconds,
+                    ),
+                    cloud_enabled=lambda: self._cloud_reasoning.enabled,
+                    registry=build_windows_registry(),
+                    provider_timeout_seconds=self._settings.planner_timeout_seconds,
+                    executor=(
+                        self._planner_executor
+                        if self._planner_executor is not None
+                        else WindowsActionExecutor()
+                    ),
+                )
+            )
         if self._settings.assistant_orchestrator == "adk":
             # Imported lazily so `google.adk`/`litellm` are only ever
             # imported by a Core process that actually opted into ADK —
@@ -208,6 +248,10 @@ class CoreLifecycle:
         "deterministic" default is active, not that startup() hasn't run.
         """
         return self._assistant_orchestrator
+
+    @property
+    def cloud_reasoning(self) -> CloudReasoningSettings:
+        return self._cloud_reasoning
 
     @property
     def embedding_provider(self) -> EmbeddingProvider | None:

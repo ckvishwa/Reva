@@ -134,7 +134,9 @@ def test_voice_speech_rejects_oversized_text(voice_client, voice_auth_headers):
 
 
 def test_voice_unavailable_does_not_break_typed_chat(tmp_path):
-    settings = load_settings(_env_file=None, data_dir=tmp_path)
+    settings = load_settings(
+        _env_file=None, data_dir=tmp_path, assistant_orchestrator="deterministic"
+    )
     lifecycle = CoreLifecycle(settings)
     lifecycle.startup()
     try:

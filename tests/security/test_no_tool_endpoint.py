@@ -5,6 +5,9 @@ from tests.conftest import iter_effective_routes
 
 _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/messages"),
+    ("GET", "/v1/settings/reasoning"),
+    ("PATCH", "/v1/settings/reasoning"),
+    ("POST", "/v1/settings/reasoning/key"),
     ("POST", "/v1/memories"),
     ("GET", "/v1/memories"),
     ("GET", "/v1/audit-events"),

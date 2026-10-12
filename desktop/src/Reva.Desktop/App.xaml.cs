@@ -70,7 +70,8 @@ public partial class App : Application
             new ViewModels.ShellViewModel(lifecycle),
             assistant,
             new ViewModels.MemoryViewModel(coreClient),
-            wakeWord);
+            wakeWord,
+            coreClient);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)
         {

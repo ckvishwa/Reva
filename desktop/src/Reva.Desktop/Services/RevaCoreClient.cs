@@ -10,7 +10,7 @@ namespace Reva.Desktop.Services;
 /// HttpClient-backed <see cref="IRevaCoreClient"/>. One shared HttpClient
 /// instance (caller-owned, injected) — never created per-request.
 /// </summary>
-public sealed class RevaCoreClient : IRevaCoreClient
+public sealed class RevaCoreClient : IRevaCoreClient, IReasoningSettingsClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -18,17 +18,20 @@ public sealed class RevaCoreClient : IRevaCoreClient
     private readonly ILocalTokenProvider _tokenProvider;
     private readonly TimeSpan _requestTimeout;
     private readonly TimeSpan _sttRequestTimeout;
+    private readonly TimeSpan _messageTimeout;
 
     public RevaCoreClient(
         HttpClient httpClient,
         ILocalTokenProvider tokenProvider,
         TimeSpan? requestTimeout = null,
-        TimeSpan? sttRequestTimeout = null)
+        TimeSpan? sttRequestTimeout = null,
+        TimeSpan? messageTimeout = null)
     {
         _httpClient = httpClient;
         _tokenProvider = tokenProvider;
         _requestTimeout = requestTimeout ?? DesktopConfiguration.DefaultRequestTimeout;
         _sttRequestTimeout = sttRequestTimeout ?? DesktopConfiguration.DefaultSttRequestTimeout;
+        _messageTimeout = messageTimeout ?? DesktopConfiguration.DefaultMessageTimeout;
     }
 
     public Task<CoreResult<HealthStatus>> GetHealthAsync(CancellationToken cancellationToken = default) =>
@@ -37,11 +40,29 @@ public sealed class RevaCoreClient : IRevaCoreClient
     public Task<CoreResult<VersionInfo>> GetVersionAsync(CancellationToken cancellationToken = default) =>
         SendAsync<VersionInfo>(HttpMethod.Get, "version", requiresAuth: false, cancellationToken);
 
+    public Task<CoreResult<ReasoningSettings>> GetReasoningSettingsAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync<ReasoningSettings>(HttpMethod.Get, "v1/settings/reasoning", requiresAuth: true,
+            cancellationToken);
+
+    public Task<CoreResult<ReasoningSettings>> SetReasoningSettingsAsync(
+        bool enabled, CancellationToken cancellationToken = default) =>
+        SendAsync<ReasoningSettings>(HttpMethod.Patch, "v1/settings/reasoning", requiresAuth: true,
+            cancellationToken,
+            JsonContent.Create(new { cloud_reasoning = enabled }, options: JsonOptions));
+
+    public Task<CoreResult<KeySavedResponse>> SaveAnthropicKeyAsync(
+        string key, CancellationToken cancellationToken = default) =>
+        SendAsync<KeySavedResponse>(HttpMethod.Post, "v1/settings/reasoning/key", requiresAuth: true,
+            cancellationToken,
+            JsonContent.Create(new { api_key = key }, options: JsonOptions));
+
     public Task<CoreResult<TypedMessageResponse>> SendMessageAsync(
         string content, CancellationToken cancellationToken = default)
     {
         var body = JsonContent.Create(new TypedMessageRequest(content), options: JsonOptions);
-        return SendAsync<TypedMessageResponse>(HttpMethod.Post, "v1/messages", requiresAuth: true, cancellationToken, body);
+        return SendAsync<TypedMessageResponse>(HttpMethod.Post, "v1/messages", requiresAuth: true,
+            cancellationToken, body, timeout: _messageTimeout);
     }
 
     public Task<CoreResult<MemoryCreateResponse>> CreateMemoryAsync(

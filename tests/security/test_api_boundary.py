@@ -18,6 +18,8 @@ _ALLOWED_PATHS = {
     "/redoc",
     "/openapi.json",
     "/v1/messages",
+    "/v1/settings/reasoning",
+    "/v1/settings/reasoning/key",
     "/v1/memories",
     "/v1/audit-events",
     "/v1/voice/speech",

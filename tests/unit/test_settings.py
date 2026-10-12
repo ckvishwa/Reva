@@ -9,7 +9,8 @@ def test_default_settings_are_safe_for_dev(monkeypatch):
     assert settings.environment == "dev"
     assert settings.api_host == "127.0.0.1"
     assert settings.log_level == "info"
-    assert settings.llm_provider_api_key is None
+    assert settings.assistant_orchestrator == "planner"
+    assert not hasattr(settings, "llm_provider_api_key")
 
 
 def test_db_path_is_under_data_dir():
@@ -17,10 +18,11 @@ def test_db_path_is_under_data_dir():
     assert settings.db_path == Path("somewhere/reva.db")
 
 
-def test_secret_str_never_renders_in_repr():
-    settings = Settings(_env_file=None, llm_provider_api_key="sk-real-secret")
+def test_api_key_environment_variable_is_not_a_setting(monkeypatch):
+    monkeypatch.setenv("REVA_LLM_PROVIDER_API_KEY", "sk-real-secret")
+    settings = Settings(_env_file=None)
     assert "sk-real-secret" not in repr(settings)
-    assert "sk-real-secret" not in str(settings)
+    assert not hasattr(settings, "llm_provider_api_key")
 
 
 def test_load_settings_accepts_localhost_variants():

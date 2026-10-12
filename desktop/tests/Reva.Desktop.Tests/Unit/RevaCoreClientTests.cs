@@ -5,6 +5,37 @@ namespace Reva.Desktop.Tests.Unit;
 
 public class RevaCoreClientTests
 {
+    [Fact]
+    public async Task ReasoningSettings_RoundTripUsesAuthenticatedLocalApi()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(
+            HttpStatusCode.OK,
+            """{"cloud_reasoning":true,"leaves_device":{"text":"Final transcript and capability names","audio":"Never","screens":"Never","memory":"Never","domain_data":"Never"}}""");
+        var (client, capture) = AuthenticatedClientFor(handler);
+
+        var result = await client.SetReasoningSettingsAsync(true);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value!.CloudReasoning);
+        Assert.Equal(HttpMethod.Patch, capture.LastRequest!.Method);
+        Assert.Equal("/v1/settings/reasoning", capture.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"cloud_reasoning\":true", capture.LastRequestBody);
+        Assert.Equal("Bearer", capture.LastRequest.Headers.Authorization!.Scheme);
+    }
+
+    [Fact]
+    public async Task SaveAnthropicKey_DoesNotPutSecretInUrl()
+    {
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.OK, """{"saved":true}""");
+        var (client, capture) = AuthenticatedClientFor(handler);
+
+        var result = await client.SaveAnthropicKeyAsync("test-secret-never-log");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/v1/settings/reasoning/key", capture.LastRequest!.RequestUri!.AbsolutePath);
+        Assert.DoesNotContain("test-secret-never-log", capture.LastRequest.RequestUri.ToString());
+    }
+
     private sealed class NullTokenProvider : ILocalTokenProvider
     {
         public Task<TokenLoadResult> GetTokenAsync(CancellationToken cancellationToken = default) =>
@@ -36,7 +67,8 @@ public class RevaCoreClientTests
     }
 
     private static RevaCoreClient ClientWith(
-        HttpMessageHandler handler, TimeSpan requestTimeout, TimeSpan sttRequestTimeout) =>
+        HttpMessageHandler handler, TimeSpan requestTimeout, TimeSpan sttRequestTimeout,
+        TimeSpan? messageTimeout = null) =>
         new(
             new HttpClient(handler)
             {
@@ -45,7 +77,8 @@ public class RevaCoreClientTests
             },
             new FakeTokenProvider("t"),
             requestTimeout,
-            sttRequestTimeout);
+            sttRequestTimeout,
+            messageTimeout ?? requestTimeout);
 
     [Fact]
     public async Task GetHealthAsync_ParsesSuccessResponse()
@@ -418,6 +451,22 @@ public class RevaCoreClientTests
         Assert.False(result.IsSuccess);
         Assert.Equal(CoreErrorKind.CoreTimeout, result.Error!.Kind);
         Assert.Equal("REVA Core did not respond in time.", result.Error.SafeMessage);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_UsesPlannerBudgetBeyondGeneralTimeout()
+    {
+        var client = ClientWith(
+            FakeHttpMessageHandler.Delayed(TimeSpan.FromMilliseconds(300), HttpStatusCode.OK,
+                """{"schema_version":1,"correlation_id":"c","reply":"Tokyo.","memory_created":null}"""),
+            requestTimeout: TimeSpan.FromMilliseconds(50),
+            sttRequestTimeout: TimeSpan.FromSeconds(30),
+            messageTimeout: TimeSpan.FromSeconds(2));
+
+        var result = await client.SendMessageAsync("what's the capital of Japan?");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Tokyo.", result.Value!.Reply);
     }
 
     [Fact]

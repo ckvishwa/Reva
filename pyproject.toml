@@ -15,6 +15,7 @@ dependencies = [
     "fastapi>=0.111,<1",
     "uvicorn>=0.30,<1",
     "httpx>=0.27,<1",
+    "jsonschema>=4.22,<5",
     # Orchestration dependency for Slice 5's AssistantOrchestrator boundary
     # (opt-in via REVA_ASSISTANT_ORCHESTRATOR=adk) — see
     # docs/adr/ADR-017-google-adk-orchestration-dependency.md for the exact
@@ -39,6 +40,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["reva_core*"]
+
+[tool.setuptools.package-data]
+"reva_core.planner" = ["contracts/*.json"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -84,4 +88,8 @@ exclude = "useful_sites"
 
 [[tool.mypy.overrides]]
 module = "uvicorn.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
 ignore_missing_imports = true

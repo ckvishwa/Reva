@@ -11,7 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from reva_core.shared.errors import ConfigurationError
@@ -30,17 +29,13 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     log_level: Literal["debug", "info", "warning", "error"] = "info"
 
-    # Placeholder for a future real provider credential. Never a real key in
-    # Phase 0 — no provider integration exists yet. Documented future path:
-    # Windows Credential Manager / DPAPI, not plaintext `.env`, for prod.
-    llm_provider_api_key: SecretStr | None = None
-
-    # "deterministic" (default) preserves Phase 1A/1B's exact FakeLLMProvider
-    # echo behavior - every existing test and the default `python -m
-    # reva_core --serve` stay untouched. "adk" opts a running Core into
-    # Slice 5's AdkAssistantOrchestrator; see
-    # docs/adr/ADR-017-google-adk-orchestration-dependency.md.
-    assistant_orchestrator: Literal["deterministic", "adk"] = "deterministic"
+    # The real local planner is the consumer default. Deterministic mode is
+    # explicit for tests/development only. Cloud keys are never settings.
+    assistant_orchestrator: Literal["planner", "deterministic", "adk"] = "planner"
+    planner_model: str = "qwen2.5:3b-instruct-q4_K_M"
+    planner_model_api_base: str = "http://127.0.0.1:11434"
+    anthropic_model: str = "claude-sonnet-4-6"
+    planner_timeout_seconds: float = 30.0
     # LiteLlm model string. Default targets a local Ollama model (no cloud
     # credential required) - see ADR-017 for why.
     adk_model: str = "ollama_chat/llama3.1:8b"
@@ -90,6 +85,7 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return self.data_dir / "reva.db"
+
 
 
 def load_settings(**overrides: object) -> Settings:

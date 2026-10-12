@@ -15,7 +15,7 @@ def core(tmp_path):
     """A started CoreLifecycle against a fresh tmp_path database.
     Caller is responsible for nothing — shutdown happens automatically.
     """
-    settings = load_settings(_env_file=None, data_dir=tmp_path)
+    settings = load_settings(_env_file=None, data_dir=tmp_path, assistant_orchestrator="deterministic")
     lifecycle = CoreLifecycle(settings)
     lifecycle.startup()
     yield lifecycle

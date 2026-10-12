@@ -30,7 +30,10 @@ from starlette.responses import FileResponse
 
 from reva_core.api.auth import build_auth_dependency
 from reva_core.api.schemas import (
+    AnthropicKeyRequest,
     AuditEventListResponse,
+    CloudReasoningPatch,
+    CloudReasoningResponse,
     ExplicitMemoryCreateRequest,
     ExplicitMemoryCreateResponse,
     MemoryQueryRequest,
@@ -45,6 +48,7 @@ from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
 from reva_core.models.stt import TranscriptionInput
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.orchestration.typed_interaction import TypedInteractionService
+from reva_core.planner import credentials
 from reva_core.shared.errors import ProviderError, ProviderErrorKind, ValidationError
 from reva_core.shared.ids import new_id
 from reva_core.shared.time import utc_now
@@ -64,6 +68,40 @@ def build_router(lifecycle: CoreLifecycle) -> APIRouter:
             embedding_model_id=lifecycle.embedding_model_id,
             ranking_config=lifecycle.ranking_config,
         )
+
+    def _reasoning_response() -> CloudReasoningResponse:
+        return CloudReasoningResponse(
+            cloud_reasoning=lifecycle.cloud_reasoning.enabled,
+            leaves_device=lifecycle.cloud_reasoning.disclosure,
+        )
+
+    @router.get("/settings/reasoning", response_model=CloudReasoningResponse)
+    def get_reasoning_settings(
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> CloudReasoningResponse:
+        return _reasoning_response()
+
+    @router.patch("/settings/reasoning", response_model=CloudReasoningResponse)
+    def patch_reasoning_settings(
+        payload: CloudReasoningPatch,
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> CloudReasoningResponse:
+        lifecycle.cloud_reasoning.set_enabled(payload.cloud_reasoning)
+        return _reasoning_response()
+
+    @router.post("/settings/reasoning/key")
+    def put_reasoning_key(
+        payload: AnthropicKeyRequest,
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> dict[str, bool]:
+        try:
+            credentials.write_anthropic_key(payload.api_key.get_secret_value())
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="credential_store_unavailable",
+            ) from exc
+        return {"saved": True}
 
     @router.post("/messages", response_model=TypedResponse)
     async def post_message(

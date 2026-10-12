@@ -18,17 +18,22 @@ public sealed partial class MainWindow : Window
 
     public WakeWordCoordinator? WakeWord { get; }
 
+    private readonly IReasoningSettingsClient? _reasoningSettingsClient;
+    private bool _loadingReasoningSettings;
+
     public MainWindow(
         ShellViewModel shell,
         AssistantViewModel assistant,
         MemoryViewModel memory,
-        WakeWordCoordinator? wakeWord = null)
+        WakeWordCoordinator? wakeWord = null,
+        IReasoningSettingsClient? reasoningSettingsClient = null)
     {
         InitializeComponent();
         Shell = shell;
         Assistant = assistant;
         Memory = memory;
         WakeWord = wakeWord;
+        _reasoningSettingsClient = reasoningSettingsClient;
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
         RegisterVoicePointerHandlers();
@@ -86,6 +91,10 @@ public sealed partial class MainWindow : Window
         if (e.PropertyName == nameof(ShellViewModel.LifecycleState))
         {
             ApplyStatusDotColor();
+            if (Shell.LifecycleState == CoreLifecycleState.Connected)
+            {
+                _ = LoadReasoningSettingsAsync();
+            }
         }
     }
 
@@ -157,6 +166,63 @@ public sealed partial class MainWindow : Window
     private async void Root_Loaded(object sender, RoutedEventArgs e)
     {
         await Assistant.RefreshVoiceAvailabilityAsync();
+        await LoadReasoningSettingsAsync();
+    }
+
+    private async Task LoadReasoningSettingsAsync()
+    {
+        if (_reasoningSettingsClient is null)
+        {
+            return;
+        }
+
+        var result = await _reasoningSettingsClient.GetReasoningSettingsAsync();
+        if (!result.IsSuccess)
+        {
+            ReasoningSettingsMessage.Text = "Cloud reasoning settings are unavailable.";
+            return;
+        }
+
+        _loadingReasoningSettings = true;
+        CloudReasoningToggle.IsOn = result.Value!.CloudReasoning;
+        CloudReasoningStatus.Text = result.Value.CloudReasoning
+            ? "Cloud reasoning: on" : "Cloud reasoning: off";
+        _loadingReasoningSettings = false;
+        ReasoningSettingsMessage.Text = string.Empty;
+    }
+
+    private async void CloudReasoningToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loadingReasoningSettings || _reasoningSettingsClient is null)
+        {
+            return;
+        }
+
+        var result = await _reasoningSettingsClient.SetReasoningSettingsAsync(CloudReasoningToggle.IsOn);
+        if (!result.IsSuccess)
+        {
+            ReasoningSettingsMessage.Text = "Could not change cloud reasoning. Try again.";
+            await LoadReasoningSettingsAsync();
+            return;
+        }
+
+        CloudReasoningStatus.Text = result.Value!.CloudReasoning
+            ? "Cloud reasoning: on" : "Cloud reasoning: off";
+        ReasoningSettingsMessage.Text = string.Empty;
+    }
+
+    private async void SaveAnthropicKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_reasoningSettingsClient is null || string.IsNullOrWhiteSpace(AnthropicKeyBox.Password))
+        {
+            return;
+        }
+
+        var result = await _reasoningSettingsClient.SaveAnthropicKeyAsync(AnthropicKeyBox.Password);
+        AnthropicKeyBox.Password = string.Empty;
+        ReasoningSettingsMessage.Text = result.IsSuccess && result.Value!.Saved
+            ? "Key saved in Windows Credential Manager."
+            : "Could not save the key.";
     }
 
     private async void VoiceButton_PointerPressed(object sender, PointerRoutedEventArgs e)
