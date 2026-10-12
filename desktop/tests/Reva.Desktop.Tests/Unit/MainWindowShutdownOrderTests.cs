@@ -65,4 +65,48 @@ public class MainWindowShutdownOrderTests
 
         Assert.Equal(new[] { "core-stop-begin", "core-stop-end", "wakeword-dispose" }, events);
     }
+
+    [Fact]
+    public async Task CompleteShutdownAsync_ExitsOnlyAfterCleanupFinishes()
+    {
+        var events = new List<string>();
+        var coreStopGate = new TaskCompletionSource();
+        Func<Task> stopCoreAsync = async () =>
+        {
+            events.Add("core-stop-begin");
+            await coreStopGate.Task;
+            events.Add("core-stop-end");
+        };
+        Func<Task> disposeWakeWordAsync = () =>
+        {
+            events.Add("wakeword-dispose");
+            return Task.CompletedTask;
+        };
+
+        var sequenceTask = Reva.Desktop.MainWindow.CompleteShutdownAsync(
+            stopCoreAsync,
+            disposeWakeWordAsync,
+            () => events.Add("process-exit"));
+
+        coreStopGate.SetResult();
+        await sequenceTask;
+
+        Assert.Equal(
+            new[] { "core-stop-begin", "core-stop-end", "wakeword-dispose", "process-exit" },
+            events);
+    }
+
+    [Fact]
+    public async Task CompleteShutdownAsync_DoesNotExitWhenCoreStopThrows()
+    {
+        var exited = false;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Reva.Desktop.MainWindow.CompleteShutdownAsync(
+                () => throw new InvalidOperationException("stop failed"),
+                () => Task.CompletedTask,
+                () => exited = true));
+
+        Assert.False(exited);
+    }
 }

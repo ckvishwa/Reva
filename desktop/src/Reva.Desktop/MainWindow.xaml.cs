@@ -39,18 +39,9 @@ public sealed partial class MainWindow : Window
 
     private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
-        // Slice 8A, Task 6 root cause: for an unpackaged WinUI app, the
-        // process's message loop exits as soon as this handler returns —
-        // and `async void` returns at its first `await`, long before the
-        // awaited cleanup (wake-word disposal, Core shutdown) actually
-        // finishes. Every previous version of this handler was fire-and-
-        // forget in practice: the process was gone before ShutdownAsync's
-        // Stop() call ever ran, confirmed by a real launch/close/tasklist
-        // repro that still showed the orphan even after ShutdownAsync
-        // itself was correct in isolation. `Handled = true` cancels this
-        // close so the async work can run to completion; the explicit
-        // Close() below re-fires this handler once, past the `if`, to let
-        // the window actually go away.
+        // Unpackaged WinUI returns from this handler at the first await, and
+        // native teardown after Close() can leave the process hung. Cancel
+        // the close, finish Core stop and wake-word disposal, then exit.
         if (_shutdownComplete)
         {
             return;
@@ -59,12 +50,14 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
 
         Assistant.DetachLifecycle();
-        await RunShutdownSequenceAsync(
+        await CompleteShutdownAsync(
             () => Shell.ShutdownAsync(),
-            () => WakeWord is not null ? WakeWord.DisposeAsync().AsTask() : Task.CompletedTask);
-
-        _shutdownComplete = true;
-        Close();
+            () => WakeWord is not null ? WakeWord.DisposeAsync().AsTask() : Task.CompletedTask,
+            () =>
+            {
+                _shutdownComplete = true;
+                Environment.Exit(0);
+            });
     }
 
     /// <summary>Core stop before wake-word disposal, not after — Core stop
@@ -79,6 +72,15 @@ public sealed partial class MainWindow : Window
     {
         await stopCoreAsync().ConfigureAwait(true);
         await disposeWakeWordAsync().ConfigureAwait(true);
+    }
+
+    internal static async Task CompleteShutdownAsync(
+        Func<Task> stopCoreAsync,
+        Func<Task> disposeWakeWordAsync,
+        Action exitProcess)
+    {
+        await RunShutdownSequenceAsync(stopCoreAsync, disposeWakeWordAsync).ConfigureAwait(true);
+        exitProcess();
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
