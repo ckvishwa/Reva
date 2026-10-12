@@ -17,7 +17,11 @@ public class WakeWordKeywordResolverTests
             @"C:\kw\hey-reva.ppn",
             @"C:\kw\you-up-reva.ppn");
 
-        var result = WakeWordKeywordResolver.Resolve(phrases, @"C:\kw", probe);
+        var result = WakeWordKeywordResolver.Resolve(
+            phrases,
+            @"C:\kw",
+            probe,
+            VerifiedManifest(WakePhrase.HeyReva, WakePhrase.YouUpReva));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(new[] { @"C:\kw\hey-reva.ppn", @"C:\kw\you-up-reva.ppn" }, result.KeywordPaths);
@@ -35,13 +39,37 @@ public class WakeWordKeywordResolverTests
         };
         var probe = new FakeFileSystemProbe(@"C:\kw\hey-reva.ppn");
 
-        var result = WakeWordKeywordResolver.Resolve(phrases, @"C:\kw", probe);
+        var result = WakeWordKeywordResolver.Resolve(
+            phrases,
+            @"C:\kw",
+            probe,
+            VerifiedManifest(WakePhrase.HeyReva));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(WakePhrase.YouUpReva, result.MissingPhrase);
         Assert.Null(result.KeywordPaths);
         Assert.Null(result.Sensitivities);
         Assert.Null(result.PhraseOrder);
+    }
+
+    [Fact]
+    public void Resolve_EmptyManifest_RejectsPresentKeywordFile()
+    {
+        var phrases = new[]
+        {
+            new WakePhraseSetting(WakePhrase.HeyReva, Enabled: true, Sensitivity: 0.55f),
+        };
+
+        var result = WakeWordKeywordResolver.Resolve(
+            phrases,
+            @"C:\kw",
+            new FakeFileSystemProbe(@"C:\kw\hey-reva.ppn"),
+            WakeWordModelManifest.Empty);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeywordResolutionFailure.MissingExpectedHash, result.Failure);
+        Assert.Equal(WakePhrase.HeyReva, result.MissingPhrase);
+        Assert.Null(result.KeywordPaths);
     }
 
     [Fact]
@@ -55,6 +83,12 @@ public class WakeWordKeywordResolverTests
         Assert.False(result.IsSuccess);
         Assert.Null(result.MissingPhrase);
     }
+
+    private static WakeWordModelManifest VerifiedManifest(params WakePhrase[] phrases) =>
+        new(
+            string.Empty,
+            string.Empty,
+            phrases.ToDictionary(phrase => phrase, _ => new string('0', 64)));
 
     private sealed class FakeFileSystemProbe : IFileSystemProbe
     {
