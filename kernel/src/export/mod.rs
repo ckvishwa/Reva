@@ -79,13 +79,15 @@ fn export_csv(conn: &Connection) -> DomainResult<Vec<u8>> {
             r.get::<_, String>(8)?,
             r.get::<_, String>(9)?,
         ];
-        // Spreadsheet formula injection guard: a leading = + - @ in text cells is prefixed.
+        // Spreadsheet formula injection guard (OWASP CSV injection): every text cell that starts with
+        // = + - @ or a tab / carriage return is prefixed with an apostrophe. The numeric columns
+        // (amount, amount_minor) and the date are produced by the Kernel itself and stay as they are.
         let safe: Vec<String> = record
             .iter()
             .enumerate()
             .map(|(i, v)| {
-                let is_text = matches!(i, 2 | 7 | 8 | 9 | 10);
-                if is_text && v.starts_with(['=', '+', '-', '@']) {
+                let is_text = !matches!(i, 1 | 4 | 5);
+                if is_text && v.starts_with(['=', '+', '-', '@', '\t', '\r']) {
                     format!("'{v}")
                 } else {
                     v.clone()
