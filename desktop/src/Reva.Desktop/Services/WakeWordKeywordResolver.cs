@@ -70,19 +70,16 @@ public static class WakeWordKeywordResolver
                 return new KeywordResolution(false, null, null, null, phrase.Phrase, KeywordResolutionFailure.MissingFile);
             }
 
-            if (manifest.ExpectedSha256.Count > 0)
+            if (!manifest.ExpectedSha256.TryGetValue(phrase.Phrase, out var expectedHash)
+                || string.IsNullOrWhiteSpace(expectedHash))
             {
-                if (!manifest.ExpectedSha256.TryGetValue(phrase.Phrase, out var expectedHash)
-                    || string.IsNullOrWhiteSpace(expectedHash))
-                {
-                    return new KeywordResolution(false, null, null, null, phrase.Phrase, KeywordResolutionFailure.MissingExpectedHash);
-                }
+                return new KeywordResolution(false, null, null, null, phrase.Phrase, KeywordResolutionFailure.MissingExpectedHash);
+            }
 
-                var actualHash = fileSystem.ComputeSha256(path);
-                if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
-                {
-                    return new KeywordResolution(false, null, null, null, phrase.Phrase, KeywordResolutionFailure.HashMismatch);
-                }
+            var actualHash = fileSystem.ComputeSha256(path);
+            if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                return new KeywordResolution(false, null, null, null, phrase.Phrase, KeywordResolutionFailure.HashMismatch);
             }
 
             keywordPaths.Add(path);
