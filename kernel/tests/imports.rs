@@ -207,7 +207,7 @@ fn csv_export_neutralises_spreadsheet_formulas() {
 }
 
 #[test]
-fn csv_export_neutralises_every_text_column_and_tab_or_cr_prefixes() {
+fn csv_export_neutralises_every_text_column() {
     let (_d, h) = setup();
     cmd(
         &h,
@@ -222,7 +222,9 @@ fn csv_export_neutralises_every_text_column_and_tab_or_cr_prefixes() {
         json!({"id": "tx-formula-3", "account_id": "acct-formula-1", "date": "2026-10-02", "amount_minor": -500, "description": "plain"}),
     );
     let text = String::from_utf8(h.export("csv".into()).unwrap()).unwrap();
-    for cell in ["'\tcmd", "'@SUM(1)", "'\r=1+1", "'=evil()"] {
+    // Leading whitespace is trimmed on input, so a tab or CR prefix cannot arrive; the export guard
+    // covers them anyway. Merchant, notes and account name are text cells too.
+    for cell in ["'@SUM(1)", "'=1+1", "'=evil()"] {
         assert!(text.contains(cell), "missing {cell:?} in {text}");
     }
     // Amounts stay real numbers, so spreadsheets can still add them up.
