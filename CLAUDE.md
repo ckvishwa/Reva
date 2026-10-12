@@ -12,6 +12,8 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 ## Current state (update this section at the end of every slice)
 
+- AND-1 (branch `feat/and-1-android`, based on `feat/fin-2-finance-ui`): `android/` app with Today, Finance, Talk placeholder, More on the Kernel via Kotlin binding; Keystore-wrapped key in noBackupFilesDir. Build: `python tools/android/build_apk.py`. 85 JVM tests; 18 instrumented tests pass on API 31 and 36 in airplane mode. CI `android` lane is still a placeholder.
+
 - FIN-2 (branch `feat/fin-2-finance-ui`): WinUI Finance page + Today card + nav (non-built sections say coming soon), Core support (`source` column, `conflict.resolve`, privacy store, `REVA_DOMAIN_KEYSTORE=memory` test-only). .NET 518 passed; FlaUI smoke in `desktop/tests/Reva.Desktop.UiTests` is opt-in (`REVA_RUN_UI_TESTS=1`, needs `REVA_CORE_PYTHON_EXE`). Fixtures regenerate with `tools/desktop/generate_finance_fixtures.py`.
 
 - S03-lite is done: spec pack in `docs/spec/REVA_v2.0/`, persona in `docs/persona/`, `kernel/ android/ avatar/ contracts/` skeleton, LFS attributes, pytest env guard, evidence ledger, CI lanes (`python`, `csharp-desktop`, `contracts`, `kernel` and `android` placeholders). `reva_core/` and `desktop/` were not moved; the full `core/ windows/` restructure is still open.
