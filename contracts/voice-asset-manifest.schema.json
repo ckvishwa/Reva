@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/voice-asset-manifest/1.0",
+  "title": "REVA asset manifest (models, datasets, runs outside git)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "asset_root",
+    "assets"
+  ],
+  "properties": {
+    "manifest_version": {
+      "const": "1.0"
+    },
+    "asset_root": {
+      "type": "string"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "path",
+          "sha256",
+          "bytes",
+          "source",
+          "license",
+          "provenance_status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "tts_model",
+              "tts_checkpoint",
+              "dataset",
+              "reference_audio",
+              "run_output",
+              "eval_audio",
+              "other"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^([a-f0-9]{64}|TODO|DIRECTORY)$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "engine": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "language": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "description": "how it was made: generator/tool name and version, or recording origin"
+          },
+          "license": {
+            "type": "string",
+            "description": "license or terms of the source tool/model; TODO until filled"
+          },
+          "provenance_status": {
+            "enum": [
+              "TODO",
+              "synthetic_designed",
+              "self_recorded",
+              "licensed",
+              "excluded"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
