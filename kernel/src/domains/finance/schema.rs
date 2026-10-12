@@ -101,6 +101,14 @@ CREATE TABLE networth_snapshots (
 "#,
 };
 
+/// v3: where a transaction came from (`manual`, `voice`, `csv`, `ofx`, `json`). Rows written before
+/// v3 have NULL; the query layer derives a display kind for them.
+pub const MIGRATION_V3: Migration = Migration {
+    version: 3,
+    name: "finance_transaction_source",
+    sql: "ALTER TABLE transactions ADD COLUMN source TEXT;",
+};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Col {
     Text,
@@ -160,6 +168,7 @@ pub const TABLES: &[Table] = &[
             ("notes", Col::Text),
             ("import_batch_id", Col::Text),
             ("fingerprint", Col::Text),
+            ("source", Col::Text),
             ("created_at", Col::Text),
             ("updated_at", Col::Text),
             ("version", Col::Int),
@@ -316,4 +325,59 @@ pub fn clear_projections(conn: &Connection) -> DomainResult<()> {
     }
     conn.execute("DELETE FROM category_aliases", [])?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use super::*;
+    use crate::key::{KeyProvider, KeyProviderError};
+    use crate::store::Store;
+
+    #[derive(Default)]
+    struct Keys(Mutex<HashMap<String, Vec<u8>>>);
+
+    impl KeyProvider for Keys {
+        fn load_key(&self, domain: String) -> Result<Option<Vec<u8>>, KeyProviderError> {
+            Ok(self.0.lock().unwrap().get(&domain).cloned())
+        }
+        fn store_key(&self, domain: String, key: Vec<u8>) -> Result<(), KeyProviderError> {
+            self.0.lock().unwrap().insert(domain, key);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn v2_database_upgrades_to_v3_keeping_its_transactions_and_taking_a_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Keys::default();
+        {
+            let store = Store::open("finance", dir.path(), &keys, &[MIGRATION_V2]).unwrap();
+            assert_eq!(store.schema_version().unwrap(), 2);
+            store
+                .conn
+                .execute(
+                    "INSERT INTO transactions (id, account_id, date, amount_minor, currency, description, created_at, updated_at, version)
+                     VALUES ('tx-old-0001', 'acct-old-001', '2026-07-01', -500, 'USD', 'written under v2', 'x', 'x', 1)",
+                    [],
+                )
+                .unwrap();
+        }
+        let store = Store::open("finance", dir.path(), &keys, &[MIGRATION_V2, MIGRATION_V3]).unwrap();
+        assert_eq!(store.schema_version().unwrap(), 3);
+        let (description, source): (String, Option<String>) = store
+            .conn
+            .query_row("SELECT description, source FROM transactions WHERE id = 'tx-old-0001'", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(description, "written under v2");
+        assert_eq!(source, None, "rows from before v3 have no stored source");
+        let backups = dir.path().join("domains").join("backups");
+        let names: Vec<String> =
+            std::fs::read_dir(backups).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(names.iter().any(|n| n.contains("pre-migrate-v2")), "{names:?}");
+    }
 }

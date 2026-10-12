@@ -236,6 +236,7 @@ pub fn run_statement(
                 notes: c.notes.clone(),
                 import_batch_id: Some(batch_id.clone()),
                 fingerprint: Some(fp),
+                source: Some(format.to_string()),
             },
             now,
         );
