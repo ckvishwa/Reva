@@ -35,6 +35,7 @@ dev = [
     "ruff>=0.5,<1",
     "mypy>=1.10,<2",
     "pre-commit>=3.7,<4",
+    "jsonschema>=4.22,<5",
 ]
 
 [tool.setuptools.packages.find]
