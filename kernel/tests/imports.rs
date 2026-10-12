@@ -207,6 +207,29 @@ fn csv_export_neutralises_spreadsheet_formulas() {
 }
 
 #[test]
+fn csv_export_neutralises_every_text_column_and_tab_or_cr_prefixes() {
+    let (_d, h) = setup();
+    cmd(
+        &h,
+        "transaction.create",
+        json!({"id": "tx-formula-2", "account_id": "acct-main-1", "date": "2026-10-01", "amount_minor": -250,
+               "description": "\tcmd", "merchant": "@SUM(1)", "notes": "\r=1+1"}),
+    );
+    cmd(&h, "account.create", json!({"id": "acct-formula-1", "name": "=evil()", "currency": "USD"}));
+    cmd(
+        &h,
+        "transaction.create",
+        json!({"id": "tx-formula-3", "account_id": "acct-formula-1", "date": "2026-10-02", "amount_minor": -500, "description": "plain"}),
+    );
+    let text = String::from_utf8(h.export("csv".into()).unwrap()).unwrap();
+    for cell in ["'\tcmd", "'@SUM(1)", "'\r=1+1", "'=evil()"] {
+        assert!(text.contains(cell), "missing {cell:?} in {text}");
+    }
+    // Amounts stay real numbers, so spreadsheets can still add them up.
+    assert!(text.contains(",-2.50,-250,") && text.contains(",-5.00,-500,"), "{text}");
+}
+
+#[test]
 fn json_export_import_into_a_non_empty_install_reports_duplicates_not_errors() {
     let (_d, h) = setup();
     cmd(
