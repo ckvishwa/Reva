@@ -19,6 +19,36 @@ except (FileNotFoundError, OSError) as exc:  # missing binding or native library
     pytest.skip(f"Kernel Python binding not built: {exc}", allow_module_level=True)
 
 
+class _DeviceKey(binding.DeviceSigner):
+    """A device key held by the Python host, signing with `cryptography` (what the Core will do)."""
+
+    def __init__(self) -> None:
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        self._ec = ec
+        self._key = ec.generate_private_key(ec.SECP256R1())
+
+    def public_key(self) -> bytes:
+        from cryptography.hazmat.primitives import serialization
+
+        return self._key.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+
+    def sign(self, message: bytes) -> bytes:
+        from cryptography.hazmat.primitives import hashes
+
+        return self._key.sign(bytes(message), self._ec.ECDSA(hashes.SHA256()))
+
+
+def _paired_peer(handle) -> str:
+    """Give `handle` a signing key and one registered peer, and return the peer's device id."""
+    handle.set_signer(_DeviceKey())
+    peer_id = "peer-device-0001"
+    handle.register_peer(peer_id, _DeviceKey().public_key(), "Test phone", ["finance"])
+    return peer_id
+
+
 def test_finance_conformance_suite_through_python():
     steps = runner.run_suite(binding)
     assert steps >= 90
@@ -131,7 +161,8 @@ def test_emitted_events_validate_against_the_domain_event_contract(data_dir):
             }
         ),
     )
-    events = json.loads(handle.pending_events(100).events_json)
+    peer = _paired_peer(handle)
+    events = json.loads(handle.sync_export(peer, 100).events_json)
     assert len(events) == 6
     kinds = [e["kind"] for e in events]
     assert kinds == [
@@ -141,4 +172,28 @@ def test_emitted_events_validate_against_the_domain_event_contract(data_dir):
     for event in events:
         errors = list(validator.iter_errors(event))
         assert not errors, f"{event['kind']}: {[e.message for e in errors]}"
+        assert event["signature"].startswith("es256:")
     assert [e["tombstone"] for e in events] == [False, False, False, False, True, False]
+
+
+def test_events_signed_by_python_verify_in_the_kernel_on_another_device(data_dir):
+    """ECDSA interop: `cryptography` DER signatures are accepted by the Kernel's verifier."""
+    other_dir = tempfile.mkdtemp(prefix="reva-kernel-peer-")
+    try:
+        sender = binding.open_domain("finance", _Vault(), data_dir)
+        receiver = binding.open_domain("finance", _Vault(), other_dir)
+        sender_key, receiver_key = _DeviceKey(), _DeviceKey()
+        sender.set_signer(sender_key)
+        receiver.set_signer(receiver_key)
+        sender.register_peer(receiver.device_id(), receiver_key.public_key(), "PC", ["finance"])
+        receiver.register_peer(sender.device_id(), sender_key.public_key(), "Phone", ["finance"])
+        sender.command("account.create", '{"id": "acct-main-1", "name": "Main", "currency": "USD"}')
+        batch = sender.sync_export(receiver.device_id(), 100)
+        report = receiver.sync_apply(sender.device_id(), batch)
+        assert report.applied == 1
+        assert sender.projection_digest() == receiver.projection_digest()
+        # The same batch from a device that was never paired is refused.
+        with pytest.raises(binding.DomainError.Rejected):
+            receiver.sync_apply("stranger-device-1", batch)
+    finally:
+        shutil.rmtree(other_dir, ignore_errors=True)

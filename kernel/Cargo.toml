@@ -24,8 +24,10 @@ hex = "0.4"
 getrandom = "0.2"
 zeroize = "1"
 csv = "1"
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pkcs8", "std"] }
 
 [build-dependencies]
 
 [dev-dependencies]
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8", "std", "arithmetic"] }
 tempfile = "3"

@@ -122,6 +122,8 @@ impl Store {
             }
             return Err(error);
         }
+        // Unversioned and additive, so later domain migrations are never skipped by a high version.
+        crate::sync::ensure_tables(&store.conn)?;
         store.device_id = store.load_or_create_device_id()?;
         if fresh || !kcv_path.exists() {
             fs::write(&kcv_path, key::key_check_value(&store.key))?;
