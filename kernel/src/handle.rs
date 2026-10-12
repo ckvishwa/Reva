@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use rusqlite::TransactionBehavior;
+use rusqlite::{Transaction, TransactionBehavior};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -16,6 +16,7 @@ use crate::export;
 use crate::import::{self, json_format};
 use crate::key::KeyProvider;
 use crate::store::Store;
+use crate::sync::{self, DeviceSigner, PeerInfo, SyncBatch};
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CommitResult {
@@ -83,6 +84,7 @@ struct Inner {
 pub struct DomainHandle {
     domain: String,
     inner: Mutex<Inner>,
+    signer: Mutex<Option<Arc<dyn DeviceSigner>>>,
 }
 
 /// Open (or create, on a fresh install) the encrypted file for `domain`.
@@ -99,7 +101,7 @@ pub fn open_domain(
         }
     };
     let store = Store::open(&domain, Path::new(&data_dir), key_provider.as_ref(), &migrations)?;
-    Ok(Arc::new(DomainHandle { domain, inner: Mutex::new(Inner { store }) }))
+    Ok(Arc::new(DomainHandle { domain, inner: Mutex::new(Inner { store }), signer: Mutex::new(None) }))
 }
 
 /// The kernel version string, for diagnostics.
@@ -221,43 +223,115 @@ impl DomainHandle {
         })
     }
 
-    pub fn pending_events(&self, limit: u32) -> Result<EventBatch, DomainError> {
-        let guard = self.lock();
-        let (events, cursor) = events::pending(&guard.store.conn, limit.clamp(1, 5000))?;
-        Ok(EventBatch { count: events.len() as u64, events_json: serde_json::to_string(&events)?, cursor })
+    /// Hand the Kernel the device-key signer (the host's OS key vault). Needed before `sync_export`.
+    pub fn set_signer(&self, signer: Arc<dyn DeviceSigner>) {
+        *self.signer.lock().unwrap_or_else(|e| e.into_inner()) = Some(signer);
     }
 
-    pub fn ack(&self, cursor: i64) -> Result<(), DomainError> {
-        let guard = self.lock();
-        events::ack(&guard.store.conn, cursor)?;
-        Ok(())
+    /// SHA-256 of this device's public key, hex: what pairing screens show for comparison.
+    pub fn device_fingerprint(&self) -> Result<String, DomainError> {
+        let signer = self.signer()?;
+        let key = signer.public_key().map_err(|e| DomainError::Rejected { reason: e.to_string() })?;
+        Ok(sync::fingerprint(&key))
     }
 
-    /// Apply events from another device. Duplicates are no-ops; concurrent edits that
-    /// disagree on an amount are recorded as conflicts and returned (AR-DOM-008).
-    pub fn apply_events(&self, batch: EventBatch) -> Result<ApplyReport, DomainError> {
-        let mut incoming: Vec<Event> = serde_json::from_str(&batch.events_json)
-            .map_err(|e| DomainError::validation("events_json", e.to_string()))?;
-        for event in &incoming {
-            events::validate_remote(event, &self.domain)?;
-        }
-        incoming.sort_by(|a, b| (a.lamport, &a.origin_device_id).cmp(&(b.lamport, &b.origin_device_id)));
+    /// Record a peer the user approved. `scopes` are the domains it may exchange with this device.
+    pub fn register_peer(
+        &self,
+        device_id: String,
+        public_key: Vec<u8>,
+        label: String,
+        scopes: Vec<String>,
+    ) -> Result<(), DomainError> {
+        let guard = self.lock();
+        sync::register_peer(
+            &guard.store.conn,
+            &self.domain,
+            &guard.store.device_id,
+            &device_id,
+            &public_key,
+            &label,
+            &scopes,
+        )
+    }
 
+    /// Stop exchanging with a peer. Checked before every export and apply; takes effect at once.
+    pub fn revoke_peer(&self, device_id: String) -> Result<(), DomainError> {
+        let guard = self.lock();
+        sync::revoke_peer(&guard.store.conn, &device_id)
+    }
+
+    pub fn list_peers(&self) -> Result<Vec<PeerInfo>, DomainError> {
+        let guard = self.lock();
+        sync::list_peers(&guard.store.conn)
+    }
+
+    /// The next batch of signed events for `peer_device_id`, after its acknowledged cursor.
+    pub fn sync_export(&self, peer_device_id: String, limit: u32) -> Result<SyncBatch, DomainError> {
+        let signer = self.signer()?;
+        let own_key = signer.public_key().map_err(|e| DomainError::Rejected { reason: e.to_string() })?;
         let mut guard = self.lock();
-        let tx = guard.store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let mut report = ApplyReport { applied: 0, duplicates: 0, conflicts: Vec::new() };
-        for event in &incoming {
-            match events::insert_remote(&tx, event)? {
-                InsertOutcome::Duplicate => report.duplicates += 1,
-                InsertOutcome::Inserted => {
-                    report.applied += 1;
-                    detect_conflicts(&tx, event, &mut report.conflicts)?;
-                    if events::is_aggregate_head(&tx, event)? {
-                        project::apply(&tx, event)?;
-                    }
+        let store = &mut guard.store;
+        let (own_id, tag_key) = (store.device_id.clone(), store.tag_key().to_vec());
+        let tx = store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let outgoing = sync::events_after(&tx, &peer_device_id, &self.domain, limit as usize)?;
+        let (cursor_from, cursor_to) = (outgoing.cursor_from, outgoing.cursor_to);
+        let mut out: Vec<Event> = Vec::with_capacity(outgoing.rows.len());
+        for (_, mut event) in outgoing.rows {
+            if event.origin_device_id == own_id {
+                // Our own event: prove it was not altered on disk, then sign it with the device key once.
+                if !crate::key::constant_time_eq(&events::sign(&tag_key, &event), &event.signature) {
+                    return Err(DomainError::Corrupt);
                 }
+                event.signature = match sync::cached_signature(&tx, &event.event_id)? {
+                    Some(sig) => sig,
+                    None => {
+                        let der = signer
+                            .sign(sync::signing_bytes(&event))
+                            .map_err(|e| DomainError::Rejected { reason: e.to_string() })?;
+                        let sig = sync::encode_signature(&der);
+                        event.signature = sig.clone();
+                        sync::verify_with_key(&own_key, &event)
+                            .map_err(|_| DomainError::internal("the device signer produced an invalid signature"))?;
+                        sync::store_signature(&tx, &event.event_id, &sig)?;
+                        sig
+                    }
+                };
+            } else if !event.signature.starts_with(sync::SIG_PREFIX) {
+                continue; // never forward an event that carries no device signature
             }
+            out.push(event);
         }
+        tx.commit()?;
+        Ok(SyncBatch { count: out.len() as u64, events_json: serde_json::to_string(&out)?, cursor_from, cursor_to })
+    }
+
+    /// The peer confirmed it holds our log up to `cursor`. Moves forward only.
+    pub fn sync_ack(&self, peer_device_id: String, cursor: i64) -> Result<(), DomainError> {
+        let guard = self.lock();
+        sync::ack_peer(&guard.store.conn, &peer_device_id, &self.domain, cursor)
+    }
+
+    /// Apply a batch received from `peer_device_id`. The sender and every event's origin must be
+    /// active, in-scope peers and every signature must verify; otherwise nothing is applied.
+    /// Duplicates are no-ops; concurrent amount edits become conflicts (AR-DOM-008).
+    pub fn sync_apply(&self, peer_device_id: String, batch: SyncBatch) -> Result<ApplyReport, DomainError> {
+        let mut incoming = sync::parse_batch(&batch, &self.domain)?;
+        let mut guard = self.lock();
+        let own_id = guard.store.device_id.clone();
+        let tx = guard.store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        sync::check_sender(&tx, &peer_device_id, &self.domain)?;
+        for event in &incoming {
+            if events::get(&tx, &event.event_id)?.is_some() {
+                continue; // already held: a no-op, whatever it claims
+            }
+            if event.origin_device_id == own_id {
+                return Err(DomainError::Rejected { reason: "event claims this device as its origin".into() });
+            }
+            sync::verify_event(&tx, event, &self.domain)?;
+        }
+        let report = apply_in_tx(&tx, &mut incoming)?;
+        sync::note_received(&tx, &peer_device_id, batch.cursor_to)?;
         tx.commit()?;
         Ok(report)
     }
@@ -310,6 +384,67 @@ impl DomainHandle {
         let guard = self.lock();
         Ok(guard.store.conn.query_row("PRAGMA integrity_check", [], |r| r.get::<_, String>(0))?)
     }
+}
+
+/// Trust-local replication used by tests inside this workspace. These are not exported to host
+/// bindings: a host can only apply events that passed the peer checks in `sync_apply`.
+impl DomainHandle {
+    #[doc(hidden)]
+    pub fn pending_events(&self, limit: u32) -> Result<EventBatch, DomainError> {
+        let guard = self.lock();
+        let (events, cursor) = events::pending(&guard.store.conn, limit.clamp(1, 5000))?;
+        Ok(EventBatch { count: events.len() as u64, events_json: serde_json::to_string(&events)?, cursor })
+    }
+
+    #[doc(hidden)]
+    pub fn ack(&self, cursor: i64) -> Result<(), DomainError> {
+        let guard = self.lock();
+        events::ack(&guard.store.conn, cursor)?;
+        Ok(())
+    }
+
+    /// Applies without signature checks. Tests only; hosts use `sync_apply`.
+    #[doc(hidden)]
+    pub fn apply_events(&self, batch: EventBatch) -> Result<ApplyReport, DomainError> {
+        let mut incoming: Vec<Event> = serde_json::from_str(&batch.events_json)
+            .map_err(|e| DomainError::validation("events_json", e.to_string()))?;
+        for event in &incoming {
+            events::validate_remote(event, &self.domain)?;
+        }
+        let mut guard = self.lock();
+        let tx = guard.store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let report = apply_in_tx(&tx, &mut incoming)?;
+        tx.commit()?;
+        Ok(report)
+    }
+
+    fn signer(&self) -> DomainResult<Arc<dyn DeviceSigner>> {
+        self.signer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or_else(|| DomainError::Rejected { reason: "this device has no signing key yet".into() })
+    }
+}
+
+/// Insert and project events in `(lamport, origin_device_id)` order inside the caller's transaction.
+/// A tombstone always applies, whatever its clock: deleted records never come back.
+fn apply_in_tx(tx: &Transaction<'_>, incoming: &mut [Event]) -> DomainResult<ApplyReport> {
+    incoming.sort_by(|a, b| (a.lamport, &a.origin_device_id).cmp(&(b.lamport, &b.origin_device_id)));
+    let mut report = ApplyReport { applied: 0, duplicates: 0, conflicts: Vec::new() };
+    for event in incoming.iter() {
+        match events::insert_remote(tx, event)? {
+            InsertOutcome::Duplicate => report.duplicates += 1,
+            InsertOutcome::Inserted => {
+                report.applied += 1;
+                detect_conflicts(tx, event, &mut report.conflicts)?;
+                if event.tombstone || events::is_aggregate_head(tx, event)? {
+                    project::apply(tx, event)?;
+                }
+            }
+        }
+    }
+    Ok(report)
 }
 
 /// Amount fields where two devices editing the same version concurrently must be shown to the user.
