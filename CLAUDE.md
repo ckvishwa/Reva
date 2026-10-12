@@ -12,15 +12,19 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 ## Current state (update this section at the end of every slice)
 
-- Baseline (Oct 11 audit): Python 326 passed / 2 skipped, .NET 334 passed.
-- PIPE-1 steps 1–2 (TTS registry + Kokoro provider, voice sessions + WebSocket) are built and **uncommitted**. Python is at 439 passed / 2 skipped. Steps 3–9 have not started. `v2.0.0-alpha.1` is not tagged.
-- 3 failing tests came from a parallel session (route whitelist ×2, voice-unavailable reply text). The mypy errors are in `planner/*`.
+- S03-lite is done: spec pack in `docs/spec/REVA_v2.0/`, persona in `docs/persona/`, `kernel/ android/ avatar/ contracts/` skeleton, LFS attributes, pytest env guard, evidence ledger, CI lanes (`python`, `csharp-desktop`, `contracts`, `kernel` and `android` placeholders). `reva_core/` and `desktop/` were not moved; the full `core/ windows/` restructure is still open.
+- Baseline (Oct 11 audit): Python 326 passed / 2 skipped, .NET 334 passed. Clean worktree at the S03 tag (2026-10-11): Python 340 passed / 2 skipped, .NET 344 passed, `ruff format --check .`, `ruff check .`, `mypy reva_core` and the contracts check all clean.
+- S00 (tags `archive/pre-merge-2026-10-11/*`, bundle, backup), S01 (wake-word resolver fails closed) and S02 (owned/external Core shutdown, 10 real cycles) are committed on `fixing-things`. Evidence: `docs/archive/`.
+- Parallel work lives on branches, not in this tree: `feat/pipe-1-voice` (PIPE-1.1, PIPE-1.2; Python 428 passed / 2 skipped), `wip/planner-reasoning` (planner + cloud reasoning, one known failing test `test_forged_answer_cannot_claim_action_success`), `archive/shutdown-wip` (the `Environment.Exit` variant, not adopted). Their tests still read contracts from the old `docs/08_CONTRACTS/` path; point them at `contracts/` before merging.
+- `docs/spec/REVA_v2.0/SHA256SUMS.txt` has one stale entry: `08_CONTRACTS/planner-decision.schema.json` no longer matches its recorded hash (the file equals `reva_core/planner/contracts/`). Decide which version is canonical, then fix the sum.
 - V1-fix is done. Real-person (Lana) material is quarantined in `F:\reva-assets\_excluded\`, and the manifest is updated.
 - **Revi voice is blocked.** It's a separate project; it stays out of REVA until its manifest provenance is filled. Kokoro `af_heart` is the voice.
+- `v2.0.0-alpha.0` is tagged at the end of S03. `v2.0.0-alpha.1` is not tagged (needs S04).
 - Open items:
   - chatterbox-v3-src: reconcile the two halves.
-  - Lana-derived untracked copies are still in `tools/voice-lab/revi-prosody-study/` and `tests/voice-evals/outputs/`. Delete them before any commit.
+  - 11 Lana-derived untracked copies remain in `tools/voice-lab/revi-prosody-study/` and `tests/voice-evals/outputs/`. Inventory: `docs/voice/lana-quarantine-inventory.md`. They are in `.git/info/exclude`; deletion awaits approval.
   - The merge script pattern misses `LDR*` names.
+  - The working tree still holds uncommitted PIPE-1 and planner files that are also on the branches above.
 
 ## Working rules (non-negotiable)
 
@@ -57,27 +61,29 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 ## Layout
 
-The current layout is pre-S03: `reva_core/` (Python Core) and the desktop WinUI app. The S03 target is below.
+Real layout after S03-lite (the `core/` and `windows/` renames are not done).
 
 ```
-core/        Python Core (sessions, voice, planner, policy, providers, sync)
-kernel/      Rust Domain Kernel + UniFFI bindings (Python, Kotlin)
-windows/     WinUI 3 app (NAudio capture/playback, WebView2 avatar host, executor)
-android/     Kotlin/Compose app
-avatar/      three.js + three-vrm web package (shared by both apps)
-contracts/   JSON Schemas, capability registry
-assets/avatar/  .blend + .vrm (Git LFS)
-tests/       unit, contract, cross-binding, security, voice-evals, e2e, evidence/ledger.csv
-tools/voice-lab/  voice experiments (read REVA_ASSET_ROOT; no hardcoded paths)
-docs/        spec/, persona/, voice/, archive/
+reva_core/   Python Core (api, agent, memory, models, orchestration, security, storage). Moves to core/ later.
+desktop/     WinUI 3 app and tests (NAudio capture/playback, WebView2 avatar host, executor). Moves to windows/ later.
+kernel/      Rust Domain Kernel + UniFFI bindings (placeholder until S04)
+android/     Kotlin/Compose app (placeholder until S11)
+avatar/      three.js + three-vrm web package (placeholder until S08)
+contracts/   JSON Schemas, capability registry (copy of docs/spec/REVA_v2.0/08_CONTRACTS, checked by CI)
+assets/avatar/  .blend + .vrm (Git LFS rules in .gitattributes; folder created when assets arrive)
+tests/       unit, integration, contract, security, e2e, evidence/ledger.csv; voice-evals is opt-in (REVA_RUN_VOICE_EVALS=1)
+tools/ci/    CI helper scripts; tools/voice-lab/ voice experiments (untracked, no hardcoded paths)
+docs/        spec/REVA_v2.0/, persona/, archive/, voice/, plus older adr/ architecture/ development/ plans/ product/ security/ superpowers/ testing/
+.github/workflows/ci.yml   lanes: python, csharp-desktop, contracts, kernel, android
 ```
 
 ## Commands
 
-Fill in the exact forms in S00 and keep them current.
+Run from the repo root. `.venv\Scripts\python -m ...` is the Core environment.
 
-- Python: `pytest -q` · `ruff check <files>` · `ruff format <your files only>` · `mypy <package>`
-- .NET: `dotnet build` · `dotnet test`
+- Python: `python -m pytest -q` (the env guard sets a temp `REVA_DATA_DIR`; a non-temp value or a non-localhost DB URL aborts the run) · `ruff check <files>` · `ruff format <your files only>` · `mypy reva_core`
+- Contracts: `python tools/ci/check_contracts.py` (needs `jsonschema`)
+- .NET: `dotnet build desktop\Reva.Desktop.sln` · `dotnet test desktop\Reva.Desktop.sln` (run with `REVA_DATA_DIR` unset)
 - Rust (after S04): `cargo test -p reva-kernel` · `cargo clippy`
 - Android (after S11): `./gradlew lint testDebugUnitTest`
 
