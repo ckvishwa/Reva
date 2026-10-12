@@ -135,6 +135,7 @@ public sealed class TransactionRowViewModel
         AmountText = MoneyFormat.Format(transaction.AmountMinor, transaction.Currency, showPlus: true);
         IsIncome = transaction.AmountMinor > 0;
         SourceText = FinanceDisplay.SourceText(transaction.SourceKind);
+        IsVoice = transaction.SourceKind == "voice";
         AccessibleName =
             $"{DateText}, {Description}, {CategoryText}, {AccountText}, {AmountText}, source {SourceText}";
     }
@@ -156,6 +157,9 @@ public sealed class TransactionRowViewModel
     public bool IsIncome { get; }
 
     public string SourceText { get; }
+
+    /// <summary>Voice rows are shown in the success colour: a spoken entry the person confirmed.</summary>
+    public bool IsVoice { get; }
 
     public string AccessibleName { get; }
 }

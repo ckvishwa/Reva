@@ -13,3 +13,7 @@ License 1.1 (`OFL-IBM-Plex.txt`).
 | IBMPlexMono-Medium.ttf | a9b4c49bb299e05b5f6c481e7fb5e78943d2793249a0c8874ab574a2d1ea6755 | same |
 
 Numbers (balances, amounts, ids) use Plex Mono; everything else uses Plex Sans.
+
+Note: IBM's Medium and SemiBold Sans files register the family names `IBM Plex Sans Medm` and
+`IBM Plex Sans SmBld` (name ID 1), and that is what the `ms-appx:///...#family` references in
+`Themes/RevaTheme.xaml` must use.
