@@ -2,13 +2,24 @@
     x:Class="Reva.Desktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:state="using:Reva.Desktop.State">
+    xmlns:state="using:Reva.Desktop.State"
+    xmlns:views="using:Reva.Desktop.Views">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
+    <Grid ColumnDefinitions="232,*" Background="{StaticResource RevaGroundBrush}">
+
+    <views:NavPane x:Name="Nav" Grid.Column="0" />
+
+    <Grid Grid.Column="1">
+
+    <!-- Talk & Today: the existing assistant/voice/memory UI, unchanged, under the Today summary. -->
+    <Grid x:Name="TalkPage" RowDefinitions="Auto,*" Visibility="{x:Bind views:Vis.Show(Navigation.ShowsTalk), Mode=OneWay}">
+    <views:TodayCard x:Name="TodayPanel" Margin="24,24,24,0" ViewModel="{x:Bind Today}" />
+
+    <Grid Grid.Row="1" Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
@@ -144,6 +155,19 @@
                 TextWrapping="Wrap" />
         </StackPanel>
 
+    </Grid>
+    </Grid>
+
+    <views:FinancePage
+        x:Name="FinancePanel"
+        ViewModel="{x:Bind Finance}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsFinance), Mode=OneWay}" />
+
+    <views:ComingSoonPage
+        x:Name="ComingSoonPanel"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsComingSoon), Mode=OneWay}" />
+
+    </Grid>
     </Grid>
 
 </Window>

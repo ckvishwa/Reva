@@ -41,6 +41,10 @@ ROUTES = [
         {"json": {"paid_date": "2026-10-20"}},
     ),
     ("get", "/v1/today", {}),
+    ("get", "/v1/domains/finance/privacy", {}),
+    ("patch", "/v1/domains/finance/privacy", {"json": {"sync": False}}),
+    ("get", "/v1/domains/finance/conflicts", {}),
+    ("post", "/v1/domains/finance/conflicts/1/resolve", {"json": {"keep": "local"}}),
 ]
 
 

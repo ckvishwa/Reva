@@ -1,0 +1,8 @@
+{
+  "body": {
+    "correlation_id": "CORRELATION",
+    "detail": "account acct-checking already exists",
+    "error": "conflict"
+  },
+  "status": 409
+}

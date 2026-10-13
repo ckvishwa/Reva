@@ -39,9 +39,6 @@ FINANCE_REPORTS = (
 _INT_PARAMS = {"limit", "offset", "days", "min_amount_minor", "max_amount_minor"}
 _MAX_IMPORT_BYTES = 8 * 1024 * 1024
 
-# Privacy defaults from ARD-700 section 4 (informational; enforced by what the Core exposes).
-PRIVACY = {"finance": {"sync_default": True, "hosted_model_access": False}}
-
 
 class ImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -105,10 +102,50 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
         service = _service()
         return {
             "domains": [
-                {**service.status(name), "privacy": PRIVACY.get(name, {})}
+                {**service.status(name), "privacy": lifecycle.domain_privacy.get(name)}
                 for name in service.enabled_domains
             ]
         }
+
+    @router.get("/domains/{domain}/privacy")
+    def get_privacy(
+        domain: str,
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> dict[str, Any]:
+        return {"domain": domain, "privacy": lifecycle.domain_privacy.get(domain)}
+
+    @router.patch("/domains/{domain}/privacy")
+    def patch_privacy(
+        domain: str,
+        body: dict[str, Any],
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> dict[str, Any]:
+        return {"domain": domain, "privacy": lifecycle.domain_privacy.update(domain, body)}
+
+    @router.get("/domains/finance/conflicts")
+    def list_conflicts(
+        request: Request,
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> dict[str, Any]:
+        include_resolved = request.query_params.get("include_resolved") == "true"
+        params = json.dumps({"include_resolved": include_resolved})
+        result = _call("finance", lambda h: h.query("conflicts", params))
+        return {
+            "domain": "finance",
+            "collection": "conflicts",
+            "items": json.loads(result.rows_json),
+        }
+
+    @router.post("/domains/finance/conflicts/{conflict_id}/resolve")
+    def resolve_conflict(
+        conflict_id: int,
+        body: dict[str, Any],
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> dict[str, Any]:
+        fields = {**body, "conflict_id": conflict_id}
+        return _commit(
+            _call("finance", lambda h: h.command("conflict.resolve", json.dumps(fields)))
+        )
 
     @router.get("/domains/{domain}/export")
     def export_domain(

@@ -1,0 +1,27 @@
+{
+  "collection": "transactions",
+  "domain": "finance",
+  "items": [
+    {
+      "account_id": "acct-card",
+      "amount_minor": -1200,
+      "category_id": "cat-dining",
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "currency": "USD",
+      "date": "2026-10-12",
+      "description": "Lunch",
+      "fingerprint": null,
+      "id": "tx-lunch-0001",
+      "import_batch_id": null,
+      "merchant": null,
+      "notes": null,
+      "source": "voice",
+      "source_kind": "voice",
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "version": 1
+    }
+  ],
+  "source_ids": [
+    "tx-lunch-0001"
+  ]
+}

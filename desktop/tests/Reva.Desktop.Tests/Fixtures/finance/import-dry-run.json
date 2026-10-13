@@ -1,0 +1,39 @@
+{
+  "accepted": 2,
+  "batch_id": "BATCH",
+  "dry_run": true,
+  "duplicates": 0,
+  "rejected": [
+    {
+      "raw": "bad,Row,1.00",
+      "reason": "date does not match %Y-%m-%d",
+      "row": 4
+    }
+  ],
+  "rows": [
+    {
+      "amount_minor": -450,
+      "date": "2026-10-03",
+      "description": "Imported coffee",
+      "raw": "2026-10-03,Imported coffee,-4.50",
+      "record_id": "00000000-0000-0000-0000-000000000001",
+      "row": 2,
+      "status": "accepted"
+    },
+    {
+      "amount_minor": 1200,
+      "date": "2026-10-04",
+      "description": "Imported refund",
+      "raw": "2026-10-04,Imported refund,12.00",
+      "record_id": "00000000-0000-0000-0000-000000000002",
+      "row": 3,
+      "status": "accepted"
+    },
+    {
+      "raw": "bad,Row,1.00",
+      "reason": "date does not match %Y-%m-%d",
+      "row": 4,
+      "status": "rejected"
+    }
+  ]
+}

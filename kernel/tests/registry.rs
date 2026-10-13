@@ -29,6 +29,7 @@ const EXPECTED: &[&str] = &[
     "bill.delete",
     "networth_snapshot.create",
     "networth_snapshot.delete",
+    "conflict.resolve",
 ];
 
 const FORBIDDEN_TOKENS: &[&str] = &[

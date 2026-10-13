@@ -1,0 +1,9 @@
+{
+  "body": {
+    "correlation_id": "CORRELATION",
+    "detail": "no category or alias named \"nonexistent\"",
+    "error": "validation_error",
+    "field": "category"
+  },
+  "status": 422
+}

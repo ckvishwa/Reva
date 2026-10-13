@@ -50,7 +50,7 @@ const CARRY: &[(&str, &[&str])] = &[
     ("category", &["created_at", "updated_at"]),
     ("budget", &["created_at", "updated_at"]),
     ("bill", &["last_paid_date", "active", "anchor_day", "created_at", "updated_at"]),
-    ("transaction", &["import_batch_id", "fingerprint", "created_at", "updated_at"]),
+    ("transaction", &["import_batch_id", "fingerprint", "source", "created_at", "updated_at"]),
     ("networth_snapshot", &["created_at", "updated_at"]),
 ];
 
@@ -62,7 +62,7 @@ fn is_timestamp(value: &Value) -> bool {
 /// able to store a value the rest of the Kernel would later choke on.
 fn carried_value_ok(key: &str, value: &Value) -> bool {
     if value.is_null() {
-        return matches!(key, "last_paid_date" | "import_batch_id" | "fingerprint");
+        return matches!(key, "last_paid_date" | "import_batch_id" | "fingerprint" | "source");
     }
     match key {
         "created_at" | "updated_at" => is_timestamp(value),
@@ -70,6 +70,7 @@ fn carried_value_ok(key: &str, value: &Value) -> bool {
         "anchor_day" => value.as_i64().is_some_and(|d| (1..=31).contains(&d)),
         "last_paid_date" => value.as_str().and_then(crate::civil::Date::parse).is_some(),
         "import_batch_id" => value.as_str().is_some_and(commands::valid_id),
+        "source" => value.as_str().is_some_and(|s| ["manual", "voice", "csv", "ofx", "json"].contains(&s)),
         "fingerprint" => value.as_str().is_some_and(|f| f.len() == 64 && f.bytes().all(|b| b.is_ascii_hexdigit())),
         _ => false,
     }
