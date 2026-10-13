@@ -131,10 +131,10 @@ public class NavigationViewModelTests
     }
 
     [Fact]
-    public void Only_talk_and_finance_are_built_and_the_rest_say_coming_soon()
+    public void Only_talk_finance_and_devices_are_built_and_the_rest_say_coming_soon()
     {
         var built = NavigationViewModel.AllSections.Where(s => s.IsBuilt).Select(s => s.Id);
-        Assert.Equal(new[] { "talk", "finance" }, built);
+        Assert.Equal(new[] { "talk", "finance", "devices" }, built);
 
         var vm = new NavigationViewModel();
         Assert.True(vm.ShowsTalk);

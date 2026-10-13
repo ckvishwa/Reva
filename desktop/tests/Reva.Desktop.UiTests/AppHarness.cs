@@ -46,7 +46,11 @@ public sealed class AppHarness : IDisposable
         var start = new ProcessStartInfo(FindAppExecutable(repoRoot)) { UseShellExecute = false };
         start.Environment["REVA_DATA_DIR"] = _dataDirectory;
         start.Environment["REVA_DOMAIN_KEYSTORE"] = "memory";
-        start.Environment["REVA_DESKTOP_CORE_URL"] = $"http://127.0.0.1:{FreePort()}/";
+        CoreUrl = $"http://127.0.0.1:{FreePort()}/";
+        start.Environment["REVA_DESKTOP_CORE_URL"] = CoreUrl;
+        // The pairing gateway, if a test switches it on, binds loopback on a free port (never a LAN address).
+        start.Environment["REVA_GATEWAY_HOST"] = "127.0.0.1";
+        start.Environment["REVA_GATEWAY_PORT"] = FreePort().ToString();
         start.Environment["REVA_CORE_PYTHON_EXE"] = FindPython(repoRoot);
         // This checkout's reva_core must win over any editable install of another checkout.
         start.Environment["PYTHONPATH"] = repoRoot;
@@ -62,6 +66,10 @@ public sealed class AppHarness : IDisposable
 
     public Window Window { get; } = null!;
 
+    public string CoreUrl { get; } = string.Empty;
+
+    public string DataDirectory => _dataDirectory;
+
     public AutomationElement? Find(string automationId, TimeSpan? timeout = null) =>
         Retry.WhileNull(
             () => Window.FindFirstDescendant(cf => cf.ByAutomationId(automationId)) ?? FindOnDesktop(automationId),
@@ -76,6 +84,35 @@ public sealed class AppHarness : IDisposable
     {
         var path = Path.Combine(Path.GetTempPath(), "reva-ui-" + name + ".png");
         Window.Capture().Save(path);
+        return path;
+    }
+
+    /// <summary>
+    /// Saves what the window itself renders (Win32 PrintWindow of its handle), which is correct at any display scale.
+    /// Screen-rectangle captures through UI Automation are cropped on scaled displays, so design reviews use this.
+    /// </summary>
+    public string ScreenshotWindowContent(string name)
+    {
+        var handle = Window.Properties.NativeWindowHandle.ValueOrDefault;
+        GetWindowRect(handle, out var rect);
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        var path = Path.Combine(Path.GetTempPath(), "reva-ui-" + name + ".png");
+        using var bitmap = new System.Drawing.Bitmap(width, height);
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+        {
+            var hdc = graphics.GetHdc();
+            try
+            {
+                PrintWindow(handle, hdc, 2); // PW_RENDERFULLCONTENT
+            }
+            finally
+            {
+                graphics.ReleaseHdc(hdc);
+            }
+        }
+
+        bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
         return path;
     }
 
@@ -271,6 +308,21 @@ public sealed class AppHarness : IDisposable
             : throw new FileNotFoundException(
                 "Set REVA_CORE_PYTHON_EXE to a Python with REVA's requirements installed (for example the main checkout's .venv).");
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hwnd);

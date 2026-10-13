@@ -178,6 +178,25 @@ public sealed class FinanceViewModel : ObservableObject
 
     // ------------------------------------------------------------------------------------------
 
+    /// <summary>Re-reads only the sync-conflict banner. A phone can sync while this page is open, so the page
+    /// calls this on a slow timer; it never touches the rest of the data.</summary>
+    public async Task RefreshConflictsAsync(CancellationToken cancellationToken = default)
+    {
+        var generation = Volatile.Read(ref _refreshGeneration);
+        var result = await _api.GetConflictsAsync(cancellationToken).ConfigureAwait(true);
+        if (!result.IsSuccess || generation != Volatile.Read(ref _refreshGeneration))
+        {
+            return;
+        }
+
+        var first = result.Value!.FirstOrDefault();
+        var changed = first is null ? Conflict is not null : Conflict?.Id != first.Id;
+        if (changed)
+        {
+            Conflict = first is null ? null : new ConflictBannerViewModel(first);
+        }
+    }
+
     /// <summary>Loads everything on the page. Safe to call again; the newest call wins.</summary>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {

@@ -1,0 +1,15 @@
+{
+  "devices": [],
+  "gateway": {
+    "enabled": true,
+    "error": null,
+    "host": "192.168.1.20",
+    "listening": true,
+    "pairing": {
+      "expires_in": 118,
+      "state": "open"
+    },
+    "port": 47821,
+    "tls_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "body": {
+    "correlation_id": "CORRELATION",
+    "error": "unknown_device"
+  },
+  "status": 404
+}

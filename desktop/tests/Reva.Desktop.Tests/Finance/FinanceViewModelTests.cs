@@ -200,6 +200,46 @@ public class FinanceViewModelTests
     }
 
     [Fact]
+    public async Task A_conflict_that_arrives_from_a_sync_while_the_page_is_open_appears_without_a_full_reload()
+    {
+        var api = TestData.PopulatedApi();
+        var vm = Create(api);
+        await vm.RefreshAsync();
+        Assert.False(vm.HasConflict);
+        var callsBefore = api.Calls.Count;
+
+        // A paired phone syncs and disagrees about an amount; Core now lists the conflict.
+        api.Conflicts.Add(new FinanceConflict(9, "transaction", "tx-2", "amount_minor", "-500", "-900", "Taxi", "USD"));
+        await vm.RefreshConflictsAsync();
+
+        Assert.True(vm.HasConflict);
+        Assert.Equal("Taxi was -$5.00 on this PC and -$9.00 on your phone. Which is right?", vm.Conflict!.Message);
+        Assert.Equal(new[] { "GetConflicts" }, api.Calls.Skip(callsBefore));
+    }
+
+    [Fact]
+    public async Task The_conflict_refresh_clears_the_banner_when_it_was_resolved_elsewhere_and_ignores_failures()
+    {
+        var api = TestData.PopulatedApi();
+        api.Conflicts.Add(new FinanceConflict(7, "transaction", "tx-1", "amount_minor", "-1111", "-2222", "Corner Cafe", "USD"));
+        var vm = Create(api);
+        await vm.RefreshAsync();
+        var banner = vm.Conflict;
+
+        await vm.RefreshConflictsAsync();
+        Assert.Same(banner, vm.Conflict); // unchanged conflict: the banner object is not replaced
+
+        api.Failures["GetConflicts"] = new FinanceError(FinanceErrorKind.Unavailable, "down");
+        await vm.RefreshConflictsAsync();
+        Assert.Same(banner, vm.Conflict); // a failed poll never wipes the banner
+
+        api.Failures.Clear();
+        api.Conflicts.Clear();
+        await vm.RefreshConflictsAsync();
+        Assert.False(vm.HasConflict);
+    }
+
+    [Fact]
     public async Task The_sync_conflict_banner_names_the_record_and_both_amounts()
     {
         var api = TestData.PopulatedApi();

@@ -59,6 +59,35 @@ public sealed partial class FinancePage : UserControl
     /// <summary>Loads (or reloads) everything from Core; called whenever the page is opened.</summary>
     public Task RefreshAsync() => ViewModel?.RefreshAsync() ?? Task.CompletedTask;
 
+    private DispatcherQueueTimer? _conflictTimer;
+
+    /// <summary>While Finance is the open section, look for a sync conflict every 10 seconds, because a paired
+    /// phone can sync while the page is open. Only the banner is re-read.</summary>
+    public void SetActive(bool active)
+    {
+        if (!active)
+        {
+            _conflictTimer?.Stop();
+            return;
+        }
+
+        if (_conflictTimer is null)
+        {
+            _conflictTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+            _conflictTimer.Interval = TimeSpan.FromSeconds(10);
+            _conflictTimer.IsRepeating = true;
+            _conflictTimer.Tick += async (_, _) =>
+            {
+                if (ViewModel is { } vm)
+                {
+                    await vm.RefreshConflictsAsync();
+                }
+            };
+        }
+
+        _conflictTimer.Start();
+    }
+
     private void OnViewModelChanged(FinanceViewModel? old)
     {
         if (old is not null)
