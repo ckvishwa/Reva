@@ -261,6 +261,13 @@ impl DomainHandle {
         sync::revoke_peer(&guard.store.conn, &device_id)
     }
 
+    /// Start the next export to this peer from the beginning of the log (used when a paired device
+    /// reports that it was reset). Re-pairing a revoked device does this automatically.
+    pub fn reset_peer_cursors(&self, device_id: String) -> Result<(), DomainError> {
+        let guard = self.lock();
+        sync::reset_peer_cursors(&guard.store.conn, &device_id)
+    }
+
     pub fn list_peers(&self) -> Result<Vec<PeerInfo>, DomainError> {
         let guard = self.lock();
         sync::list_peers(&guard.store.conn)
