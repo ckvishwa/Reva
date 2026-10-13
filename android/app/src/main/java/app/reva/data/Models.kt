@@ -118,7 +118,28 @@ private fun JSONObject.optBoolOrNull(key: String): Boolean? = if (isNull(key)) n
 private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> =
     (0 until length()).map { transform(getJSONObject(it)) }
 
+/** A Finance amount the phone and the PC disagree about. Values are minor units; "local" is this phone's. */
+data class Conflict(
+    val id: Long,
+    val label: String,
+    val field: String,
+    val currency: String,
+    val localMinor: Long,
+    val remoteMinor: Long,
+)
+
 object Json {
+    fun conflicts(rowsJson: String): List<Conflict> = JSONArray(rowsJson).mapObjects {
+        Conflict(
+            it.getLong("id"),
+            if (it.isNull("label")) "A record" else it.getString("label").ifBlank { "A record" },
+            it.getString("field"),
+            if (it.isNull("currency")) "USD" else it.getString("currency"),
+            it.getString("local_value").toLong(),
+            it.getString("remote_value").toLong(),
+        )
+    }
+
     fun accountBalances(rowsJson: String): List<AccountBalance> = JSONArray(rowsJson).mapObjects {
         AccountBalance(
             it.getString("account_id"), it.getString("name"), it.getString("kind"), it.getString("currency"),

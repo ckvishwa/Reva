@@ -63,6 +63,16 @@ class KernelFinanceRepository(
 
     override suspend fun today() = run { Json.today(kernelToday(listOf(it), asOf())) }
 
+    override suspend fun conflicts() = run { Json.conflicts(query(it, "conflicts")) }
+
+    override suspend fun resolveConflict(id: Long, keepMine: Boolean) = run {
+        it.command("conflict.resolve", JSONObject().put("conflict_id", id).put("keep", if (keepMine) "local" else "remote").toString())
+        Unit
+    }
+
+    /** The open Finance handle, for the sync engine (same file, same lock). Call off the main thread. */
+    fun kernelHandle(): DomainHandle = handle()
+
     override suspend fun addTransaction(request: NewTransaction) = run {
         val body = JSONObject()
             .put("account_id", request.accountId)

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import app.reva.ui.CaptionText
 import app.reva.ui.MutedText
 import app.reva.ui.RevaCard
+import app.reva.ui.SecondaryButton
 import app.reva.ui.SectionTitle
 import app.reva.ui.theme.RevaColors
 
@@ -40,9 +41,18 @@ fun TalkScreen(modifier: Modifier = Modifier) {
 private val comingSoon = listOf("Health", "Coach", "Career", "Learn", "Cyber", "Personal", "Memory")
 
 @Composable
-fun MoreScreen(versionName: String, modifier: Modifier = Modifier) {
+fun MoreScreen(versionName: String, modifier: Modifier = Modifier, devicesSummary: String? = null, onOpenDevices: (() -> Unit)? = null) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("More", style = MaterialTheme.typography.headlineMedium, color = RevaColors.Text, modifier = Modifier.semantics { heading() }) }
+        if (onOpenDevices != null) {
+            item {
+                RevaCard(modifier = Modifier.testTag("more_devices")) {
+                    SectionTitle("Devices")
+                    MutedText(devicesSummary ?: "Pair this phone with your PC to keep Finance in step. Nothing leaves your Wi-Fi.")
+                    SecondaryButton(if (devicesSummary == null) "Pair with a PC" else "Manage", onOpenDevices, Modifier.testTag("open_devices"))
+                }
+            }
+        }
         item {
             RevaCard(modifier = Modifier.testTag("more_sections")) {
                 SectionTitle("Sections")
@@ -63,7 +73,7 @@ fun MoreScreen(versionName: String, modifier: Modifier = Modifier) {
                 SectionTitle("About this build")
                 MutedText("REVA $versionName")
                 MutedText("Finance data is encrypted on this phone with a key held by the Android Keystore. It is excluded from Android backups.")
-                MutedText("This build has no internet permission, so it cannot send data anywhere.")
+                MutedText("The only network use is syncing with a PC you paired, over your own Wi-Fi. No server of ours is involved.")
             }
         }
     }
