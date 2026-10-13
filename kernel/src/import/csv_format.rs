@@ -266,8 +266,8 @@ pub fn parse(bytes: &[u8], mapping_json: &Value, currency: &str) -> DomainResult
                 let v = money::parse_decimal(text, currency, dec, thou)?;
                 return Ok(v);
             }
-            let debit = debit_i.and_then(&get).map(|s| money::parse_decimal(s, currency, dec, thou)).transpose()?;
-            let credit = credit_i.and_then(&get).map(|s| money::parse_decimal(s, currency, dec, thou)).transpose()?;
+            let debit = debit_i.and_then(get).map(|s| money::parse_decimal(s, currency, dec, thou)).transpose()?;
+            let credit = credit_i.and_then(get).map(|s| money::parse_decimal(s, currency, dec, thou)).transpose()?;
             match (debit, credit) {
                 (Some(d), None) => Ok(-d.abs()),
                 (None, Some(c)) => Ok(c.abs()),
@@ -296,9 +296,9 @@ pub fn parse(bytes: &[u8], mapping_json: &Value, currency: &str) -> DomainResult
             date,
             amount_minor: amount,
             description: description.to_string(),
-            merchant: merchant_i.and_then(&get).map(str::to_string),
-            category: category_i.and_then(&get).map(str::to_string),
-            notes: notes_i.and_then(&get).map(str::to_string),
+            merchant: merchant_i.and_then(get).map(str::to_string),
+            category: category_i.and_then(get).map(str::to_string),
+            notes: notes_i.and_then(get).map(str::to_string),
             fitid: None,
             raw,
         });
