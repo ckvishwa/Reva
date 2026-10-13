@@ -1,6 +1,6 @@
 # ARD-500 — Data, Sync, Relay and Security v2.0
 
-**Document ID:** REVA-ARD-500 · **Version:** 2.0.5 · **Date:** 2026-10-12 · **Status:** Proposed
+**Document ID:** REVA-ARD-500 · **Version:** 2.0.6 · **Date:** 2026-10-12 · **Status:** Proposed
 **Replaces:** ARD v1 §6, §7, §13. **Decisions:** ADR-006, ADR-008, ADR-009, ADR-010, ADR-014, ADR-015, ADR-028, ADR-031, ADR-032.
 
 ## 1. Storage map
@@ -16,6 +16,8 @@
 ## 2. Identity and pairing (v1 §6 kept)
 
 PC shows a short-lived QR with a one-time session and the gateway key hash; the phone scans, opens TLS, both show a matching code, the PC user approves; each side records a scoped device grant; mutual auth by signed challenge with device keys. Revocation is checked atomically before every dispatch. The phone never receives the Core bearer token. LAN only for R2.
+
+**Implementation note (2.0.6, SYNC-1b):** the gateway is a separate ASGI app on its own TLS socket inside the Core process, off until the Devices setting turns it on, bound to one LAN address and never the loopback Core port. Five POST routes only (`/pair/start`, `/pair/complete`, `/sync/push`, `/sync/pull`, `/sync/ack`). The phone pins the SHA-256 of the gateway TLS public key from the QR (`contracts/pairing-qr.schema.json`); the QR carries a 120-second one-time code; both screens show a 6-digit fingerprint and approval on the PC must echo it. After pairing every request is signed by the phone key and re-checked against the database; revocation takes the same lock as dispatch. The PC forwards a third device's events only with that device's public key in the same response and withholds events from revoked devices. Details, decisions and threat model: `docs/architecture/pairing-gateway.md`, `docs/security/SYNC-1b-gateway-review.md`.
 
 ## 3. Sync
 

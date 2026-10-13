@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.6 — 2026-10-12
+- ARD-500: implementation note for the pairing gateway (SYNC-1b); new contract `pairing-qr.schema.json`.
+
 ## 2.0.5 — 2026-10-12
 - ARD-700: new section 2.3 Implementation notes (API names, error variants, event signatures, sync API, Finance rules, key handling on both devices, privacy store). The API block in 2.1 now matches the code.
 - ARD-500 section 3: note on P-256 device-key signatures and per-peer cursors.
