@@ -78,9 +78,6 @@ jobs:
     # the same WindowsAppSDK 2.3.1 baseline this project uses.
     runs-on: windows-latest
     timeout-minutes: 40
-    env:
-      # See desktop/Directory.Build.props.
-      REVA_CI_BUNDLE_RUNTIME: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -90,15 +87,22 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore desktop\Reva.Desktop.sln
+        run: dotnet restore desktop\Reva.Desktop.sln --locked-mode
+
+      - name: Install the Windows App Runtime
+        # The runner does not have it. Without it the unpackaged WinUI assembly waits for an install prompt
+        # and test discovery hangs. The installers come from the restored (locked) Microsoft.WindowsAppSDK.Runtime
+        # package, so the runtime always matches the version the app is built against.
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem "$env:USERPROFILE/.nuget/packages/microsoft.windowsappsdk.runtime/*/tools/MSIX/win10-x64" -File
+          if (-not $msix) { throw "Windows App Runtime installers not found in the restored package" }
+          $order = "Microsoft.WindowsAppRuntime.2.msix","Microsoft.WindowsAppRuntime.Main.2.msix","Microsoft.WindowsAppRuntime.Singleton.2.msix","Microsoft.WindowsAppRuntime.DDLM.2.msix"
+          foreach ($name in $order) { Add-AppxPackage -Path ($msix | Where-Object Name -eq $name).FullName }
+          Get-AppxPackage *WindowsAppRuntime* | Select-Object Name,Version,Architecture
 
       - name: Build
         run: dotnet build desktop\Reva.Desktop.sln --configuration Release --no-restore
-
-      - name: Put the checked-in lock files back
-        # The runtime-bundling restore adds a second target to them; a test reads the committed file.
-        shell: pwsh
-        run: git ls-files "desktop/*packages.lock.json" | ForEach-Object { git checkout -- $_ }
 
       - name: Test
         run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 3m --blame-hang-dump-type none --diag:${{ runner.temp }}/vstest-diag.log --logger "console;verbosity=normal"
