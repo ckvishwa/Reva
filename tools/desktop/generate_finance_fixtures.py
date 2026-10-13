@@ -61,6 +61,7 @@ def build() -> dict[str, Any]:
     from reva_core.domains.kernel_loader import load_kernel
     from reva_core.domains.keys import InMemoryKeyProvider
     from reva_core.orchestration.lifecycle import CoreLifecycle
+    from tools.kernel.paired_devices import pair, push
 
     binding = load_kernel()
     out: dict[str, Any] = {}
@@ -241,9 +242,8 @@ def build() -> dict[str, Any]:
             # A phone: a second Kernel install that adds a transaction and disagrees on an amount.
             phone = binding.open_domain("finance", InMemoryKeyProvider(), phone_dir)
             pc = core.domain_service.handle("finance")
-            first = pc.pending_events(1000)
-            pc.ack(first.cursor)
-            phone.apply_events(first)
+            pair(binding, pc, phone)
+            push(pc, phone, 500)
             phone.command(
                 "transaction.create",
                 json.dumps(
@@ -260,9 +260,8 @@ def build() -> dict[str, Any]:
                 "transaction.update", json.dumps({"id": "tx-market-001", "amount_minor": -8540})
             )
             client.patch(f"{F}/transactions/tx-market-001", json={"amount_minor": -8450 + 1})
-            from_pc, from_phone = pc.pending_events(1000), phone.pending_events(1000)
-            phone.apply_events(from_pc)
-            pc.apply_events(from_phone)
+            push(pc, phone, 500)
+            push(phone, pc, 500)
 
             get = lambda path: client.get(path).json()  # noqa: E731
             out["balances"] = get(f"{F}/reports/account_balances?as_of={AS_OF}")
