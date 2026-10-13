@@ -1,7 +1,0 @@
-<Project>
-  <!-- Imported after each project, so it overrides the project's RestorePackagesWithLockFile=true. A RID restore would
-       add a second target to the checked-in lock files, which a test reads. CI bundle only. -->
-  <PropertyGroup Condition="'$(REVA_CI_BUNDLE_RUNTIME)' == 'true'">
-    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-  </PropertyGroup>
-</Project>

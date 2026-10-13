@@ -95,6 +95,11 @@ jobs:
       - name: Build
         run: dotnet build desktop\Reva.Desktop.sln --configuration Release --no-restore
 
+      - name: Put the checked-in lock files back
+        # The runtime-bundling restore adds a second target to them; a test reads the committed file.
+        shell: pwsh
+        run: git ls-files "desktop/*packages.lock.json" | ForEach-Object { git checkout -- $_ }
+
       - name: Test
         run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 3m --blame-hang-dump-type none --diag:${{ runner.temp }}/vstest-diag.log --logger "console;verbosity=normal"
 
