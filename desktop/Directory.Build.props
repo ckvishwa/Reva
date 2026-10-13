@@ -1,0 +1,9 @@
+<Project>
+  <!-- CI only (REVA_CI_BUNDLE_RUNTIME=true): the GitHub runner has no Windows App Runtime, so the unpackaged
+       WinUI assembly would wait for an install prompt and test discovery would hang. Bundle the runtime.
+       Local and release builds are not affected. -->
+  <PropertyGroup Condition="'$(REVA_CI_BUNDLE_RUNTIME)' == 'true'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+</Project>
