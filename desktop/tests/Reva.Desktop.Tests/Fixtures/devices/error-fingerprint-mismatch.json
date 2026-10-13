@@ -1,0 +1,7 @@
+{
+  "body": {
+    "correlation_id": "CORRELATION",
+    "error": "fingerprint_mismatch"
+  },
+  "status": 409
+}

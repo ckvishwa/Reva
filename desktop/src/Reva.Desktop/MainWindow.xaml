@@ -163,6 +163,11 @@
         ViewModel="{x:Bind Finance}"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsFinance), Mode=OneWay}" />
 
+    <views:DevicesPage
+        x:Name="DevicesPanel"
+        ViewModel="{x:Bind Devices}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsDevices), Mode=OneWay}" />
+
     <views:ComingSoonPage
         x:Name="ComingSoonPanel"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsComingSoon), Mode=OneWay}" />

@@ -65,6 +65,7 @@ public sealed class FinanceFixture : IDisposable
         Harness.Window.FindAllDescendants(cf => cf.ByAutomationId("TransactionRow")).Select(r => r.Name).ToList();
 }
 
+[Collection("ui")] // one app window at a time: the tests use the keyboard and the foreground window
 public class FinanceSmokeTests : IClassFixture<FinanceFixture>
 {
     private readonly FinanceFixture _finance;
