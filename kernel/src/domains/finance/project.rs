@@ -15,6 +15,10 @@ pub fn apply(conn: &Connection, event: &Event) -> DomainResult<()> {
         }
         return Ok(());
     }
+    // A deleted record stays deleted: a concurrent or late edit never brings it back (AR-DATA-011).
+    if events::is_tombstoned(conn, &event.aggregate_type, &event.aggregate_id)? {
+        return Ok(());
+    }
     let mut state: Map<String, Value> = event.payload.as_object().cloned().unwrap_or_default();
     state.insert("id".to_string(), Value::String(event.aggregate_id.clone()));
     state.insert("version".to_string(), Value::from(event.version));

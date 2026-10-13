@@ -205,8 +205,8 @@ pub fn validate_remote(event: &Event, expected_domain: &str) -> DomainResult<()>
     if event.version < 1 {
         return bad("version", "must be >= 1");
     }
-    if event.lamport < 0 {
-        return bad("lamport", "must be >= 0");
+    if !(0..=crate::sync::MAX_LAMPORT).contains(&event.lamport) {
+        return bad("lamport", "is outside the range a device can produce");
     }
     let Some((head, action)) = event.kind.rsplit_once('.') else {
         return bad("kind", "must look like aggregate.action");
@@ -321,6 +321,19 @@ pub fn pending(conn: &Connection, limit: u32) -> DomainResult<(Vec<Event>, i64)>
 
 pub fn ack(conn: &Connection, cursor: i64) -> DomainResult<u64> {
     Ok(conn.execute("DELETE FROM outbox WHERE seq <= ?1", [cursor])? as u64)
+}
+
+/// Log rows after `after_seq` in log order, with their sequence numbers.
+pub fn scan_after(conn: &Connection, after_seq: i64, limit: u32) -> DomainResult<Vec<(i64, Event)>> {
+    let sql = format!("SELECT {EVENT_COLUMNS} FROM events e WHERE e.seq > ?1 ORDER BY e.seq LIMIT ?2");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![after_seq, limit], row_to_event)?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (event, seq) = row?;
+        out.push((seq, event));
+    }
+    Ok(out)
 }
 
 /// The whole log in replay order.

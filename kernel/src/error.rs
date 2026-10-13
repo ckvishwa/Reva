@@ -23,6 +23,10 @@ pub enum DomainError {
     Deleted { detail: String },
     #[error("internal error: {detail}")]
     Internal { detail: String },
+    /// Sync refused: unknown, revoked or out-of-scope device, or an event that is unsigned or
+    /// whose signature does not verify. Nothing from the batch was applied.
+    #[error("sync rejected: {reason}")]
+    Rejected { reason: String },
 }
 
 pub type DomainResult<T> = Result<T, DomainError>;
@@ -56,6 +60,7 @@ impl DomainError {
             DomainError::NotFound { .. } => "not_found",
             DomainError::Deleted { .. } => "deleted",
             DomainError::Internal { .. } => "internal",
+            DomainError::Rejected { .. } => "rejected",
         }
     }
 }
