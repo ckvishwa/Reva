@@ -16,9 +16,14 @@ object ExportShare {
 
     fun mimeType(format: String): String = if (format == "json") "application/json" else "text/csv"
 
+    /** Removes every shared export from [cacheDir]. Called at every app start so a plain copy never lingers. */
+    fun clear(cacheDir: File) {
+        File(cacheDir, "exports").listFiles()?.forEach { it.delete() }
+    }
+
     fun write(context: Context, format: String, bytes: ByteArray, today: LocalDate = LocalDate.now()): File {
+        clear(context.cacheDir)
         val dir = File(context.cacheDir, "exports").also { it.mkdirs() }
-        dir.listFiles()?.forEach { it.delete() }
         return File(dir, fileName(format, today)).also { it.writeBytes(bytes) }
     }
 

@@ -5,6 +5,7 @@ import android.content.Context
 import app.reva.data.FinanceRepository
 import app.reva.data.KernelFinanceRepository
 import app.reva.data.KeystoreKeyProvider
+import app.reva.ui.ExportShare
 import java.io.File
 import uniffi.reva_kernel.openDomain
 
@@ -29,4 +30,10 @@ class AppContainer(private val context: Context) {
 
 class RevaApp : Application() {
     val container: AppContainer by lazy { AppContainer(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // A Finance export is a plain file in the cache for the share sheet; never keep it past the session.
+        ExportShare.clear(cacheDir)
+    }
 }
