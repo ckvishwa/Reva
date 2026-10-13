@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
                     repository = container.financeRepository,
                     versionName = BuildConfig.VERSION_NAME,
                     onShare = { format, bytes -> ExportShare.share(this, format, bytes) },
+                    sync = container.syncService,
                 )
             }
         }

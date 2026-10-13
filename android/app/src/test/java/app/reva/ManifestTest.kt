@@ -12,7 +12,8 @@ import org.w3c.dom.NodeList
 
 /**
  * Manifest checks for this slice, run on every unit-test build against the MERGED manifest (so permissions
- * and services pulled in by libraries count too): no INTERNET, no QUERY_ALL_PACKAGES, no AccessibilityService,
+ * and services pulled in by libraries count too): only INTERNET and CAMERA (for pairing with the user's own PC),
+ * no cleartext, no QUERY_ALL_PACKAGES, no AccessibilityService,
  * and backup rules that exclude the domain files.
  */
 class ManifestTest {
@@ -32,14 +33,30 @@ class ManifestTest {
 
     private fun Document.permissions() = getElementsByTagName("uses-permission").elements().map { it.getAttributeNS(androidNs, "name") }
 
-    @Test fun the_app_requests_no_permissions_beyond_androidxs_own_internal_one() {
-        val permissions = merged().permissions()
-        assertEquals(listOf("app.reva.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"), permissions)
+    @Test fun the_app_requests_exactly_internet_and_camera_plus_androidxs_internal_permission() {
+        val permissions = merged().permissions().sorted()
+        assertEquals(
+            listOf("android.permission.CAMERA", "android.permission.INTERNET", "app.reva.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
+            permissions,
+        )
     }
 
-    @Test fun there_is_no_internet_permission() {
-        assertFalse(merged().permissions().any { it == "android.permission.INTERNET" })
-        assertFalse(merged().permissions().any { it.contains("NETWORK") })
+    @Test fun internet_is_used_for_the_paired_pc_only_so_cleartext_is_refused_everywhere() {
+        val doc = merged()
+        val app = doc.getElementsByTagName("application").elements().single()
+        assertEquals("false", app.getAttributeNS(androidNs, "usesCleartextTraffic"))
+        assertEquals("@xml/network_security_config", app.getAttributeNS(androidNs, "networkSecurityConfig"))
+        val config = File(System.getProperty("reva.resDir"), "xml/network_security_config.xml").readText()
+        assertTrue(config.contains("cleartextTrafficPermitted=\"false\""))
+        assertFalse("no domain may be allowed cleartext", config.contains("cleartextTrafficPermitted=\"true\""))
+    }
+
+    @Test fun the_camera_is_optional_hardware_and_no_other_hardware_or_network_permission_is_requested() {
+        val doc = merged()
+        val camera = doc.getElementsByTagName("uses-feature").elements().single { it.getAttributeNS(androidNs, "name") == "android.hardware.camera" }
+        assertEquals("false", camera.getAttributeNS(androidNs, "required"))
+        val permissions = doc.permissions()
+        assertFalse(permissions.any { it.contains("RECORD_AUDIO") || it.contains("LOCATION") || it.contains("NETWORK") || it.contains("WIFI") })
     }
 
     @Test fun there_is_no_query_all_packages() {

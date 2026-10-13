@@ -1,0 +1,84 @@
+{
+  "b64u": [
+    {
+      "b64u": "",
+      "hex": ""
+    },
+    {
+      "b64u": "AA",
+      "hex": "00"
+    },
+    {
+      "b64u": "-_8",
+      "hex": "fbff"
+    },
+    {
+      "b64u": "AP8Q",
+      "hex": "00ff10"
+    },
+    {
+      "b64u": "3q2-78r-",
+      "hex": "deadbeefcafe"
+    }
+  ],
+  "fingerprint": [
+    {
+      "expected": "222846",
+      "gw": "abababababababababababababababababababababababababababababababab",
+      "session": "sess_0123456789abcdef",
+      "spki_b64u": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE74gMjvgWiBeWwYjlcbAaxvcMUmJ0VtrkhnWO_9nGPd1c28EeJIg6ElmCQqlYdblqiFT2S_-ayaM4ELgfFU9U5Q"
+    },
+    {
+      "expected": "049900",
+      "gw": "abababababababababababababababababababababababababababababababab",
+      "session": "other",
+      "spki_b64u": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE74gMjvgWiBeWwYjlcbAaxvcMUmJ0VtrkhnWO_9nGPd1c28EeJIg6ElmCQqlYdblqiFT2S_-ayaM4ELgfFU9U5Q"
+    }
+  ],
+  "messages": {
+    "code": "A1b2C3d4E5f6G7h8I9j0K1",
+    "gateway": "abababababababababababababababababababababababababababababababab",
+    "nonce": "nonce_0123456789abcdef",
+    "pair_complete": "REVA-GW1\npair-complete\nsess_0123456789abcdef\nnonce_0123456789abcdef\nabababababababababababababababababababababababababababababababab",
+    "pair_start": "REVA-GW1\npair-start\nA1b2C3d4E5f6G7h8I9j0K1\nabababababababababababababababababababababababababababababababab",
+    "request": {
+      "body": "{\"domain\":\"finance\",\"limit\":5}",
+      "method": "POST",
+      "path": "/sync/pull",
+      "text": "REVA-GW1\nrequest\nPOST\n/sync/pull\n1800000000\nnonce_0123456789abcdef\nbb4511f6d46987945f4b7823ad7315e99f6abc124817964f5efcf242332b7d2b\nabababababababababababababababababababababababababababababababab",
+      "timestamp": 1800000000
+    },
+    "response": {
+      "body": "{\"count\":0}",
+      "status": 200,
+      "text": "REVA-GW1\nresponse\nnonce_0123456789abcdef\n200\n618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c"
+    },
+    "session": "sess_0123456789abcdef"
+  },
+  "qr": {
+    "bad_texts": [
+      "",
+      "REVA-PAIR1:",
+      "REVA-PAIR1:e30",
+      "OTHER:eyJjb2RlIjoiQTFiMkMzZDRFNWY2RzdoOEk5ajBLMSIsImV4cCI6MTgwMDAwMDEyMCwiZ3ciOiJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiIiwiaG9zdCI6IjE5Mi4xNjguMS4yMCIsInBvcnQiOjQ3ODIxLCJ2IjoxfQ"
+    ],
+    "payload": {
+      "code": "A1b2C3d4E5f6G7h8I9j0K1",
+      "exp": 1800000120,
+      "gw": "abababababababababababababababababababababababababababababababab",
+      "host": "192.168.1.20",
+      "port": 47821,
+      "v": 1
+    },
+    "text": "REVA-PAIR1:eyJjb2RlIjoiQTFiMkMzZDRFNWY2RzdoOEk5ajBLMSIsImV4cCI6MTgwMDAwMDEyMCwiZ3ciOiJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiIiwiaG9zdCI6IjE5Mi4xNjguMS4yMCIsInBvcnQiOjQ3ODIxLCJ2IjoxfQ"
+  },
+  "signature": {
+    "message": "REVA-GW1\nrequest\nPOST\n/sync/pull\n1800000000\nnonce_0123456789abcdef\nbb4511f6d46987945f4b7823ad7315e99f6abc124817964f5efcf242332b7d2b\nabababababababababababababababababababababababababababababababab",
+    "public_b64u": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE74gMjvgWiBeWwYjlcbAaxvcMUmJ0VtrkhnWO_9nGPd1c28EeJIg6ElmCQqlYdblqiFT2S_-ayaM4ELgfFU9U5Q",
+    "signature_b64u": "MEUCIEdpUNFVUS-A6-B5O9TaCD-IxPRqZNmSgWfah5234mI7AiEAzquLNyn9mQpJYe_IILhDNtrcKOhaxnSnAh7zAHKDuxA"
+  },
+  "spki": {
+    "b64u": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE74gMjvgWiBeWwYjlcbAaxvcMUmJ0VtrkhnWO_9nGPd1c28EeJIg6ElmCQqlYdblqiFT2S_-ayaM4ELgfFU9U5Q",
+    "sha256": "1fb1316d8c1236fc506368dac0a4ccf7d3b1fc8086c8554eccb6d5ebe59b2c4e"
+  }
+}

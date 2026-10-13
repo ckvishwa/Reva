@@ -48,7 +48,8 @@ import app.reva.ui.finance.FinanceViewModel
 import app.reva.ui.finance.FormSheet
 import app.reva.ui.finance.ImportForm
 import app.reva.ui.finance.ImportViewModel
-import app.reva.ui.more.MoreScreen
+import app.reva.sync.SyncService
+import app.reva.ui.devices.MoreHost
 import app.reva.ui.more.TalkScreen
 import app.reva.ui.theme.RevaColors
 import app.reva.ui.today.TodayScreen
@@ -78,7 +79,12 @@ private class RootViewModels(private val repository: FinanceRepository) : ViewMo
 
 /** The whole app below the activity: bottom navigation, the four tabs, and the Finance sheets. */
 @Composable
-fun RevaRoot(repository: FinanceRepository, versionName: String, onShare: (format: String, bytes: ByteArray) -> Unit) {
+fun RevaRoot(
+    repository: FinanceRepository,
+    versionName: String,
+    onShare: (format: String, bytes: ByteArray) -> Unit,
+    sync: SyncService? = null,
+) {
     val factory = remember(repository) { RootViewModels(repository) }
     val today: TodayViewModel = viewModel(factory = factory)
     val finance: FinanceViewModel = viewModel(factory = factory)
@@ -139,7 +145,7 @@ fun RevaRoot(repository: FinanceRepository, versionName: String, onShare: (forma
                     onExport = { pendingExport = it },
                 )
                 Tab.Talk -> TalkScreen()
-                Tab.More -> MoreScreen(versionName)
+                Tab.More -> MoreHost(sync, versionName, onSynced = { finance.refresh(); today.refresh() })
             }
         }
     }

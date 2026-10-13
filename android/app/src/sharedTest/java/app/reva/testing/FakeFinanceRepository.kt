@@ -4,6 +4,7 @@ import app.reva.data.AccountBalance
 import app.reva.data.Bill
 import app.reva.data.BudgetStatus
 import app.reva.data.Category
+import app.reva.data.Conflict
 import app.reva.data.CsvMapping
 import app.reva.data.FinanceError
 import app.reva.data.FinanceRepository
@@ -36,6 +37,8 @@ class FakeFinanceRepository : FinanceRepository {
     var budgets = mutableListOf<BudgetStatus>()
     var bills = mutableListOf<Bill>()
     var snapshots = mutableListOf<NetWorthSnapshot>()
+    var conflicts = mutableListOf<Conflict>()
+    val resolved = mutableListOf<Pair<Long, Boolean>>()
     var todaySummary = TodaySummary("2026-10-12", emptyList(), emptyList())
     var importResponder: (Boolean) -> ImportReport = { dry -> ImportReport(0, 0, 0, emptyList(), dry) }
 
@@ -75,6 +78,14 @@ class FakeFinanceRepository : FinanceRepository {
     override suspend fun netWorthSnapshots() = call("netWorthSnapshots") { snapshots.toList() }
 
     override suspend fun today() = call("today") { todaySummary }
+
+    override suspend fun conflicts() = call("conflicts") { conflicts.toList() }
+
+    override suspend fun resolveConflict(id: Long, keepMine: Boolean) = call("resolveConflict") {
+        resolved += id to keepMine
+        conflicts.removeAll { it.id == id }
+        Unit
+    }
 
     override suspend fun addTransaction(request: NewTransaction) = call("addTransaction") {
         addedTransactions += request
