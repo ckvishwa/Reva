@@ -68,7 +68,8 @@ class CoreLifecycle:
         # Domain files open lazily on first use, so a locked vault never blocks Core startup.
         self._domain_service = DomainService(
             self._settings.data_dir,
-            self._domain_key_provider or default_key_provider(self._settings.domain_keystore),
+            self._domain_key_provider
+            or default_key_provider(self._settings.domain_keystore, self._settings.data_dir),
             self._settings.kernel_bindings_dir,
         )
         self._embedding_provider = OllamaEmbeddingProvider(

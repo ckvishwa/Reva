@@ -208,5 +208,6 @@ def test_memory_keystore_is_refused_outside_the_temp_directory(tmp_path):
     with pytest.raises(ConfigurationError):
         load_settings(_env_file=None, data_dir=outside, domain_keystore="memory")
     inside = load_settings(_env_file=None, data_dir=tmp_path, domain_keystore="memory")
-    assert isinstance(default_key_provider(inside.domain_keystore), InMemoryKeyProvider)
+    provider = default_key_provider(inside.domain_keystore, inside.data_dir)
+    assert isinstance(provider, InMemoryKeyProvider)
     assert load_settings(_env_file=None, data_dir=outside).domain_keystore == "windows"

@@ -15,7 +15,9 @@ from __future__ import annotations
 import ctypes
 import os
 import sys
+import tempfile
 from ctypes import wintypes
+from pathlib import Path
 from typing import Protocol
 
 ENTRY_PREFIX = "reva.domain."
@@ -46,6 +48,23 @@ def entry_name(domain: str, prefix: str = ENTRY_PREFIX) -> str:
     if any(fragment in name.lower() for fragment in _FORBIDDEN_FRAGMENTS):
         raise KeyStoreError("refusing to use a legacy AuraO credential entry")
     return name
+
+
+def ensure_memory_keystore_allowed(data_dir: Path) -> None:
+    """The in-memory key provider is a test tool. Refuse it unless every condition holds:
+
+    * the process is not a packaged (frozen) release build, and
+    * the data directory is inside the OS temp directory, so a forgotten environment variable can
+      never point the Core at the real data directory with throw-away keys.
+    """
+    if getattr(sys, "frozen", False):
+        raise KeyStoreError("the in-memory key store is not available in release builds")
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    if temp_root not in Path(data_dir).resolve().parents:
+        raise KeyStoreError(
+            "REVA_DOMAIN_KEYSTORE=memory is only allowed with a data directory "
+            "inside the temp directory"
+        )
 
 
 class InMemoryKeyProvider:
@@ -165,9 +184,15 @@ class _UnavailableKeyProvider:
         raise KeyStoreError("no OS key vault is available on this platform")
 
 
-def default_key_provider(keystore: str = "windows") -> DomainKeyProvider:
+def default_key_provider(
+    keystore: str = "windows", data_dir: Path | None = None
+) -> DomainKeyProvider:
     if keystore == "memory":
-        # Allowed only for a temp data directory (see `load_settings`).
+        # Checked here as well as in `load_settings`, so code that builds `Settings` directly
+        # cannot reach the throw-away keys either.
+        if data_dir is None:
+            raise KeyStoreError("the in-memory key store needs the data directory to be checked")
+        ensure_memory_keystore_allowed(data_dir)
         return InMemoryKeyProvider()
     # Tests must inject their own provider; they may never create or read the user's real keys.
     if "PYTEST_CURRENT_TEST" in os.environ:

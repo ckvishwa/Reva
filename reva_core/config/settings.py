@@ -113,13 +113,10 @@ def load_settings(**overrides: object) -> Settings:
             "REVA Core is never publicly exposed (security invariant #2)."
         )
     if settings.domain_keystore == "memory":
-        import tempfile
+        from reva_core.domains.keys import KeyStoreError, ensure_memory_keystore_allowed
 
-        temp_root = Path(tempfile.gettempdir()).resolve()
-        data_dir = settings.data_dir.resolve()
-        if temp_root not in data_dir.parents:
-            raise ConfigurationError(
-                "REVA_DOMAIN_KEYSTORE=memory is only allowed with a data directory "
-                "inside the temp directory."
-            )
+        try:
+            ensure_memory_keystore_allowed(settings.data_dir)
+        except KeyStoreError as exc:
+            raise ConfigurationError(str(exc)) from exc
     return settings
