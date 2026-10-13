@@ -4,14 +4,15 @@ One Rust crate holds every life domain's storage and rules (ADR-027). It runs in
 Core (Python binding) and inside the Android app (Kotlin binding). It stores, validates and
 computes. It never touches the network, calls a model, or reads anything except its own data files.
 
-Status (FIN-1): store, event log, outbox, tombstones, projections and the **Finance** domain.
+Status (FIN-1, SYNC-1a): store, event log, outbox, tombstones, projections, device-key signed sync (`src/sync/`) and the **Finance** domain.
 Other domains follow the same shape in later slices. Spec: `docs/spec/REVA_v2.0/02_ARD/ARD-700_Life_Domains_and_Domain_Kernel_v2.0.md`.
 
 ## Layout
 
 ```
 src/lib.rs            UniFFI exports and test-visible internals
-src/handle.rs         DomainHandle: command / query / export / import_data / pending_events / apply_events / ack
+src/handle.rs         DomainHandle: command / query / export / import_data / sync_export / sync_apply / sync_ack / peers
+src/sync/             device-key signatures (P-256), peer registry, per-peer cursors, batch checks
 src/store/            SQLCipher open + key handling, migrations (backup first), encrypted backup, recovery
 src/events/           event envelope (contracts/domain-event.schema.json), log, outbox, tombstones, Lamport clock
 src/domains/finance/  money, schema, commands, queries, projections
@@ -45,23 +46,23 @@ SQLCipher links a vendored OpenSSL that is compiled from source. See the docstri
   no key but a data file exists, the Kernel returns `Locked` and never invents a key. The Kernel never
   persists a key itself and never replaces one.
 * **Errors.** `Locked`, `WrongKey`, `Corrupt`, `MigrationFailed`, `Validation{field, reason}`, `Conflict`,
-  `NotFound`, `Deleted`, `Internal`. Failed opens never modify the file. `WrongKey` and `Corrupt` are told
+  `NotFound`, `Deleted`, `Internal`, `Rejected`. Failed opens never modify the file. `WrongKey` and `Corrupt` are told
   apart with a key-check sidecar (`finance.sqlite3.kcv`: an HMAC of a constant under the key; it reveals
   nothing usable about the key). Without the sidecar a failed open of a well-formed file reports `WrongKey`.
 * **Threads.** Calls are blocking and short. Hosts call them off the UI thread (AR-DOM-015). One file is
   serialized by a mutex.
 * **Time.** Queries that depend on "today" take `as_of`; only `created_at` stamps read the clock.
 
-## Deviations from ARD-700 section 2.1 (to be folded into the ARD)
+## Deviations from ARD-700 section 2.1 (folded into ARD-700 section 2.3 in spec 2.0.5)
 
 * `import` is `import_data(format, data, options_json)`: `import` is a Python keyword, and an import needs
   options (target account, column mapping, `dry_run`).
 * Error variants carry a `detail` field, not `message`: a field called `message` collides with the Kotlin
   `Throwable.message`.
-* Event `signature` is an HMAC-SHA256 integrity tag under a key derived from the local domain key. It proves
-  an event was not altered on this device. It is **not** yet a public-key signature, so another device cannot
-  verify it. Cross-device verification arrives with pairing (S13); `apply_events` currently validates shape,
-  schema, domain and tombstone consistency only.
+* Event `signature`: the local log keeps an HMAC-SHA256 integrity tag; on export it becomes `es256:` + hex DER ECDSA P-256
+  by the device key (the host implements `DeviceSigner`). `sync_apply` verifies it against the registered peer key and
+  rejects the whole batch if anything fails. The trust-local `pending_events` / `ack` / `apply_events` are not in the
+  bindings. Full list of implementation notes: ARD-700 section 2.3.
 * A dry-run import executes the real import inside a transaction that is rolled back, so its report equals
   the real run's. It commits nothing.
 * `bill` and `recurring` are one aggregate: a bill has a `recurrence` and a `kind` (`bill`, `subscription`,

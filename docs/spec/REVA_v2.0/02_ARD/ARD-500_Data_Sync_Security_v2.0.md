@@ -1,6 +1,6 @@
 # ARD-500 — Data, Sync, Relay and Security v2.0
 
-**Document ID:** REVA-ARD-500 · **Version:** 2.0.1 · **Date:** 2026-10-11 · **Status:** Proposed
+**Document ID:** REVA-ARD-500 · **Version:** 2.0.5 · **Date:** 2026-10-12 · **Status:** Proposed
 **Replaces:** ARD v1 §6, §7, §13. **Decisions:** ADR-006, ADR-008, ADR-009, ADR-010, ADR-014, ADR-015, ADR-028, ADR-031, ADR-032.
 
 ## 1. Storage map
@@ -24,6 +24,7 @@ PC shows a short-lived QR with a one-time session and the gateway key hash; the 
 - **Apply:** by `event_id` (duplicate = no-op); ordering by (`aggregate_id`, `version`, `lamport`, `origin_device_id`); tombstones beat any older version; never wall-clock last-write-wins (AR-057).
 - **Conflicts:** concurrent edits to the same field produce a conflict record shown to the user for Finance amounts and Health measurements; other fields merge per field with deterministic tie-break.
 - **Scopes:** per-domain sync switch and device list enforced on send **and** receive (AR-058).
+- **Implementation note (2.0.5):** events are signed with a P-256 device key held in the OS vault (Credential Manager, Android Keystore). The Kernel verifies against the peer's registered public key, rejects a whole batch if any event fails, and keeps per-peer cursors. Ed25519 was not used because Android Keystore supports it only from API 33 (minSdk is 31). Details: ARD-700 section 2.3. The pairing gateway, QR and approval flow (S13) are still to come.
 - **Never synced:** raw audio, action commands (outcomes only, as information), embeddings (rebuilt), keys.
 
 ### Transport 1 — LAN direct (R2 default)
