@@ -28,5 +28,7 @@ public static class Vis
 
     public static Brush DueBrush(bool isSoon) => Brush(isSoon ? "RevaAccentBrush" : "RevaMutedBrush");
 
+    public static Brush StatusBrush(bool isActive) => Brush(isActive ? "RevaSuccessBrush" : "RevaMutedBrush");
+
     public static Brush BarBrush(bool nearLimit) => Brush(nearLimit ? "RevaAccentLightBrush" : "RevaAccentBrush");
 }

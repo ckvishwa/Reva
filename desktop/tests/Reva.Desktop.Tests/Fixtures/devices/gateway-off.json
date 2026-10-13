@@ -1,0 +1,11 @@
+{
+  "gateway": {
+    "enabled": false,
+    "error": null,
+    "host": null,
+    "listening": false,
+    "pairing": null,
+    "port": null,
+    "tls_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}
