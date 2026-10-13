@@ -14,6 +14,7 @@ from reva_core.domains.kernel_loader import KernelUnavailableError, load_kernel
 from reva_core.domains.keys import InMemoryKeyProvider, default_key_provider
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.shared.errors import ConfigurationError
+from tools.kernel.paired_devices import pair, push
 
 try:
     binding = load_kernel()
@@ -161,18 +162,16 @@ def test_conflicts_can_be_listed_and_resolved_over_http(api, tmp_path_factory):
         },
     )
     pc = core.domain_service.handle("finance")
-    base = pc.pending_events(100)
-    pc.ack(base.cursor)
 
     # A second "device" (a separate Kernel install) starts from the same history and diverges.
     phone_dir = tmp_path_factory.mktemp("phone")
     phone = binding.open_domain("finance", InMemoryKeyProvider(), str(phone_dir))
-    phone.apply_events(base)
+    pair(binding, pc, phone)
+    push(pc, phone)
     client.patch("/v1/domains/finance/transactions/tx-conflict1", json={"amount_minor": -1111})
     phone.command("transaction.update", json.dumps({"id": "tx-conflict1", "amount_minor": -2222}))
-    from_pc, from_phone = pc.pending_events(100), phone.pending_events(100)
-    phone.apply_events(from_pc)
-    assert len(pc.apply_events(from_phone).conflicts) == 1
+    push(pc, phone)
+    assert len(push(phone, pc).conflicts) == 1
 
     listed = client.get("/v1/domains/finance/conflicts").json()["items"]
     assert (
