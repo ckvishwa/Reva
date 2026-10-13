@@ -22,6 +22,7 @@ from reva_core.api.routes import build_router
 from reva_core.api.schemas import ErrorResponse
 from reva_core.domains.routes import build_domains_router
 from reva_core.domains.service import DomainRequestError
+from reva_core.gateway.routes import build_devices_router
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.shared.errors import StorageError
 from reva_core.shared.logging import get_logger
@@ -33,6 +34,7 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
     app = FastAPI(title="REVA Core", version=__version__)
     app.include_router(build_router(lifecycle))
     app.include_router(build_domains_router(lifecycle))
+    app.include_router(build_devices_router(lifecycle))
 
     @app.get("/health")
     def health() -> dict[str, Any]:
