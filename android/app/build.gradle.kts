@@ -92,6 +92,13 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.kotlinx.coroutines.android)
+    // QR scan for pairing: CameraX (Apache-2.0) shows the preview, ZXing core (Apache-2.0, plain Java, no Google
+    // Play services) decodes frames on the device. See docs/architecture/android-sync.md.
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
     // UniFFI's Kotlin binding loads libreva_kernel.so through JNA; the AAR carries JNA's own native stub.
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
 

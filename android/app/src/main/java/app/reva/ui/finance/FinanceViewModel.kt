@@ -8,6 +8,7 @@ import app.reva.data.AccountBalance
 import app.reva.data.Bill
 import app.reva.data.BudgetStatus
 import app.reva.data.Category
+import app.reva.data.Conflict
 import app.reva.data.ErrorKind
 import app.reva.data.FinanceRepository
 import app.reva.data.NetWorthSnapshot
@@ -52,7 +53,11 @@ data class TransactionRow(
     val a11y: String,
 )
 
+/** One amount the phone and the PC disagree about, with both values ready to show. */
+data class ConflictRow(val id: Long, val title: String, val mineText: String, val pcText: String, val a11y: String)
+
 data class FinanceUiState(
+    val conflicts: List<ConflictRow> = emptyList(),
     val isLoading: Boolean = false,
     val hasLoaded: Boolean = false,
     val isLocked: Boolean = false,
@@ -110,9 +115,10 @@ class FinanceViewModel(
         val budgetsResult = repository.budgetStatus(period)
         val billsResult = repository.bills()
         val snapshotsResult = repository.netWorthSnapshots()
+        val conflictsResult = repository.conflicts()
         if (generation != refreshGeneration) return // a newer refresh is already running
 
-        val failure = listOf(balancesResult, categoriesResult, transactionsResult, budgetsResult, billsResult, snapshotsResult)
+        val failure = listOf(balancesResult, categoriesResult, transactionsResult, budgetsResult, billsResult, snapshotsResult, conflictsResult)
             .filterIsInstance<Outcome.Failed>().firstOrNull()?.error
         if (failure != null) {
             _state.update {
@@ -140,6 +146,7 @@ class FinanceViewModel(
                 budgets = (budgetsResult as Outcome.Ok).value.map(::budgetRow),
                 bills = (billsResult as Outcome.Ok).value.map { b -> billRow(b, now) },
                 transactions = (transactionsResult as Outcome.Ok).value.map { t -> transactionRow(t, now) },
+                conflicts = (conflictsResult as Outcome.Ok).value.map(::conflictRow),
             )
         }
     }
@@ -200,6 +207,18 @@ class FinanceViewModel(
         }
     }
 
+    /** Settle a disagreement: keep this phone's amount or the PC's. Both devices converge on the choice. */
+    fun resolveConflict(id: Long, keepMine: Boolean) {
+        viewModelScope.launch {
+            _state.update { it.copy(isBusy = true) }
+            when (val result = repository.resolveConflict(id, keepMine)) {
+                is Outcome.Ok -> refreshNow()
+                is Outcome.Failed -> _state.update { it.copy(error = result.error.message) }
+            }
+            _state.update { it.copy(isBusy = false) }
+        }
+    }
+
     fun clearError() = _state.update { it.copy(error = null) }
 
     // ---- row building (pure) -------------------------------------------------------------------
@@ -208,6 +227,12 @@ class FinanceViewModel(
         val balanceText = Money.format(b.balanceMinor, b.currency)
         val kind = Display.accountKindLabel(b.kind)
         return AccountCard(b.accountId, b.name, balanceText, "$kind · ${b.currency}", "${b.name}, $kind, balance $balanceText")
+    }
+
+    private fun conflictRow(c: Conflict): ConflictRow {
+        val mine = Money.format(c.localMinor, c.currency)
+        val pc = Money.format(c.remoteMinor, c.currency)
+        return ConflictRow(c.id, c.label, mine, pc, "${c.label}: this phone says $mine, your PC says $pc")
     }
 
     private fun budgetRow(s: BudgetStatus): BudgetRow {

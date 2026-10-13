@@ -31,7 +31,8 @@ import uniffi.reva_kernel.today
  * The Domain Kernel's shared Finance conformance suite (the same kernel/tests/conformance/finance.json the
  * Rust, Python and JVM runners use), run through the Kotlin binding and libreva_kernel.so ON THE DEVICE with
  * the REAL Android Keystore key provider. Run it in airplane mode: [the_device_is_offline_when_the_suite_runs]
- * asserts that, and this app has no INTERNET permission, so nothing in here can reach a network anyway.
+ * asserts that. (Since SYNC-1d the app holds INTERNET for LAN sync with the user's own PC, so the proof of
+ * "nothing leaves the phone" is airplane mode plus the fact that the Kernel itself has no network code.)
  */
 @RunWith(AndroidJUnit4::class)
 class KernelConformanceTest {
@@ -256,18 +257,20 @@ class KernelConformanceTest {
         }
     }
 
-    @Test fun the_app_holds_no_internet_permission_at_runtime() {
+    @Test fun the_app_holds_only_the_sync_permissions_at_runtime() {
         val info = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
         val requested = info.requestedPermissions?.toList() ?: emptyList()
-        assertFalse(requested.contains("android.permission.INTERNET"))
+        assertEquals(setOf("android.permission.INTERNET", "android.permission.CAMERA"), requested.filter { it.startsWith("android.permission.") }.toSet())
         assertFalse(requested.contains("android.permission.QUERY_ALL_PACKAGES"))
-        assertEquals(android.content.pm.PackageManager.PERMISSION_DENIED, context.packageManager.checkPermission("android.permission.INTERNET", context.packageName))
+        assertFalse(requested.any { it.contains("ACCESSIBILITY") })
     }
 
     @Test fun domain_files_and_wrapped_keys_live_in_the_no_backup_directory() {
         val app = context.applicationContext as RevaApp
         assertTrue(app.container.domainRoot.absolutePath.startsWith(context.noBackupFilesDir.absolutePath))
         assertTrue(app.container.keyRoot.absolutePath.startsWith(context.noBackupFilesDir.absolutePath))
+        // The paired-PC record (public data only) is excluded from backups the same way.
+        assertTrue(app.container.syncRoot.absolutePath.startsWith(context.noBackupFilesDir.absolutePath))
     }
 
     @Test fun the_wrapped_key_survives_a_restart_and_the_database_is_not_plain_sqlite() {

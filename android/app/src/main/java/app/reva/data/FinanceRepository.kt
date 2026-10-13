@@ -33,6 +33,12 @@ interface FinanceRepository {
 
     suspend fun today(): Outcome<TodaySummary>
 
+    /** Amounts this phone and the PC disagree about, not yet resolved. */
+    suspend fun conflicts(): Outcome<List<Conflict>>
+
+    /** Settles a conflict by writing a new event with the chosen amount; every paired device then agrees. */
+    suspend fun resolveConflict(id: Long, keepMine: Boolean): Outcome<Unit>
+
     suspend fun addTransaction(request: NewTransaction): Outcome<Unit>
 
     suspend fun addAccount(request: NewAccount): Outcome<Unit>
