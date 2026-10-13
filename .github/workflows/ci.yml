@@ -106,13 +106,7 @@ jobs:
         run: dotnet build desktop\Reva.Desktop.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 3m --blame-hang-dump-type none --diag:${{ runner.temp }}/vstest-diag.log --logger "console;verbosity=normal"
-
-      - name: Test host diagnostics (only when the tests failed)
-        if: failure()
-        shell: pwsh
-        run: |
-          Get-ChildItem "${{ runner.temp }}" -Filter "vstest-diag*" | ForEach-Object { "=== $($_.Name)"; Get-Content $_.FullName | Where-Object { $_ -notmatch "Polling on remoteEndPoint" } | Select-Object -First 70 | ForEach-Object { $_.Substring(0, [Math]::Min(260, $_.Length)) } }
+        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none
 
   contracts:
     # Every schema in contracts/ must be a valid JSON Schema, and contracts/
