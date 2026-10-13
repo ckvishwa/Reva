@@ -79,11 +79,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     env:
-      # The runner has no Windows App Runtime installed. An unpackaged WinUI assembly then waits for a
-      # runtime-install prompt nobody can answer, so test discovery hangs. Bundle the runtime for CI only;
-      # the shipped app is built without these.
-      WindowsAppSDKSelfContained: "true"
-      RuntimeIdentifier: win-x64
+      # See desktop/Directory.Build.props.
+      REVA_CI_BUNDLE_RUNTIME: "true"
 
     steps:
       - uses: actions/checkout@v4
