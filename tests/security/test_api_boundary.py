@@ -33,6 +33,12 @@ _ALLOWED_PATHS = {
     "/v1/domains/{domain}/{collection}/{item_id}",
     "/v1/domains/finance/bills/{item_id}/mark-paid",
     "/v1/today",
+    "/v1/devices",
+    "/v1/devices/gateway",
+    "/v1/devices/pairing",
+    "/v1/devices/pairing/approve",
+    "/v1/devices/pairing/deny",
+    "/v1/devices/{device_id}/revoke",
 }
 
 

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/pairing-qr/1.0",
+  "title": "REVA pairing QR payload",
+  "description": "The JSON inside the pairing QR code. The QR text is the prefix REVA-PAIR1: followed by the unpadded base64url encoding of this object (UTF-8, compact, keys sorted). The phone must check the gateway's TLS public key (SHA-256 of its SubjectPublicKeyInfo DER) against gw before sending anything, and must refuse the code after exp.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "host", "port", "code", "gw", "exp"],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "description": "LAN address of the pairing gateway on the PC."
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,43}$",
+      "description": "One-time pairing code. Valid for one phone and a short time."
+    },
+    "gw": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 (hex) of the gateway TLS public key, SubjectPublicKeyInfo DER."
+    },
+    "exp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unix time (seconds) after which the code is refused."
+    }
+  }
+}
