@@ -3,13 +3,13 @@
 Usage:  python tools/android/build_apk.py [--skip-kernel] [--task assembleDebug]
 
 Steps (each prints what it does):
-  1. python tools/kernel/build_bindings.py   Kotlin binding for the Domain Kernel (kernel/bindings, git-ignored)
-  2. python tools/kernel/build_android.py    libreva_kernel.so for arm64-v8a and x86_64, verified with readelf
+  1. python tools/kernel/build_bindings.py   Kotlin binding (kernel/bindings, git-ignored)
+  2. python tools/kernel/build_android.py    libreva_kernel.so for arm64-v8a and x86_64 (readelf)
   3. copy the two libraries to android/app/build/kernel-libs/<abi>/
   4. android/gradlew :app:assembleDebug      signed with the standard Android debug key
 
 Output: android/app/build/outputs/apk/debug/app-debug.apk (path and SHA-256 are printed).
-Needs: JDK 17+, the Android SDK (ANDROID_HOME) with platform 36, and what tools/kernel/build_android.py needs.
+Needs: JDK 17+, the Android SDK (ANDROID_HOME) with platform 36, and what build_android.py needs.
 """
 
 from __future__ import annotations
@@ -45,7 +45,9 @@ def find_sdk(env: dict[str, str]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--skip-kernel", action="store_true", help="reuse the libraries already built")
+    parser.add_argument(
+        "--skip-kernel", action="store_true", help="reuse the libraries already built"
+    )
     parser.add_argument("--task", default="assembleDebug")
     args = parser.parse_args()
 
@@ -74,7 +76,7 @@ def main() -> int:
             raise SystemExit(f"expected APK not found: {APK}")
         digest = hashlib.sha256(APK.read_bytes()).hexdigest()
         print(f"\nAPK: {APK}\nsize: {APK.stat().st_size} bytes\nsha256: {digest}")
-        print(f"Install: adb install -r \"{APK}\"")
+        print(f'Install: adb install -r "{APK}"')
     return 0
 
 
