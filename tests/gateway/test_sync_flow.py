@@ -109,6 +109,11 @@ def test_conflicting_amount_edits_are_reported_on_both_sides(env: Env) -> None:
     assert _amount(env.pc_kernel(), "tx-shared-001") == _amount(phone.kernel, "tx-shared-001")
     listed = env.client.get("/v1/domains/finance/conflicts", headers=env.headers).json()["items"]
     assert len(listed) == 1
+    # What the Windows banner reads: label, currency and both amounts (one per device).
+    banner = listed[0]
+    assert banner["label"] == "Expense tx-shared-001" and banner["currency"] == "USD"
+    assert {banner["local_value"], banner["remote_value"]} == {"-1111", "-2222"}
+    assert banner["field"] == "amount_minor" and banner["resolved"] is False
 
 
 def test_sync_stops_for_a_revoked_phone_and_the_data_already_synced_stays(env: Env) -> None:

@@ -69,6 +69,7 @@ public partial class App : Application
         var financeApi = new Finance.FinanceApiClient(
             httpClient, tokenProvider, configuration.RequestTimeout);
         var today = new ViewModels.TodayViewModel(financeApi);
+        var devicesApi = new Devices.DevicesApiClient(httpClient, tokenProvider, configuration.RequestTimeout);
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),
             assistant,
@@ -76,6 +77,7 @@ public partial class App : Application
             new ViewModels.NavigationViewModel(),
             new ViewModels.FinanceViewModel(financeApi),
             today,
+            new ViewModels.DevicesViewModel(devicesApi, new Devices.QrCoderEncoder()),
             wakeWord);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)
