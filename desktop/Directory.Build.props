@@ -5,5 +5,7 @@
   <PropertyGroup Condition="'$(REVA_CI_BUNDLE_RUNTIME)' == 'true'">
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- A RID restore would add a second target to the checked-in lock files, which a test reads. -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
   </PropertyGroup>
 </Project>
