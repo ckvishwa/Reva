@@ -77,6 +77,7 @@ jobs:
     # test` work with no VS-path overrides — confirmed locally against
     # the same WindowsAppSDK 2.3.1 baseline this project uses.
     runs-on: windows-latest
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +93,7 @@ jobs:
         run: dotnet build desktop\Reva.Desktop.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build
+        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none --logger "console;verbosity=normal"
 
   contracts:
     # Every schema in contracts/ must be a valid JSON Schema, and contracts/
