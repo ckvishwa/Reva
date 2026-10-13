@@ -93,7 +93,13 @@ jobs:
         run: dotnet build desktop\Reva.Desktop.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none --logger "console;verbosity=normal"
+        run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build --blame-hang --blame-hang-timeout 3m --blame-hang-dump-type none --diag:${{ runner.temp }}/vstest-diag.log --logger "console;verbosity=normal"
+
+      - name: Test host diagnostics (only when the tests failed)
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem "${{ runner.temp }}" -Filter "vstest-diag*" | ForEach-Object { "=== $($_.Name)"; Get-Content $_.FullName -Tail 60 }
 
   contracts:
     # Every schema in contracts/ must be a valid JSON Schema, and contracts/
