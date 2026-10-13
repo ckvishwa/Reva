@@ -67,6 +67,7 @@ pub fn code(error: &DomainError) -> &'static str {
         DomainError::NotFound { .. } => "not_found",
         DomainError::Deleted { .. } => "deleted",
         DomainError::Internal { .. } => "internal",
+        DomainError::Rejected { .. } => "rejected",
     }
 }
 

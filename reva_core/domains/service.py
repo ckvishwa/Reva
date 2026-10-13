@@ -31,6 +31,7 @@ _ERROR_MAP: dict[str, tuple[str, int]] = {
     "NotFound": ("not_found", 404),
     "Deleted": ("deleted", 410),
     "Internal": ("internal_error", 500),
+    "Rejected": ("sync_rejected", 403),
 }
 
 

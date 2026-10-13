@@ -14,6 +14,7 @@ mod handle;
 mod import;
 mod key;
 mod store;
+mod sync;
 mod today;
 
 pub use error::{DomainError, DomainResult};
@@ -22,6 +23,7 @@ pub use handle::{
     RejectedRow,
 };
 pub use key::{KeyProvider, KeyProviderError};
+pub use sync::{DeviceSigner, PeerInfo, SignerError, SyncBatch};
 pub use today::today;
 
 /// Internals the integration tests exercise directly.
