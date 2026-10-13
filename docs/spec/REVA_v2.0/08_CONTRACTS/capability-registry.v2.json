@@ -1,0 +1,600 @@
+{
+  "registry_revision": 2,
+  "schema_version": "2.0",
+  "note": "Shared by Windows Core and Android local brain. No payment, transfer, purchase, bank-login or medical-dosing capability may ever be added (ADR-033); CI absence test checks forbidden_capability_prefixes.",
+  "forbidden_capability_prefixes": [
+    "finance.pay",
+    "finance.transfer",
+    "finance.purchase",
+    "finance.bank_login",
+    "health.dose",
+    "health.diagnose",
+    "shell.",
+    "files.delete",
+    "email.send",
+    "system.install"
+  ],
+  "capabilities": [
+    {
+      "capability": "assistant.answer",
+      "device": "any",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "none",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "memory.recall",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "memory.remember",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "today.get",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "finance.summary",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "period"
+        ],
+        "properties": {
+          "period": {
+            "enum": [
+              "week",
+              "month",
+              "year"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "capability": "finance.budget_status",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "finance.add_transaction",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "amount",
+          "currency",
+          "category",
+          "note"
+        ],
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "finance.bill_reminder",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bill_id"
+        ],
+        "properties": {
+          "bill_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "capability": "health.weekly",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "health.log_workout",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "minutes"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          }
+        }
+      }
+    },
+    {
+      "capability": "health.log_meal",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "health.med_reminder",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schedule_id"
+        ],
+        "properties": {
+          "schedule_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "capability": "coach.checkin",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "note"
+        ],
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "coach.progress",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "career.add_application",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "company",
+          "role"
+        ],
+        "properties": {
+          "company": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "career.pipeline",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "learn.quiz",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deck_id"
+        ],
+        "properties": {
+          "deck_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "capability": "learn.log_session",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "minutes"
+        ],
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "capability": "cyber.add_note",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "cyber.find",
+      "device": "kernel",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "kernel_query",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "personal.reminder.create",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "due"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "due": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "capability": "personal.journal.add",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 20000
+          }
+        }
+      }
+    },
+    {
+      "capability": "windows.app.open",
+      "device": "windows",
+      "tier": "T1",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "process_started",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "app_key"
+        ],
+        "properties": {
+          "app_key": {
+            "enum": [
+              "notepad",
+              "calculator",
+              "chrome",
+              "vscode",
+              "spotify"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "capability": "windows.app.close",
+      "device": "windows",
+      "tier": "T2",
+      "confirm_on": "target",
+      "idempotent": false,
+      "evidence_kind": "process_exited",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "app_key"
+        ],
+        "properties": {
+          "app_key": {
+            "enum": [
+              "notepad",
+              "calculator",
+              "chrome",
+              "vscode",
+              "spotify"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "capability": "windows.ui.inspect",
+      "device": "windows",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "uia_snapshot",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "windows.ui.invoke",
+      "device": "windows",
+      "tier": "T2",
+      "confirm_on": "target",
+      "idempotent": false,
+      "evidence_kind": "uia_postcondition",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshot_id",
+          "element_id"
+        ],
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          },
+          "element_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "capability": "android.app.open",
+      "device": "android",
+      "tier": "T1",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "intent_resolved",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "package_alias"
+        ],
+        "properties": {
+          "package_alias": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    {
+      "capability": "android.alarm.set",
+      "device": "android",
+      "tier": "T2",
+      "confirm_on": "target",
+      "idempotent": false,
+      "evidence_kind": "intent_result",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "time"
+        ],
+        "properties": {
+          "time": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

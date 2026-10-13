@@ -23,6 +23,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # The Core loads the Rust Domain Kernel through its generated Python binding.
+      - name: Build Domain Kernel binding
+        run: python tools/kernel/build_bindings.py
+
       - name: Format check
         run: ruff format --check .
 
@@ -89,3 +93,89 @@ jobs:
 
       - name: Test
         run: dotnet test desktop\Reva.Desktop.sln --configuration Release --no-build
+
+  contracts:
+    # Every schema in contracts/ must be a valid JSON Schema, and contracts/
+    # must match docs/spec/REVA_v2.0/08_CONTRACTS.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install jsonschema
+        run: python -m pip install "jsonschema>=4.22,<5"
+
+      - name: Validate contracts
+        run: python tools/ci/check_contracts.py
+
+  kernel:
+    # Rust Domain Kernel: format, lint, native tests, then the same conformance suite through the
+    # Python and Kotlin (JVM) bindings.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Native tests (recovery, sync, import, registry, no-network, conformance)
+        run: cargo test -p reva-kernel
+
+      - name: Build bindings
+        run: python tools/kernel/build_bindings.py
+
+      - name: Conformance through Python
+        run: python -m pytest tests/cross_binding -q
+
+      - name: Conformance through Kotlin (JVM)
+        run: python tools/kernel/run_kotlin_conformance.py
+
+  android:
+    # Cross-build the Kernel for Android and verify the ELF files. The Kotlin suite runs on a device
+    # or emulator from S11 (Android shell).
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build arm64-v8a and x86_64
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: python tools/kernel/build_android.py

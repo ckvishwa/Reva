@@ -1,59 +1,80 @@
-# Windows App-Command Routing v1 Implementation Plan
+# Windows App-Command Routing v2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Before a composer message reaches the assistant, a deterministic local router recognizes a small set of app open/close commands and executes them through a restricted, allowlisted Windows process executor — never a shell, never arbitrary paths, never LLM-decided. Everything else (ordinary chat, unrecognized commands, unsupported app names) falls through to the existing assistant pipeline with zero behavior change.
+> **Supersedes v1 (2026-08-17).** Changes: `RouteAsync` takes a `CommandSource` and a transcribed `confirm` can no longer close an app (new Task 4 work, new tests); `close explorer` returns `Rejected` instead of falling silently through to the LLM; `CloseMainWindow` races are caught; process work moves off the UI thread; regex anchors changed to `\A`/`\z`; the mis-named 30-second test is fixed; a coverage table replaces the v1 self-review's unverified coverage claim.
 
-**Architecture:** Two new interfaces (`ICommandRouter`, `IAppExecutor`) behind a fixed 7-entry allowlist table (`AppAllowlist`). `CommandRouter` owns text matching and a single-slot pending-confirmation state machine (30s expiry via injected `TimeProvider`); it never touches `Process`/`ProcessStartInfo` directly. `WindowsAppExecutor` is the only place that does — `Process.Start` with `UseShellExecute = true` for open, `Process.GetProcessesByName` + `CloseMainWindow()` (never `Kill()`) for close. `AssistantViewModel.SendMessageCoreAsync` gets one new call, inserted after the existing user-message-append/composer-clear and before the existing `_coreClient.SendMessageAsync` call — a `NotACommand` result falls through to that unmodified code exactly as today.
+**Goal:** Before a composer message reaches the assistant, a deterministic local router recognizes a small set of app open/close commands and executes them through a restricted, allowlisted Windows process executor — never a shell, never arbitrary paths, never LLM-decided, and never confirming a destructive action from speech. Everything else falls through to the existing assistant pipeline with zero behavior change.
 
-**Tech Stack:** C# / .NET (net10.0-windows10.0.19041.0), `System.Diagnostics.Process`, `System.TimeProvider` (BCL, no new package), xUnit — same stack as the transcription-only voice slice this plan follows.
+**Architecture:** Two new interfaces (`ICommandRouter`, `IAppExecutor`) behind a fixed 7-entry allowlist (`AppAllowlist`). `CommandRouter` owns text matching and a single-slot pending-confirmation state machine (30s expiry via injected `TimeProvider`); it never touches `Process`/`ProcessStartInfo`. `WindowsAppExecutor` is the only file that does, and it does its work on the thread pool. `AssistantViewModel.SendMessageCoreAsync` gets one new call plus a typed-vs-transcribed flag.
+
+**Tech Stack:** C# / .NET (net10.0-windows10.0.19041.0), `System.Diagnostics.Process`, `System.TimeProvider` (BCL, no new package), xUnit.
 
 ## Global Constraints
 
-- No arbitrary executable paths — every `ProcessStartInfo.FileName` is one of 7 fixed literal strings baked into `AppAllowlist`, never derived from user text beyond an exact-alias lookup.
-- No raw user input passed to `Process.Start` — `Arguments` is never set on any `ProcessStartInfo` this plan creates.
-- No `cmd.exe`, `powershell.exe`, `pwsh.exe`, or script execution anywhere in the allowlist.
-- No `Process.Kill()` anywhere — close uses `CloseMainWindow()` only.
-- No elevation — `ProcessStartInfo.Verb` is never set to `"runas"`.
-- No LLM-generated shell commands — the router runs entirely before the assistant is invoked for any recognized command; a `NotACommand` result is the *only* way a message reaches the assistant.
-- Never closes REVA itself, security tools, system processes, or unknown apps — the close-capable set is a closed list of 5 named consumer apps (verified in Task 1); REVA's own process is never in it.
-- Reject command chaining, pipes, redirection, and injection-like input — satisfied structurally: the captured argument must exactly equal a fixed alias string (case-insensitive match, then exact dictionary lookup) or the whole message is `NotACommand`.
-- Log only a canonical action ID, app key, and fixed result code via `DesktopLogger.Info("command.state=... action=... app=... result=...")` — never the user's literal typed text, a file path, or an exception message.
-- File Explorer and Windows Settings are open-only (no close command) — decided with user 2026-08-17, `explorer.exe`'s shell-adjacent `CloseMainWindow` behavior is out of scope for v1.
-- Voice transcription, typed chat's non-command path, memory, and TTS behavior are unchanged — verified per-task by running the full existing suite, not just the new command-routing tests.
-- Desktop-only — no `reva_core`/Python changes anywhere in this plan.
+- No arbitrary executable paths — every `ProcessStartInfo.FileName` is one of 7 fixed literals in `AppAllowlist`.
+- No raw user input to `Process.Start` — `Arguments` is never set.
+- No `cmd.exe`, `powershell.exe`, `pwsh.exe`, or script execution in the allowlist.
+- No `Process.Kill()` — close uses `CloseMainWindow()` only.
+- No elevation — `Verb` is never `"runas"`.
+- No LLM-generated shell commands — the router runs before the assistant is invoked; `NotACommand` is the only way a message reaches the assistant.
+- **A destructive close is confirmable only by typed input.** A transcribed `confirm` never resolves a pending action.
+- Never closes REVA itself, security tools, system processes, or unknown apps — the close-capable set is 5 named consumer apps.
+- Reject chaining, pipes, redirection, and multi-line input — structurally, via exact-alias equality and `\A`/`\z` anchors.
+- Log only a canonical action ID, app key, source, and fixed result code — never the user's literal text, a file path, or an exception message.
+- Nothing runs `Process.Start` or `Process.GetProcessesByName` on the UI thread.
+- Voice transcription, typed chat's non-command path, memory, and TTS are unchanged — verified per-task by the full suite.
+- Desktop-only — no `reva_core`/Python changes.
 
 ---
 
 ## File Structure
 
-- `desktop/src/Reva.Desktop/Services/AppDescriptor.cs` — **new**. The allowlist entry record.
-- `desktop/src/Reva.Desktop/Services/AppAllowlist.cs` — **new**. The fixed 7-entry table + alias lookup.
-- `desktop/src/Reva.Desktop/Services/IAppExecutor.cs` — **new**. `IAppExecutor` interface + `AppCloseOutcome` enum.
-- `desktop/src/Reva.Desktop/Services/ICommandRouter.cs` — **new**. `ICommandRouter` interface + `CommandOutcome` enum + `CommandRouteResult` record.
-- `desktop/src/Reva.Desktop/Services/CommandRouter.cs` — **new**. Text matching + pending-confirmation state machine. No `Process`/OS types.
-- `desktop/src/Reva.Desktop/Services/WindowsAppExecutor.cs` — **new**. The only file that touches `System.Diagnostics.Process`.
-- `desktop/src/Reva.Desktop/Services/NullCommandRouter.cs` — **new**. Null-object default (mirrors `UnavailableVoiceDevice`).
-- `desktop/src/Reva.Desktop/ViewModels/AssistantViewModel.cs` — **modify**. New optional ctor parameter, one new call site inside `SendMessageCoreAsync`.
-- `desktop/src/Reva.Desktop/MainWindow.xaml.cs` — **modify**. Thread the router through the constructor.
-- `desktop/src/Reva.Desktop/App.xaml.cs` — **modify**. Construct `WindowsAppExecutor`/`CommandRouter`.
-- `desktop/tests/Reva.Desktop.Tests/Unit/AppAllowlistTests.cs` — **new**.
-- `desktop/tests/Reva.Desktop.Tests/Unit/CommandRouterTests.cs` — **new**. The bulk of test coverage.
-- `desktop/tests/Reva.Desktop.Tests/Unit/AssistantViewModelTests.cs` — **modify**. New command-routing integration tests, added alongside (not replacing) the existing tests.
+- `desktop/src/Reva.Desktop/Services/AppDescriptor.cs` — **new**
+- `desktop/src/Reva.Desktop/Services/AppAllowlist.cs` — **new**
+- `desktop/src/Reva.Desktop/Services/IAppExecutor.cs` — **new**
+- `desktop/src/Reva.Desktop/Services/ICommandRouter.cs` — **new** (includes `CommandSource`)
+- `desktop/src/Reva.Desktop/Services/CommandRouter.cs` — **new**
+- `desktop/src/Reva.Desktop/Services/WindowsAppExecutor.cs` — **new**. The only file touching `System.Diagnostics.Process`.
+- `desktop/src/Reva.Desktop/Services/NullCommandRouter.cs` — **new**
+- `desktop/src/Reva.Desktop/ViewModels/AssistantViewModel.cs` — **modify**
+- `desktop/src/Reva.Desktop/MainWindow.xaml.cs` — **modify**
+- `desktop/src/Reva.Desktop/App.xaml.cs` — **modify**
+- `desktop/tests/Reva.Desktop.Tests/Unit/AppAllowlistTests.cs` — **new**
+- `desktop/tests/Reva.Desktop.Tests/Unit/CommandRouterTests.cs` — **new**
+- `desktop/tests/Reva.Desktop.Tests/Unit/AssistantViewModelTests.cs` — **modify** (added to, not replaced)
+
+---
+
+### Task 0: Recon — one assumption v1 got wrong
+
+**Files:** none (read-only).
+
+- [ ] **Step 1: Establish how composer text arrives**
+
+Read `AssistantViewModel.cs` and `MainWindow.xaml.cs` and answer, in writing:
+
+1. Where does `ComposerText` get set from a transcript? (Expected: `FinishVoiceInputAsync`'s success branch, appending.)
+2. Where does user typing reach the ViewModel? (Expected: `SyncComposerTextFromTextBox`, on the `LostFocus`-gated TwoWay binding.)
+3. **Is there any existing way to tell those two apart?** (Expected: no. Task 4 adds it. v1's design assumed the router could be source-agnostic; it can't.)
+4. Confirm `SendMessageCoreAsync`'s exact current shape — the trim/pending/empty guard, the `Messages.Add(FromUser(trimmed))` line, the `clearComposer` branch, and the `finally`.
+5. Confirm `DesktopLogger.Info`'s signature and whether `Redact` is applied automatically.
+6. Confirm `AssistantMessage.FromAssistant` exists and `AssistantMessageRole` has exactly two members.
+
+- [ ] **Step 2: Record findings**
+
+Write them into `docs/superpowers/specs/2026-08-17-app-command-recon.md` and correct any task below that they contradict. Commit the note.
 
 ---
 
 ### Task 1: Types + allowlist table
 
 **Files:**
-- Create: `desktop/src/Reva.Desktop/Services/AppDescriptor.cs`
-- Create: `desktop/src/Reva.Desktop/Services/AppAllowlist.cs`
-- Create: `desktop/src/Reva.Desktop/Services/IAppExecutor.cs`
-- Create: `desktop/src/Reva.Desktop/Services/ICommandRouter.cs`
-- Test: `desktop/tests/Reva.Desktop.Tests/Unit/AppAllowlistTests.cs`
+- Create: `AppDescriptor.cs`, `AppAllowlist.cs`, `IAppExecutor.cs`, `ICommandRouter.cs`
+- Test: `AppAllowlistTests.cs`
 
 **Interfaces:**
-- Produces: `AppDescriptor(string Key, string DisplayName, IReadOnlyList<string> Aliases, string OpenTarget, string[]? CloseProcessNames)`; `AppAllowlist.All` (`IReadOnlyList<AppDescriptor>`) and `AppAllowlist.FindByAlias(string normalizedArgument)` (`AppDescriptor?`, exact-match lookup, argument must already be trimmed+lowercased by the caller); `IAppExecutor` with `OpenAsync`, `IsRunningAsync`, `CloseAsync`; `AppCloseOutcome { NotRunning, CloseRequested, Failed }`; `ICommandRouter.RouteAsync(string text, CancellationToken)`; `CommandOutcome { NotACommand, Executed, AwaitingConfirmation, Cancelled, Rejected }`; `CommandRouteResult(CommandOutcome Outcome, string? ResultMessage)`.
+- Produces: `AppDescriptor(string Key, string DisplayName, IReadOnlyList<string> Aliases, string OpenTarget, string[]? CloseProcessNames)`; `AppAllowlist.All` and `AppAllowlist.FindByAlias(string normalizedArgument)`; `IAppExecutor` (`OpenAsync`, `IsRunningAsync`, `CloseAsync`); `AppCloseOutcome`; `ICommandRouter.RouteAsync(string, CommandSource, CancellationToken)`; `CommandSource`; `CommandOutcome`; `CommandRouteResult`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -92,6 +113,8 @@ public class AppAllowlistTests
     [InlineData("chrome and tell me about tabs")]
     [InlineData("")]
     [InlineData("chrome; rm -rf")]
+    [InlineData("chrome | more")]
+    [InlineData("chrome && calc")]
     public void FindByAlias_UnknownOrInjectionLikeArgument_ReturnsNull(string argument)
     {
         Assert.Null(AppAllowlist.FindByAlias(argument));
@@ -103,14 +126,33 @@ public class AppAllowlistTests
         Assert.Equal(7, AppAllowlist.All.Count);
     }
 
+    [Fact]
+    public void All_AliasesAreUniqueAcrossEntries()
+    {
+        // A duplicated alias would make the dictionary build throw at type-init
+        // time — a startup crash, not a test failure. Catch it here instead.
+        var aliases = AppAllowlist.All.SelectMany(d => d.Aliases).ToList();
+
+        Assert.Equal(aliases.Count, aliases.Distinct().Count());
+    }
+
+    [Fact]
+    public void All_AliasesAreAlreadyLowercase()
+    {
+        // FindByAlias uses an Ordinal dictionary against a lowercased argument;
+        // an uppercase alias in the table would be permanently unreachable.
+        foreach (var alias in AppAllowlist.All.SelectMany(d => d.Aliases))
+        {
+            Assert.Equal(alias.ToLowerInvariant(), alias);
+        }
+    }
+
     [Theory]
     [InlineData("explorer")]
     [InlineData("settings")]
     public void All_ExplorerAndSettings_AreOpenOnly(string key)
     {
-        var descriptor = AppAllowlist.All.Single(d => d.Key == key);
-
-        Assert.Null(descriptor.CloseProcessNames);
+        Assert.Null(AppAllowlist.All.Single(d => d.Key == key).CloseProcessNames);
     }
 
     [Theory]
@@ -128,23 +170,35 @@ public class AppAllowlistTests
     }
 
     [Fact]
-    public void All_NeverContainsRevaOrAShell()
+    public void All_NoEntryTargetsAShellOrRevaItself()
     {
-        var forbidden = new[] { "reva", "cmd", "powershell", "pwsh" };
+        var forbidden = new[] { "cmd", "powershell", "pwsh", "wscript", "cscript", "reva" };
 
         foreach (var descriptor in AppAllowlist.All)
         {
-            Assert.DoesNotContain(descriptor.Key, forbidden);
-            Assert.DoesNotContain(descriptor.OpenTarget.ToLowerInvariant(), forbidden.Select(f => f + ".exe"));
+            var target = descriptor.OpenTarget.ToLowerInvariant();
+            foreach (var bad in forbidden)
+            {
+                Assert.False(
+                    target.Contains(bad, StringComparison.Ordinal),
+                    $"Allowlist entry '{descriptor.Key}' targets '{descriptor.OpenTarget}'.");
+            }
+
+            foreach (var processName in descriptor.CloseProcessNames ?? Array.Empty<string>())
+            {
+                Assert.DoesNotContain(processName.ToLowerInvariant(), forbidden);
+            }
         }
     }
 }
 ```
 
+(v1's version of that last test asserted a collection didn't contain a string — it passed vacuously and would not have caught `powershell.exe` in an `OpenTarget`. This one does a substring check in the right direction and also covers close names.)
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test desktop/Reva.Desktop.sln --filter AppAllowlistTests`
-Expected: FAIL (build error — none of `AppDescriptor`/`AppAllowlist`/`IAppExecutor`/`ICommandRouter` exist yet).
+Expected: FAIL (build error — none of the types exist).
 
 - [ ] **Step 3: Write the types**
 
@@ -177,8 +231,7 @@ public enum AppCloseOutcome
 }
 
 /// <summary>The only seam that touches <see cref="System.Diagnostics.Process"/>.
-/// <see cref="CommandRouter"/> never does. The real implementation is
-/// <see cref="WindowsAppExecutor"/>.</summary>
+/// <see cref="CommandRouter"/> never does.</summary>
 public interface IAppExecutor
 {
     Task<bool> OpenAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default);
@@ -186,7 +239,7 @@ public interface IAppExecutor
     /// <summary>Side-effect-free check — never calls CloseMainWindow.</summary>
     Task<bool> IsRunningAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default);
 
-    /// <summary>The actual close. Only ever called after the user confirms.</summary>
+    /// <summary>The actual close. Only ever called after a typed confirmation.</summary>
     Task<AppCloseOutcome> CloseAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default);
 }
 ```
@@ -195,6 +248,15 @@ public interface IAppExecutor
 
 ```csharp
 namespace Reva.Desktop.Services;
+
+/// <summary>How the text being routed reached the composer. Destructive
+/// confirmations are honored only for <see cref="Typed"/> — a spoken word
+/// must never be able to discard someone's unsaved work.</summary>
+public enum CommandSource
+{
+    Typed,
+    Transcribed,
+}
 
 public enum CommandOutcome
 {
@@ -209,11 +271,11 @@ public sealed record CommandRouteResult(CommandOutcome Outcome, string? ResultMe
 
 /// <summary>Deterministic, local, pre-assistant command interception. A
 /// <see cref="CommandOutcome.NotACommand"/> result is the only signal the
-/// caller needs — everything else means "do not call the assistant for
-/// this message."</summary>
+/// caller needs — everything else means "do not call the assistant."</summary>
 public interface ICommandRouter
 {
-    Task<CommandRouteResult> RouteAsync(string text, CancellationToken cancellationToken = default);
+    Task<CommandRouteResult> RouteAsync(
+        string text, CommandSource source, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -230,15 +292,12 @@ public static class AppAllowlist
         new AppDescriptor("edge", "Microsoft Edge", new[] { "edge", "microsoft edge" }, "msedge.exe", new[] { "msedge" }),
         new AppDescriptor("notepad", "Notepad", new[] { "notepad" }, "notepad.exe", new[] { "notepad" }),
         // Windows 11 ships Calculator as a packaged app (process "CalculatorApp");
-        // older builds/some installs still use the legacy "Calculator" process
-        // name. calc.exe is the fixed open target either way (App Execution
-        // Alias resolves it on modern Windows). Both names are checked on close.
+        // older builds use "Calculator". calc.exe is the open target either way.
         new AppDescriptor("calculator", "Calculator", new[] { "calculator", "calc" }, "calc.exe", new[] { "CalculatorApp", "Calculator" }),
-        // Code.exe resolves via the registered "App Paths" entry when VS Code's
-        // installer has run (the common case); WindowsAppExecutor's open path
-        // still surfaces a safe "couldn't open" message rather than throwing
-        // if it isn't installed — no plan-time guess about install location
-        // is baked in beyond this fixed literal.
+        // ShellExecute's App Paths lookup consults HKCU as well as HKLM, so a
+        // per-user VS Code install resolves this literal without a hardcoded
+        // %LOCALAPPDATA% path. If Task 7 acceptance shows otherwise, add the
+        // fallback then — as a recorded finding, not a guess now.
         new AppDescriptor("vscode", "Visual Studio Code", new[] { "vscode", "vs code", "code" }, "Code.exe", new[] { "Code" }),
         new AppDescriptor("explorer", "File Explorer", new[] { "file explorer", "explorer" }, "explorer.exe", null),
         new AppDescriptor("settings", "Windows Settings", new[] { "settings", "windows settings" }, "ms-settings:", null),
@@ -248,10 +307,9 @@ public static class AppAllowlist
         .SelectMany(descriptor => descriptor.Aliases.Select(alias => (alias, descriptor)))
         .ToDictionary(pair => pair.alias, pair => pair.descriptor, StringComparer.Ordinal);
 
-    /// <summary>Exact match only — <paramref name="normalizedArgument"/> must
-    /// already be trimmed and lowercased by the caller
-    /// (<see cref="CommandRouter"/>). No substring/contains matching: this is
-    /// the structural defense against chaining/injection-like input.</summary>
+    /// <summary>Exact match only — the argument must already be trimmed and
+    /// lowercased by <see cref="CommandRouter"/>. No substring matching: this
+    /// is the structural defense against chaining/injection-like input.</summary>
     public static AppDescriptor? FindByAlias(string normalizedArgument) =>
         ByAlias.TryGetValue(normalizedArgument, out var descriptor) ? descriptor : null;
 }
@@ -260,7 +318,7 @@ public static class AppAllowlist
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test desktop/Reva.Desktop.sln --filter AppAllowlistTests`
-Expected: PASS (all cases).
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -271,16 +329,16 @@ git commit -m "feat(desktop): add app-command allowlist and router/executor inte
 
 ---
 
-### Task 2: `CommandRouter` — matching + confirmation state machine
+### Task 2: `CommandRouter` — matching + source-aware confirmation
 
-This is the task with the most logic and the most tests. No `Process`/OS calls anywhere in this file — everything is driven through the injected `IAppExecutor` fake.
+The task with the most logic and the most tests. No `Process`/OS calls anywhere in this file.
 
 **Files:**
 - Create: `desktop/src/Reva.Desktop/Services/CommandRouter.cs`
 - Test: `desktop/tests/Reva.Desktop.Tests/Unit/CommandRouterTests.cs`
 
 **Interfaces:**
-- Consumes: `AppAllowlist`, `IAppExecutor`, `AppCloseOutcome` (Task 1).
+- Consumes: `AppAllowlist`, `IAppExecutor`, `AppCloseOutcome`, `CommandSource` (Task 1).
 - Produces: `CommandRouter(IAppExecutor executor, TimeProvider? timeProvider = null) : ICommandRouter`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -325,10 +383,9 @@ public class CommandRouterTests
         }
     }
 
-    // Hand-rolled rather than pulling in Microsoft.Extensions.Time.Testing
-    // for one test double — matches this project's stated preference for
-    // small, dependency-free pieces over an extra package (ObservableObject's
-    // own doc comment makes the same call for MVVM).
+    // Hand-rolled rather than adding Microsoft.Extensions.Time.Testing for one
+    // double — matches this project's preference for small dependency-free
+    // pieces (ObservableObject makes the same call for MVVM).
     private sealed class ManualTimeProvider : TimeProvider
     {
         public DateTimeOffset UtcNow { get; set; } = DateTimeOffset.UtcNow;
@@ -336,17 +393,25 @@ public class CommandRouterTests
         public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
+    private static Task<CommandRouteResult> Typed(CommandRouter router, string text) =>
+        router.RouteAsync(text, CommandSource.Typed);
+
+    private static Task<CommandRouteResult> Spoken(CommandRouter router, string text) =>
+        router.RouteAsync(text, CommandSource.Transcribed);
+
     [Theory]
     [InlineData("hello, how are you?")]
     [InlineData("what's the weather like")]
     [InlineData("")]
     [InlineData("   ")]
+    [InlineData("start over")]
+    [InlineData("let's open a discussion about the roadmap")]
     public async Task RouteAsync_OrdinaryChat_ReturnsNotACommand(string text)
     {
         var executor = new FakeAppExecutor();
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync(text);
+        var result = await Typed(router, text);
 
         Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
         Assert.Equal(0, executor.OpenCallCount);
@@ -357,18 +422,48 @@ public class CommandRouterTests
     [InlineData("/open chrome")]
     [InlineData("open Chrome")]
     [InlineData("OPEN CHROME")]
+    [InlineData("  open   chrome  ")]
     [InlineData("launch Notepad")]
     [InlineData("start Calculator")]
-    public async Task RouteAsync_RecognizedOpenCommand_CallsExecutorOnceAndReturnsExecuted(string text)
+    public async Task RouteAsync_RecognizedOpenCommand_CallsExecutorOnce(string text)
     {
         var executor = new FakeAppExecutor();
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync(text);
+        var result = await Typed(router, text);
 
         Assert.Equal(CommandOutcome.Executed, result.Outcome);
         Assert.NotNull(result.ResultMessage);
         Assert.Equal(1, executor.OpenCallCount);
+    }
+
+    [Fact]
+    public async Task RouteAsync_SpokenOpenCommand_IsHonored()
+    {
+        // Opening is non-destructive and Send is still the human gate, so a
+        // transcribed open is fine. Only confirmation is typing-only.
+        var executor = new FakeAppExecutor();
+        var router = new CommandRouter(executor);
+
+        var result = await Spoken(router, "open chrome");
+
+        Assert.Equal(CommandOutcome.Executed, result.Outcome);
+        Assert.Equal(1, executor.OpenCallCount);
+    }
+
+    [Fact]
+    public async Task RouteAsync_MultiLineMessage_IsNeverACommand()
+    {
+        // \A/\z anchors: "$" alone would match before a trailing newline and
+        // "." doesn't cross newlines, so a multi-line message could otherwise
+        // match on its first line only.
+        var executor = new FakeAppExecutor();
+        var router = new CommandRouter(executor);
+
+        var result = await Typed(router, "open chrome\nand summarize my tabs");
+
+        Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
+        Assert.Equal(0, executor.OpenCallCount);
     }
 
     [Fact]
@@ -377,7 +472,7 @@ public class CommandRouterTests
         var executor = new FakeAppExecutor();
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("open Photoshop");
+        var result = await Typed(router, "open Photoshop");
 
         Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
         Assert.Equal(0, executor.OpenCallCount);
@@ -386,12 +481,10 @@ public class CommandRouterTests
     [Fact]
     public async Task RouteAsync_OpenWithExtraWords_ReturnsNotACommand_NeverCallsExecutor()
     {
-        // Injection/chaining defense: the captured argument must be an exact
-        // alias match, not a prefix/contains match.
         var executor = new FakeAppExecutor();
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("open Chrome and also do something else");
+        var result = await Typed(router, "open Chrome and also do something else");
 
         Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
         Assert.Equal(0, executor.OpenCallCount);
@@ -403,35 +496,40 @@ public class CommandRouterTests
         var executor = new FakeAppExecutor { OpenResult = false };
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("open chrome");
+        var result = await Typed(router, "open chrome");
 
         Assert.Equal(CommandOutcome.Rejected, result.Outcome);
         Assert.Contains("Chrome", result.ResultMessage);
     }
 
     [Fact]
-    public async Task RouteAsync_CloseAllowlistedButNotRunning_ExecutesImmediately_NoConfirmationNeeded()
+    public async Task RouteAsync_CloseOpenOnlyApp_ReturnsRejectedWithExplanation_NotSilentFallthrough()
     {
-        var executor = new FakeAppExecutor { IsRunningResult = false };
+        // v1 returned NotACommand here, which let the assistant answer "I've
+        // closed File Explorer" while nothing happened. Declining out loud is
+        // the honest outcome.
+        var executor = new FakeAppExecutor();
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("close chrome");
+        var result = await Typed(router, "close explorer");
 
-        Assert.Equal(CommandOutcome.Executed, result.Outcome);
-        Assert.Contains("isn't running", result.ResultMessage);
+        Assert.Equal(CommandOutcome.Rejected, result.Outcome);
+        Assert.Equal("I can't close File Explorer.", result.ResultMessage);
+        Assert.Equal(0, executor.IsRunningCallCount);
         Assert.Equal(0, executor.CloseCallCount);
     }
 
     [Fact]
-    public async Task RouteAsync_CloseExplorer_ReturnsNotACommand_OpenOnlyAppHasNoCloseSupport()
+    public async Task RouteAsync_CloseAllowlistedButNotRunning_RepliesImmediately_NoConfirmationNeeded()
     {
-        var executor = new FakeAppExecutor();
+        var executor = new FakeAppExecutor { IsRunningResult = false };
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("close explorer");
+        var result = await Typed(router, "close chrome");
 
-        Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
-        Assert.Equal(0, executor.IsRunningCallCount);
+        Assert.Equal(CommandOutcome.Executed, result.Outcome);
+        Assert.Contains("isn't running", result.ResultMessage);
+        Assert.Equal(0, executor.CloseCallCount);
     }
 
     [Fact]
@@ -440,7 +538,7 @@ public class CommandRouterTests
         var executor = new FakeAppExecutor { IsRunningResult = true };
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("close chrome");
+        var result = await Typed(router, "close chrome");
 
         Assert.Equal(CommandOutcome.AwaitingConfirmation, result.Outcome);
         Assert.Equal("Close Google Chrome? Unsaved work may be lost. Type 'confirm' or 'cancel'.", result.ResultMessage);
@@ -448,27 +546,77 @@ public class CommandRouterTests
     }
 
     [Fact]
-    public async Task RouteAsync_ConfirmAfterPendingClose_ClosesExactlyOnce()
+    public async Task RouteAsync_TypedConfirmAfterPendingClose_ClosesExactlyOnce()
     {
-        var executor = new FakeAppExecutor { IsRunningResult = true, CloseResult = AppCloseOutcome.CloseRequested };
+        var executor = new FakeAppExecutor { IsRunningResult = true };
         var router = new CommandRouter(executor);
-        await router.RouteAsync("close chrome");
+        await Typed(router, "close chrome");
 
-        var result = await router.RouteAsync("confirm");
+        var result = await Typed(router, "confirm");
 
         Assert.Equal(CommandOutcome.Executed, result.Outcome);
         Assert.Equal(1, executor.CloseCallCount);
         Assert.Equal(new[] { "chrome" }, executor.ClosedKeys);
     }
 
+    // ---- The v2 rule: speech cannot confirm a destructive action ----
+
     [Fact]
-    public async Task RouteAsync_CancelAfterPendingClose_NeverCloses()
+    public async Task RouteAsync_TranscribedConfirm_DoesNotClose_AndLeavesPendingIntact()
     {
         var executor = new FakeAppExecutor { IsRunningResult = true };
         var router = new CommandRouter(executor);
-        await router.RouteAsync("close chrome");
+        await Typed(router, "close chrome");
 
-        var result = await router.RouteAsync("cancel");
+        var spoken = await Spoken(router, "confirm");
+
+        Assert.Equal(CommandOutcome.NotACommand, spoken.Outcome);
+        Assert.Equal(0, executor.CloseCallCount);
+
+        // The pending action survives — a typed confirm still works afterwards.
+        var typed = await Typed(router, "confirm");
+        Assert.Equal(CommandOutcome.Executed, typed.Outcome);
+        Assert.Equal(1, executor.CloseCallCount);
+    }
+
+    [Fact]
+    public async Task RouteAsync_TranscribedCancel_DoesNotClearPending()
+    {
+        var executor = new FakeAppExecutor { IsRunningResult = true };
+        var router = new CommandRouter(executor);
+        await Typed(router, "close chrome");
+
+        var spoken = await Spoken(router, "cancel");
+
+        Assert.Equal(CommandOutcome.NotACommand, spoken.Outcome);
+
+        var typed = await Typed(router, "confirm");
+        Assert.Equal(CommandOutcome.Executed, typed.Outcome);
+    }
+
+    [Theory]
+    [InlineData("Confirm")]
+    [InlineData("CONFIRM")]
+    [InlineData("  confirm  ")]
+    public async Task RouteAsync_TypedConfirmVariants_AreAllHonored(string text)
+    {
+        var executor = new FakeAppExecutor { IsRunningResult = true };
+        var router = new CommandRouter(executor);
+        await Typed(router, "close chrome");
+
+        var result = await Typed(router, text);
+
+        Assert.Equal(CommandOutcome.Executed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task RouteAsync_TypedCancelAfterPendingClose_NeverCloses()
+    {
+        var executor = new FakeAppExecutor { IsRunningResult = true };
+        var router = new CommandRouter(executor);
+        await Typed(router, "close chrome");
+
+        var result = await Typed(router, "cancel");
 
         Assert.Equal(CommandOutcome.Cancelled, result.Outcome);
         Assert.Equal("Cancelled.", result.ResultMessage);
@@ -481,7 +629,7 @@ public class CommandRouterTests
         var executor = new FakeAppExecutor();
         var router = new CommandRouter(executor);
 
-        var result = await router.RouteAsync("confirm");
+        var result = await Typed(router, "confirm");
 
         Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
         Assert.Equal(0, executor.CloseCallCount);
@@ -490,12 +638,9 @@ public class CommandRouterTests
     [Fact]
     public async Task RouteAsync_CancelWithNoPendingAction_ReturnsNotACommand()
     {
-        var executor = new FakeAppExecutor();
-        var router = new CommandRouter(executor);
+        var router = new CommandRouter(new FakeAppExecutor());
 
-        var result = await router.RouteAsync("cancel");
-
-        Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
+        Assert.Equal(CommandOutcome.NotACommand, (await Typed(router, "cancel")).Outcome);
     }
 
     [Fact]
@@ -504,28 +649,46 @@ public class CommandRouterTests
         var executor = new FakeAppExecutor { IsRunningResult = true };
         var time = new ManualTimeProvider();
         var router = new CommandRouter(executor, time);
-        await router.RouteAsync("close chrome");
+        await Typed(router, "close chrome");
 
         time.UtcNow = time.UtcNow.AddSeconds(31);
-        var result = await router.RouteAsync("confirm");
+        var result = await Typed(router, "confirm");
 
         Assert.Equal(CommandOutcome.NotACommand, result.Outcome);
         Assert.Equal(0, executor.CloseCallCount);
     }
 
     [Fact]
-    public async Task RouteAsync_ConfirmAtExactlyThirtySeconds_StillHonored()
+    public async Task RouteAsync_ConfirmWellInsideTheWindow_StillHonored()
     {
+        // v1 named this test "AtExactlyThirtySeconds" and then advanced 29s.
+        // Named for what it does now; the boundary itself is the next test.
         var executor = new FakeAppExecutor { IsRunningResult = true };
         var time = new ManualTimeProvider();
         var router = new CommandRouter(executor, time);
-        await router.RouteAsync("close chrome");
+        await Typed(router, "close chrome");
 
         time.UtcNow = time.UtcNow.AddSeconds(29);
-        var result = await router.RouteAsync("confirm");
+        var result = await Typed(router, "confirm");
 
         Assert.Equal(CommandOutcome.Executed, result.Outcome);
         Assert.Equal(1, executor.CloseCallCount);
+    }
+
+    [Fact]
+    public async Task RouteAsync_ConfirmAtExactlyThirtySeconds_StillHonored()
+    {
+        // The injected TimeProvider makes the literal boundary instant
+        // deterministic — no floating-point excuse needed.
+        var executor = new FakeAppExecutor { IsRunningResult = true };
+        var time = new ManualTimeProvider();
+        var router = new CommandRouter(executor, time);
+        await Typed(router, "close chrome");
+
+        time.UtcNow = time.UtcNow.AddSeconds(30);
+        var result = await Typed(router, "confirm");
+
+        Assert.Equal(CommandOutcome.Executed, result.Outcome);
     }
 
     [Fact]
@@ -533,10 +696,10 @@ public class CommandRouterTests
     {
         var executor = new FakeAppExecutor { IsRunningResult = true };
         var router = new CommandRouter(executor);
-        await router.RouteAsync("close chrome");
+        await Typed(router, "close chrome");
 
-        await router.RouteAsync("close notepad");
-        var result = await router.RouteAsync("confirm");
+        await Typed(router, "close notepad");
+        await Typed(router, "confirm");
 
         Assert.Equal(1, executor.CloseCallCount);
         Assert.Equal(new[] { "notepad" }, executor.ClosedKeys);
@@ -547,12 +710,25 @@ public class CommandRouterTests
     {
         var executor = new FakeAppExecutor { IsRunningResult = true, CloseResult = AppCloseOutcome.NotRunning };
         var router = new CommandRouter(executor);
-        await router.RouteAsync("close chrome");
+        await Typed(router, "close chrome");
 
-        var result = await router.RouteAsync("confirm");
+        var result = await Typed(router, "confirm");
 
         Assert.Equal(CommandOutcome.Executed, result.Outcome);
         Assert.Contains("isn't running", result.ResultMessage);
+    }
+
+    [Fact]
+    public async Task RouteAsync_CloseExecutorFails_ReturnsRejected()
+    {
+        var executor = new FakeAppExecutor { IsRunningResult = true, CloseResult = AppCloseOutcome.Failed };
+        var router = new CommandRouter(executor);
+        await Typed(router, "close chrome");
+
+        var result = await Typed(router, "confirm");
+
+        Assert.Equal(CommandOutcome.Rejected, result.Outcome);
+        Assert.Contains("Couldn't close", result.ResultMessage);
     }
 
     [Fact]
@@ -560,10 +736,10 @@ public class CommandRouterTests
     {
         var executor = new FakeAppExecutor { IsRunningResult = true };
         var router = new CommandRouter(executor);
-        await router.RouteAsync("close chrome");
-        await router.RouteAsync("confirm");
+        await Typed(router, "close chrome");
+        await Typed(router, "confirm");
 
-        var second = await router.RouteAsync("confirm");
+        var second = await Typed(router, "confirm");
 
         Assert.Equal(CommandOutcome.NotACommand, second.Outcome);
         Assert.Equal(1, executor.CloseCallCount);
@@ -574,7 +750,7 @@ public class CommandRouterTests
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `dotnet test desktop/Reva.Desktop.sln --filter CommandRouterTests`
-Expected: FAIL (build error — `CommandRouter` doesn't exist yet).
+Expected: FAIL (build error — `CommandRouter` doesn't exist).
 
 - [ ] **Step 3: Write the implementation**
 
@@ -585,10 +761,15 @@ namespace Reva.Desktop.Services;
 
 public sealed class CommandRouter : ICommandRouter
 {
+    // \A and \z rather than ^ and $: "$" also matches before a trailing
+    // newline and "." does not cross newlines, so ^...$ would match the first
+    // line of a multi-line message. A multi-line message is never a command.
     private static readonly Regex OpenPattern = new(
-        @"^/?(?:open|launch|start)\s+(.+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        @"\A/?(?:open|launch|start)\s+(.+)\z", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex ClosePattern = new(
-        @"^/?(?:close|quit)\s+(.+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        @"\A/?(?:close|quit)\s+(.+)\z", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly TimeSpan ConfirmationWindow = TimeSpan.FromSeconds(30);
 
     private readonly IAppExecutor _executor;
     private readonly TimeProvider _timeProvider;
@@ -600,24 +781,29 @@ public sealed class CommandRouter : ICommandRouter
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    public Task<CommandRouteResult> RouteAsync(string text, CancellationToken cancellationToken = default)
+    public Task<CommandRouteResult> RouteAsync(
+        string text, CommandSource source, CancellationToken cancellationToken = default)
     {
         var trimmed = text.Trim();
 
         if (string.Equals(trimmed, "confirm", StringComparison.OrdinalIgnoreCase))
         {
-            return HandleConfirmAsync(cancellationToken);
+            return source == CommandSource.Typed
+                ? HandleConfirmAsync(cancellationToken)
+                : IgnoredSpokenResolution();
         }
 
         if (string.Equals(trimmed, "cancel", StringComparison.OrdinalIgnoreCase))
         {
-            return Task.FromResult(HandleCancel());
+            return source == CommandSource.Typed
+                ? Task.FromResult(HandleCancel())
+                : IgnoredSpokenResolution();
         }
 
         var openMatch = OpenPattern.Match(trimmed);
         if (openMatch.Success)
         {
-            return HandleOpenAsync(openMatch.Groups[1].Value, cancellationToken);
+            return HandleOpenAsync(openMatch.Groups[1].Value, source, cancellationToken);
         }
 
         var closeMatch = ClosePattern.Match(trimmed);
@@ -626,12 +812,26 @@ public sealed class CommandRouter : ICommandRouter
             return HandleCloseRequestAsync(closeMatch.Groups[1].Value, cancellationToken);
         }
 
-        return Task.FromResult(new CommandRouteResult(CommandOutcome.NotACommand, null));
+        return NotACommand();
+    }
+
+    private static Task<CommandRouteResult> NotACommand() =>
+        Task.FromResult(new CommandRouteResult(CommandOutcome.NotACommand, null));
+
+    /// <summary>A spoken "confirm"/"cancel" never resolves a pending
+    /// destructive action — the pending action is left untouched to expire or
+    /// be resolved by typing. Logged so the user's "I said confirm and nothing
+    /// happened" has an explanation in the trace.</summary>
+    private static Task<CommandRouteResult> IgnoredSpokenResolution()
+    {
+        DesktopLogger.Info("command.state=ConfirmIgnored reason=transcribed_source");
+        return NotACommand();
     }
 
     private static string Normalize(string argument) => argument.Trim().ToLowerInvariant();
 
-    private async Task<CommandRouteResult> HandleOpenAsync(string argument, CancellationToken cancellationToken)
+    private async Task<CommandRouteResult> HandleOpenAsync(
+        string argument, CommandSource source, CancellationToken cancellationToken)
     {
         var descriptor = AppAllowlist.FindByAlias(Normalize(argument));
         if (descriptor is null)
@@ -639,21 +839,37 @@ public sealed class CommandRouter : ICommandRouter
             return new CommandRouteResult(CommandOutcome.NotACommand, null);
         }
 
-        DesktopLogger.Info($"command.state=Matched action=Open app={descriptor.Key}");
+        DesktopLogger.Info(
+            $"command.state=Matched action=Open app={descriptor.Key} source={source.ToString().ToLowerInvariant()}");
         var opened = await _executor.OpenAsync(descriptor, cancellationToken).ConfigureAwait(false);
-        DesktopLogger.Info($"command.state=Executed action=Open app={descriptor.Key} result={(opened ? "success" : "failed")}");
+        DesktopLogger.Info(
+            opened
+                ? $"command.state=Executed action=Open app={descriptor.Key} result=success"
+                : $"command.state=Rejected action=Open app={descriptor.Key} reason=launch_failed");
 
         return opened
             ? new CommandRouteResult(CommandOutcome.Executed, $"Opened {descriptor.DisplayName}.")
             : new CommandRouteResult(CommandOutcome.Rejected, $"Couldn't open {descriptor.DisplayName}.");
     }
 
-    private async Task<CommandRouteResult> HandleCloseRequestAsync(string argument, CancellationToken cancellationToken)
+    private async Task<CommandRouteResult> HandleCloseRequestAsync(
+        string argument, CancellationToken cancellationToken)
     {
         var descriptor = AppAllowlist.FindByAlias(Normalize(argument));
-        if (descriptor is null || descriptor.CloseProcessNames is null)
+        if (descriptor is null)
         {
+            // Unrecognized app — genuinely ambiguous ("close the loop"), so
+            // ordinary chat is the right destination.
             return new CommandRouteResult(CommandOutcome.NotACommand, null);
+        }
+
+        if (descriptor.CloseProcessNames is null)
+        {
+            // Recognized app, deliberately open-only. Declining out loud beats
+            // silence: silence lets the assistant invent a confirmation.
+            DesktopLogger.Info($"command.state=Rejected action=Close app={descriptor.Key} reason=open_only");
+            return new CommandRouteResult(
+                CommandOutcome.Rejected, $"I can't close {descriptor.DisplayName}.");
         }
 
         var running = await _executor.IsRunningAsync(descriptor, cancellationToken).ConfigureAwait(false);
@@ -663,7 +879,7 @@ public sealed class CommandRouter : ICommandRouter
             return new CommandRouteResult(CommandOutcome.Executed, $"{descriptor.DisplayName} isn't running.");
         }
 
-        _pending = new PendingClose(descriptor, _timeProvider.GetUtcNow().AddSeconds(30));
+        _pending = new PendingClose(descriptor, _timeProvider.GetUtcNow().Add(ConfirmationWindow));
         DesktopLogger.Info($"command.state=AwaitingConfirmation action=Close app={descriptor.Key}");
         return new CommandRouteResult(
             CommandOutcome.AwaitingConfirmation,
@@ -681,13 +897,22 @@ public sealed class CommandRouter : ICommandRouter
         var descriptor = _pending.App;
         _pending = null;
         var outcome = await _executor.CloseAsync(descriptor, cancellationToken).ConfigureAwait(false);
-        DesktopLogger.Info($"command.state=Confirmed action=Close app={descriptor.Key} result={outcome}");
+        var outcomeToken = outcome switch
+        {
+            AppCloseOutcome.CloseRequested => "requested",
+            AppCloseOutcome.NotRunning => "not_running",
+            _ => "failed",
+        };
+        DesktopLogger.Info($"command.state=Confirmed action=Close app={descriptor.Key} result={outcomeToken}");
 
         return outcome switch
         {
-            AppCloseOutcome.CloseRequested => new CommandRouteResult(CommandOutcome.Executed, $"Closing {descriptor.DisplayName}."),
-            AppCloseOutcome.NotRunning => new CommandRouteResult(CommandOutcome.Executed, $"{descriptor.DisplayName} isn't running."),
-            _ => new CommandRouteResult(CommandOutcome.Rejected, $"Couldn't close {descriptor.DisplayName}."),
+            AppCloseOutcome.CloseRequested => new CommandRouteResult(
+                CommandOutcome.Executed, $"Closing {descriptor.DisplayName}."),
+            AppCloseOutcome.NotRunning => new CommandRouteResult(
+                CommandOutcome.Executed, $"{descriptor.DisplayName} isn't running."),
+            _ => new CommandRouteResult(
+                CommandOutcome.Rejected, $"Couldn't close {descriptor.DisplayName}."),
         };
     }
 
@@ -708,34 +933,39 @@ public sealed class CommandRouter : ICommandRouter
 }
 ```
 
-Note the expiry comparison is `>` (strictly greater), not `>=` — at exactly 30.000...0s the action is still honored (`RouteAsync_ConfirmAtExactlyThirtySeconds_StillHonored` pins this; the 29-second test in that case is deliberately inside the window, not testing the exact boundary tick — floating-point/timer precision makes testing the literal instant unreliable, 29s inside vs 31s outside is what actually matters).
+Expiry uses `>` (strictly greater), so the instant at exactly 30.000s is still honored — pinned by `RouteAsync_ConfirmAtExactlyThirtySeconds_StillHonored`, which is deterministic because the `TimeProvider` is injected.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `dotnet test desktop/Reva.Desktop.sln --filter CommandRouterTests`
-Expected: PASS (all cases).
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add desktop/src/Reva.Desktop/Services/CommandRouter.cs desktop/tests/Reva.Desktop.Tests/Unit/CommandRouterTests.cs
-git commit -m "feat(desktop): add CommandRouter with confirm/cancel state machine"
+git commit -m "feat(desktop): add CommandRouter with source-aware confirm/cancel"
 ```
 
 ---
 
 ### Task 3: `WindowsAppExecutor` — the real process launcher
 
-No unit tests — same established precedent as `WindowsVoiceDevice` (real OS/`Process` dependency, verified only by the physical acceptance run in Task 6, not xUnit).
+> **Erratum from Task 3 security-boundary review (2026-08-17):** the first Task 3 implementation preserved the security boundary, but `CloseAsync` still had correctness gaps. `CloseMainWindow() == false`, `CloseMainWindow()` `Win32Exception`, and `MainWindowHandle` `Win32Exception` must count as graceful-close failures; `InvalidOperationException` means the process exited during the race and is ignored. Outcome precedence is `CloseRequested` when any request succeeded, otherwise `Failed` when any failure occurred, otherwise `NotRunning`. `IsRunningAsync` treats `MainWindowHandle` `Win32Exception` conservatively as running. Every process handle must be disposed exactly once on every path, and safe UI/log messages must not include exception details.
+
+> **Erratum from physical minimized-window acceptance (2026-08-17):** Chrome, Notepad, and Calculator close correctly while restored/on-screen, but the same allowlisted apps do not close while taskbar-minimized; restoring the minimized window and repeating the command succeeds. Task 3 must refresh process state before inspecting `MainWindowHandle`, keep `CloseMainWindow()` as the primary graceful path, and fall back only for matched allowlisted process IDs by enumerating eligible top-level normal/minimized windows and sending bounded `WM_CLOSE`. This fallback must not restore, focus, activate, kill, shell out, elevate, target unrelated processes, target hidden/background helper windows, or leak window titles/exception details.
+
+Unit tests are now required for the process-runtime boundary because `System.Diagnostics.Process` outcomes are not deterministic enough to cover the review findings directly. Keep the abstraction internal to the Windows execution boundary; never expose it to command text or raw user input.
 
 **Files:**
 - Create: `desktop/src/Reva.Desktop/Services/WindowsAppExecutor.cs`
+- Test: `desktop/tests/Reva.Desktop.Tests/Unit/WindowsAppExecutorTests.cs`
 
-**Interfaces:**
-- Consumes: `IAppExecutor`, `AppDescriptor`, `AppCloseOutcome` (Task 1).
-- Produces: `WindowsAppExecutor : IAppExecutor` — the only file touching `System.Diagnostics.Process`.
+- [ ] **Step 1: Add review-regression tests first**
 
-- [ ] **Step 1: Implement**
+Cover: `CloseMainWindow()` false -> `Failed`; `CloseMainWindow()` `Win32Exception` -> `Failed`; all matching processes exited -> `NotRunning`; one success plus one failure -> `CloseRequested`; `MainWindowHandle` `Win32Exception` during close -> `Failed`; `MainWindowHandle` `Win32Exception` during `IsRunningAsync` -> `true`; every process disposed exactly once; exception details absent from safe messages/logs; no match remains `NotRunning`; and the existing allowlist/security tests remain green.
+
+- [ ] **Step 2: Implement**
 
 ```csharp
 using System.ComponentModel;
@@ -743,152 +973,370 @@ using System.Diagnostics;
 
 namespace Reva.Desktop.Services;
 
+/// <summary>The only file in the app that touches System.Diagnostics.Process.
+/// Every operation runs on the thread pool: Process.Start with
+/// UseShellExecute=true blocks while the shell resolves and launches the
+/// target, and process enumeration is not instant either — neither belongs on
+/// the UI thread.</summary>
 public sealed class WindowsAppExecutor : IAppExecutor
 {
-    public Task<bool> OpenAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var startInfo = new ProcessStartInfo
+    public Task<bool> OpenAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default) =>
+        Task.Run(
+            () =>
             {
-                FileName = descriptor.OpenTarget,
-                UseShellExecute = true,
-            };
-            using var process = Process.Start(startInfo);
-            return Task.FromResult(process is not null);
-        }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or System.IO.FileNotFoundException)
-        {
-            DesktopLogger.Info($"command.state=Rejected action=Open app={descriptor.Key} reason=launch_failed");
-            return Task.FromResult(false);
-        }
-    }
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = descriptor.OpenTarget,   // fixed literal, never user input
+                        UseShellExecute = true,
+                    };
+                    using var process = Process.Start(startInfo);
 
-    public Task<bool> IsRunningAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default)
-    {
-        var matches = FindRunningProcesses(descriptor);
-        try
-        {
-            return Task.FromResult(matches.Count > 0);
-        }
-        finally
-        {
-            foreach (var process in matches)
+                    // ms-settings: and other shell protocol handlers legitimately
+                    // return null from Process.Start even on success, so a null
+                    // process is only a failure for entries that launch an exe.
+                    return process is not null || IsShellProtocol(descriptor.OpenTarget);
+                }
+                catch (Exception ex) when (
+                    ex is Win32Exception or InvalidOperationException or System.IO.FileNotFoundException)
+                {
+                    DesktopLogger.Info($"command.state=Rejected action=Open app={descriptor.Key} reason=launch_failed");
+                    return false;
+                }
+            },
+            cancellationToken);
+
+    public Task<bool> IsRunningAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default) =>
+        Task.Run(
+            () =>
             {
+                var matches = FindRunningProcesses(descriptor);
+                try
+                {
+                    return matches.Count > 0;
+                }
+                finally
+                {
+                    DisposeAll(matches);
+                }
+            },
+            cancellationToken);
+
+    public Task<AppCloseOutcome> CloseAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default) =>
+        Task.Run(
+            () =>
+            {
+                var matches = FindRunningProcesses(descriptor);
+                if (matches.Count == 0)
+                {
+                    return AppCloseOutcome.NotRunning;
+                }
+
+                try
+                {
+                    var requested = 0;
+                    var failed = 0;
+                    foreach (var process in matches)
+                    {
+                        try
+                        {
+                            // Polite request only — the target may ignore it or
+                            // raise its own "save changes?" prompt. Never Kill().
+                            // CloseMainWindow() can return false (no window
+                            // handle, or the window is disabled by a modal
+                            // dialog) without throwing — that's a genuine
+                            // failure to deliver the close, not a success.
+                            if (process.CloseMainWindow())
+                            {
+                                requested++;
+                            }
+                            else
+                            {
+                                failed++;
+                            }
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // The process exited between enumeration and this
+                            // call — up to 30 seconds can pass while the user
+                            // decides. Not a failure; just nothing left to close.
+                        }
+                        catch (Win32Exception)
+                        {
+                            // Access denied or the window is unresponsive — a
+                            // genuine failure to close a process that is still
+                            // running, distinct from "already exited."
+                            failed++;
+                        }
+                    }
+
+                    if (requested > 0)
+                    {
+                        return AppCloseOutcome.CloseRequested;
+                    }
+
+                    return failed > 0 ? AppCloseOutcome.Failed : AppCloseOutcome.NotRunning;
+                }
+                finally
+                {
+                    DisposeAll(matches);
+                }
+            },
+            cancellationToken);
+
+    private static bool IsShellProtocol(string target) => target.EndsWith(':');
+
+    private static List<Process> FindRunningProcesses(AppDescriptor descriptor)
+    {
+        var matches = new List<Process>();
+        foreach (var name in descriptor.CloseProcessNames ?? Array.Empty<string>())
+        {
+            foreach (var process in Process.GetProcessesByName(name))
+            {
+                try
+                {
+                    if (process.MainWindowHandle != IntPtr.Zero)
+                    {
+                        matches.Add(process);
+                        continue;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Exited while we were enumerating.
+                }
+
                 process.Dispose();
             }
         }
+
+        return matches;
     }
 
-    public Task<AppCloseOutcome> CloseAsync(AppDescriptor descriptor, CancellationToken cancellationToken = default)
+    private static void DisposeAll(List<Process> processes)
     {
-        var matches = FindRunningProcesses(descriptor);
-        if (matches.Count == 0)
+        foreach (var process in processes)
         {
-            return Task.FromResult(AppCloseOutcome.NotRunning);
-        }
-
-        try
-        {
-            foreach (var process in matches)
-            {
-                // Polite request only — the target app can ignore it or prompt
-                // its own "save changes?" dialog. Never Kill().
-                process.CloseMainWindow();
-            }
-
-            return Task.FromResult(AppCloseOutcome.CloseRequested);
-        }
-        finally
-        {
-            foreach (var process in matches)
-            {
-                process.Dispose();
-            }
+            process.Dispose();
         }
     }
-
-    private static List<Process> FindRunningProcesses(AppDescriptor descriptor) =>
-        (descriptor.CloseProcessNames ?? Array.Empty<string>())
-            .SelectMany(Process.GetProcessesByName)
-            .Where(process => process.MainWindowHandle != IntPtr.Zero)
-            .ToList();
 }
 ```
 
-- [ ] **Step 2: Build to confirm it compiles**
+Three v1 defects fixed here: the whole class was synchronous-on-the-UI-thread; `CloseMainWindow()` could throw `InvalidOperationException` on a process that exited during the confirmation window, with no catch anywhere up the stack; and non-matching processes returned by `GetProcessesByName` were never disposed (v1 filtered with LINQ and disposed only the survivors).
 
-Run: `dotnet build desktop/Reva.Desktop.sln`
-Expected: succeeds, 0 errors.
+- [ ] **Step 3: Build and test**
 
-- [ ] **Step 3: Commit**
+Run: focused `WindowsAppExecutor` tests, command-router tests, complete Desktop suite, and Release build.
+Expected: succeeds, 0 failures.
+
+- [ ] **Step 4: Focused re-review**
+
+Review outcome mapping, process disposal, absence of leaked exception details, and unchanged security boundaries: no `Process.Kill`, no shell/PowerShell invocation, no elevation, no raw user input in `ProcessStartInfo`, and no arbitrary paths.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add desktop/src/Reva.Desktop/Services/WindowsAppExecutor.cs
-git commit -m "feat(desktop): add WindowsAppExecutor (Process.Start/CloseMainWindow only)"
+git add desktop/src/Reva.Desktop/Services/WindowsAppExecutor.cs desktop/tests/Reva.Desktop.Tests/Unit/WindowsAppExecutorTests.cs
+git commit -m "fix(desktop): report graceful app-close failures accurately"
 ```
 
 ---
 
-### Task 4: `AssistantViewModel` integration
+### Task 4: Composer source tracking
+
+The new work v1 didn't know it needed. Without this, `CommandSource` is a parameter nobody can supply honestly.
+
+**Files:**
+- Modify: `desktop/src/Reva.Desktop/ViewModels/AssistantViewModel.cs`
+- Modify: `desktop/tests/Reva.Desktop.Tests/Unit/AssistantViewModelTests.cs`
+
+**Interfaces:**
+- Produces: `AssistantViewModel.ComposerSource` (`CommandSource`, read-only) — `Transcribed` while the composer holds text that came from STT and has not been edited since; `Typed` otherwise.
+
+- [ ] **Step 1: Write the failing tests**
+
+```csharp
+    [Fact]
+    public void ComposerSource_Initially_IsTyped()
+    {
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient());
+
+        Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task ComposerSource_AfterTranscription_IsTranscribed()
+    {
+        var client = TranscribingClient("confirm");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        Assert.Equal(CommandSource.Transcribed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task ComposerSource_AfterUserEditsTranscribedText_ReturnsToTyped()
+    {
+        // Editing is an act of authorship — once the user has touched the text
+        // it is theirs, and a typed confirm should work normally.
+        var client = TranscribingClient("confirm");
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        viewModel.ComposerText = "confirm";   // simulates SyncComposerTextFromTextBox
+
+        Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
+
+    [Fact]
+    public async Task ComposerSource_AfterSend_ResetsToTyped()
+    {
+        // TranscribingClient() can't be reused here — its SendMessageAsync
+        // responder deliberately throws, since every other test using it
+        // asserts the transcription-only slice never sends. This test needs
+        // both paths to succeed: transcribe, then actually send.
+        var client = new FakeCoreClient(
+            (_, _) => Task.FromResult(CoreResult<TypedMessageResponse>.Success(new TypedMessageResponse("ok"))),
+            (_, _) => Task.FromResult(CoreResult<VoiceTranscriptionResponse>.Success(SuccessTranscription("hello"))),
+            (_, _, _) => throw new NotSupportedException());
+        var viewModel = new AssistantViewModel(
+            client, new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))));
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(CommandSource.Typed, viewModel.ComposerSource);
+    }
+```
+
+(v1 of this test used `TranscribingClient("hello")`, whose `SendMessageAsync` responder deliberately throws `NotSupportedException` — every other test using that helper asserts the transcription-only slice never sends. This test needs both calls to succeed, so it can't reuse that shared fake; construct a `FakeCoreClient` directly with working responders for both instead. Adapt the exact `FakeCoreClient`/`CoreResult`/`TypedMessageResponse` construction to whatever the current test file's constructor shapes are — check `ImmediateSuccessClient()`'s definition in the same file for the pattern.)
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `dotnet test desktop/Reva.Desktop.sln --filter ComposerSource`
+Expected: FAIL to build — no `ComposerSource` property.
+
+- [ ] **Step 3: Implement**
+
+The public `ComposerText` setter marks the composer as typed; transcription writes through a private path that marks it transcribed.
+
+```csharp
+    private CommandSource _composerSource = CommandSource.Typed;
+
+    public CommandSource ComposerSource => _composerSource;
+
+    public string ComposerText
+    {
+        get => _composerText;
+        set
+        {
+            // Any write through the public setter is user authorship — the
+            // x:Bind TwoWay path and every test call site land here. This is
+            // unconditional, not gated on SetProperty's change-detection:
+            // re-typing the same text the transcript just produced (e.g. a
+            // TextBox sync firing after a no-op edit) must still count as
+            // authorship and pull the source back to Typed, even though the
+            // field's value doesn't actually change.
+            SetProperty(ref _composerText, value);
+            _composerSource = CommandSource.Typed;
+        }
+    }
+
+    /// <summary>The transcription path's write. Same append semantics as a
+    /// user edit, but marks the text as machine-authored so a spoken
+    /// "confirm" can't resolve a pending destructive command.</summary>
+    private void AppendTranscribedText(string text)
+    {
+        var merged = string.IsNullOrWhiteSpace(_composerText)
+            ? text
+            : $"{_composerText.TrimEnd()} {text}";
+
+        SetProperty(ref _composerText, merged, nameof(ComposerText));
+        _composerSource = CommandSource.Transcribed;   // after the setter, not before
+    }
+```
+
+(v1 of this snippet called a `RaiseSendAvailabilityProperties()` — that method does not exist anywhere in the codebase; it was invented for this task's sample without validating it against the file. No property computed today depends on `ComposerText`, so there is nothing for such a call to raise. Both calls are simply omitted; do not add a stub method with undefined behavior to satisfy them. v1's `ComposerText` setter also gated the `_composerSource = Typed` assignment inside `if (SetProperty(...))` — `ObservableObject.SetProperty` returns `false` and no-ops on a same-value reassignment, so re-syncing identical text after a transcription would leave the source stuck at `Transcribed`. The assignment is unconditional here for that reason.)
+
+In `FinishVoiceInputAsync`'s success branch, replace the inline append with `AppendTranscribedText(text);`.
+
+In `SendMessageCoreAsync`, after the existing composer clear, reset `_composerSource = CommandSource.Typed;` — an empty composer has no author.
+
+- [ ] **Step 4: Run to verify they pass**
+
+Run: `dotnet test desktop/Reva.Desktop.sln --filter AssistantViewModelTests`
+Expected: PASS — including every pre-existing voice test, since `AppendTranscribedText` reproduces the exact append behavior they already assert.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add desktop/src/Reva.Desktop/ViewModels/AssistantViewModel.cs desktop/tests/Reva.Desktop.Tests/Unit/AssistantViewModelTests.cs
+git commit -m "feat(desktop): track whether composer text was typed or transcribed"
+```
+
+---
+
+### Task 5: `AssistantViewModel` routing integration
 
 **Files:**
 - Create: `desktop/src/Reva.Desktop/Services/NullCommandRouter.cs`
 - Modify: `desktop/src/Reva.Desktop/ViewModels/AssistantViewModel.cs`
 - Modify: `desktop/tests/Reva.Desktop.Tests/Unit/AssistantViewModelTests.cs`
 
-**Interfaces:**
-- Consumes: `ICommandRouter`, `CommandOutcome`, `CommandRouteResult` (Task 1/2).
-- Produces: `AssistantViewModel(IRevaCoreClient coreClient, IVoiceDevice? voiceDevice = null, IRevaCoreLifecycle? lifecycle = null, ICommandRouter? commandRouter = null)`.
-
 - [ ] **Step 1: Write `NullCommandRouter`**
 
 ```csharp
 namespace Reva.Desktop.Services;
 
-/// <summary>Null-object default for <see cref="AssistantViewModel"/>'s
-/// optional command-router dependency, mirroring
-/// <see cref="UnavailableVoiceDevice"/>'s precedent — every message is
-/// NotACommand, so existing call sites that don't pass a router keep
-/// behaving exactly as before this slice.</summary>
+/// <summary>Null-object default for AssistantViewModel's optional
+/// command-router dependency, mirroring UnavailableVoiceDevice — every
+/// message is NotACommand, so call sites that don't pass a router behave
+/// exactly as before this slice.</summary>
 public sealed class NullCommandRouter : ICommandRouter
 {
-    public Task<CommandRouteResult> RouteAsync(string text, CancellationToken cancellationToken = default) =>
+    public Task<CommandRouteResult> RouteAsync(
+        string text, CommandSource source, CancellationToken cancellationToken = default) =>
         Task.FromResult(new CommandRouteResult(CommandOutcome.NotACommand, null));
 }
 ```
 
 - [ ] **Step 2: Write the failing tests**
 
-Add to `AssistantViewModelTests.cs`, alongside the existing `FakeCoreClient`/`FakeVoiceDevice`/`FakeCoreLifecycle` nested classes (same file, same idiom):
-
 ```csharp
     private sealed class FakeCommandRouter : ICommandRouter
     {
-        private readonly Func<string, CommandRouteResult> _responder;
+        private readonly Func<string, CommandSource, CommandRouteResult> _responder;
 
-        public FakeCommandRouter(Func<string, CommandRouteResult> responder) => _responder = responder;
+        public FakeCommandRouter(Func<string, CommandSource, CommandRouteResult> responder) =>
+            _responder = responder;
 
         public int CallCount { get; private set; }
 
-        public List<string> ReceivedText { get; } = new();
+        public List<(string Text, CommandSource Source)> Received { get; } = new();
 
-        public Task<CommandRouteResult> RouteAsync(string text, CancellationToken cancellationToken = default)
+        public Task<CommandRouteResult> RouteAsync(
+            string text, CommandSource source, CancellationToken cancellationToken = default)
         {
             CallCount++;
-            ReceivedText.Add(text);
-            return Task.FromResult(_responder(text));
+            Received.Add((text, source));
+            return Task.FromResult(_responder(text, source));
         }
     }
 
     private static FakeCommandRouter PassthroughRouter() =>
-        new(_ => new CommandRouteResult(CommandOutcome.NotACommand, null));
+        new((_, _) => new CommandRouteResult(CommandOutcome.NotACommand, null));
 
     private static FakeCommandRouter RecognizingRouter(CommandOutcome outcome, string message) =>
-        new(_ => new CommandRouteResult(outcome, message));
+        new((_, _) => new CommandRouteResult(outcome, message));
 ```
-
-And these facts (place near the other `SendMessageAsync`/`SendMessageCoreAsync` tests):
 
 ```csharp
     [Fact]
@@ -909,7 +1357,8 @@ And these facts (place near the other `SendMessageAsync`/`SendMessageCoreAsync` 
     [Fact]
     public async Task SendMessageAsync_RouterRecognizesCommand_NeverCallsCore()
     {
-        var client = new FakeCoreClient((_, _) => throw new NotSupportedException("router-recognized command must never reach Core"));
+        var client = new FakeCoreClient(
+            (_, _) => throw new NotSupportedException("router-recognized command must never reach Core"));
         var router = RecognizingRouter(CommandOutcome.Executed, "Opened Google Chrome.");
         var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "open Chrome" };
 
@@ -921,6 +1370,40 @@ And these facts (place near the other `SendMessageAsync`/`SendMessageCoreAsync` 
         Assert.Equal("open Chrome", viewModel.Messages[0].Text);
         Assert.Equal(AssistantMessageRole.Assistant, viewModel.Messages[1].Role);
         Assert.Equal("Opened Google Chrome.", viewModel.Messages[1].Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_TypedText_PassesTypedSourceToRouter()
+    {
+        var router = PassthroughRouter();
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), commandRouter: router)
+        {
+            ComposerText = "confirm",
+        };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(CommandSource.Typed, router.Received.Single().Source);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_TranscribedText_PassesTranscribedSourceToRouter()
+    {
+        // The end-to-end proof of the v2 rule: a spoken "confirm" reaches the
+        // router labelled as speech, and the router (Task 2) refuses to let it
+        // resolve a pending close.
+        var client = TranscribingClient("confirm");
+        var router = PassthroughRouter();
+        var viewModel = new AssistantViewModel(
+            client,
+            new FakeVoiceDevice(recordedAudio: TestWav.Mono16k(TimeSpan.FromSeconds(1))),
+            commandRouter: router);
+
+        await viewModel.StartVoiceInputAsync();
+        await viewModel.FinishVoiceInputAsync();
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(CommandSource.Transcribed, router.Received.Single().Source);
     }
 
     [Fact]
@@ -936,7 +1419,7 @@ And these facts (place near the other `SendMessageAsync`/`SendMessageCoreAsync` 
     }
 
     [Fact]
-    public async Task SendMessageAsync_RouterAwaitingConfirmation_ShowsPromptAsAssistantMessage_NeverCallsCore()
+    public async Task SendMessageAsync_RouterAwaitingConfirmation_ShowsPrompt_NeverCallsCore()
     {
         var client = new FakeCoreClient((_, _) => throw new NotSupportedException());
         var router = RecognizingRouter(
@@ -953,11 +1436,21 @@ And these facts (place near the other `SendMessageAsync`/`SendMessageCoreAsync` 
     }
 
     [Fact]
+    public async Task SendMessageAsync_RouterRejects_ShowsRejectionInsteadOfAskingTheAssistant()
+    {
+        var client = new FakeCoreClient((_, _) => throw new NotSupportedException());
+        var router = RecognizingRouter(CommandOutcome.Rejected, "I can't close File Explorer.");
+        var viewModel = new AssistantViewModel(client, commandRouter: router) { ComposerText = "close explorer" };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.Equal(0, client.CallCount);
+        Assert.Equal("I can't close File Explorer.", viewModel.Messages[1].Text);
+    }
+
+    [Fact]
     public async Task SendMessageAsync_NoCommandRouterProvided_BehavesExactlyAsBeforeThisSlice()
     {
-        // Default-constructed AssistantViewModel (no commandRouter arg) —
-        // every pre-existing test/call site in this file that doesn't pass
-        // one must keep working unchanged.
         var client = ImmediateSuccessClient("Received: hi");
         var viewModel = new AssistantViewModel(client) { ComposerText = "open Chrome" };
 
@@ -978,21 +1471,37 @@ And these facts (place near the other `SendMessageAsync`/`SendMessageCoreAsync` 
 
         Assert.False(viewModel.IsPending);
     }
+
+    [Fact]
+    public async Task SendMessageAsync_RouterThrows_SurfacesSafeErrorAndClearsPending()
+    {
+        // WindowsAppExecutor catches its own OS exceptions, but a bug in the
+        // router must not leave the UI stuck with Send disabled forever.
+        var router = new FakeCommandRouter((_, _) => throw new InvalidOperationException("boom"));
+        var viewModel = new AssistantViewModel(ImmediateSuccessClient(), commandRouter: router)
+        {
+            ComposerText = "open chrome",
+        };
+
+        await viewModel.SendMessageAsync();
+
+        Assert.False(viewModel.IsPending);
+        Assert.NotNull(viewModel.ErrorMessage);
+    }
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [ ] **Step 3: Run to verify they fail**
 
 Run: `dotnet test desktop/Reva.Desktop.sln --filter AssistantViewModelTests`
-Expected: FAIL to build — no 4-arg constructor, `ICommandRouter` not consumed yet.
+Expected: FAIL to build — no 4-arg constructor.
 
 - [ ] **Step 4: Implement**
 
-In `AssistantViewModel.cs`:
-
-1. Add a field: `private readonly ICommandRouter _commandRouter;`
-2. Update the constructor:
+Add the field and constructor parameter:
 
 ```csharp
+    private readonly ICommandRouter _commandRouter;
+
     public AssistantViewModel(
         IRevaCoreClient coreClient,
         IVoiceDevice? voiceDevice = null,
@@ -1007,7 +1516,6 @@ In `AssistantViewModel.cs`:
         _voiceState = _isVoiceAvailable
             ? (IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable)
             : VoiceUiState.CheckingMicrophone;
-        _voiceStatusText = VoiceUiStateText.For(_voiceState);
 
         if (_lifecycle is not null)
         {
@@ -1016,12 +1524,16 @@ In `AssistantViewModel.cs`:
     }
 ```
 
-3. In `SendMessageCoreAsync` (currently lines 451-491), insert the router check as the first statement inside the existing `try` block, before the `_coreClient.SendMessageAsync` call:
+In `SendMessageCoreAsync`, capture the source **before** the composer is cleared, then insert the router call as the first statement in the existing `try`:
 
 ```csharp
+        var source = _composerSource;   // captured before the clear below resets it
+        // ... existing Messages.Add(FromUser(trimmed)) and composer clear ...
+
         try
         {
-            var routeResult = await _commandRouter.RouteAsync(trimmed, cancellationToken).ConfigureAwait(true);
+            var routeResult = await _commandRouter.RouteAsync(trimmed, source, cancellationToken)
+                .ConfigureAwait(true);
             if (routeResult.Outcome != CommandOutcome.NotACommand)
             {
                 if (!string.IsNullOrEmpty(routeResult.ResultMessage))
@@ -1039,11 +1551,18 @@ In `AssistantViewModel.cs`:
                 Messages.Add(AssistantMessage.FromAssistant(reply));
                 return reply;
             }
-            else
-            {
-                ErrorMessage = result.Error!.SafeMessage;
-                return null;
-            }
+
+            ErrorMessage = result.Error!.SafeMessage;
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            ErrorMessage = "Something went wrong sending that message. Try again.";
+            return null;
         }
         finally
         {
@@ -1052,17 +1571,21 @@ In `AssistantViewModel.cs`:
         }
 ```
 
-Everything before this (`ErrorMessage = null; IsPending = true; RaiseVoiceAvailabilityProperties(); Messages.Add(AssistantMessage.FromUser(trimmed)); if (clearComposer) { ComposerText = string.Empty; }`) and the `finally` block are unchanged — this is a pure insertion inside the existing `try`, not a rewrite.
+`ConfigureAwait(true)` on the router call is deliberate: `Messages` is bound to the UI and must be mutated on the UI thread. `WindowsAppExecutor` already moved its blocking work to the pool, so the UI thread is only parked, not busy.
 
-- [ ] **Step 5: Run tests to verify they pass**
+**Ordering note.** `source` must be read before the composer clear, because the clear resets `_composerSource` to `Typed`. Reading it after would label every transcribed message as typed and silently defeat this entire slice's safety rule.
+
+(v1 of the catch clause above called `SetSafeError()` — that method does not exist anywhere in the codebase, and its described filter semantics were self-contradictory with this task's own `SendMessageAsync_RouterThrows_SurfacesSafeErrorAndClearsPending` test, which requires `SendMessageAsync` to complete normally rather than propagate. Replaced with a standard two-catch block matching the exact convention already used elsewhere in this class, e.g. `FinishVoiceInputAsync`.)
+
+- [ ] **Step 5: Run to verify they pass**
 
 Run: `dotnet test desktop/Reva.Desktop.sln --filter AssistantViewModelTests`
-Expected: PASS — every pre-existing test (none pass a `commandRouter`, so `NullCommandRouter` preserves current behavior identically) plus the new command-routing tests.
+Expected: PASS — every pre-existing test plus the new ones.
 
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 6: Full suite**
 
 Run: `dotnet test desktop/Reva.Desktop.sln`
-Expected: PASS, 0 failures — confirms voice-turn tests (which never call `SendMessageCoreAsync`) and memory-panel tests are untouched.
+Expected: PASS, 0 failures.
 
 - [ ] **Step 7: Commit**
 
@@ -1073,18 +1596,12 @@ git commit -m "feat(desktop): route recognized app-commands before the assistant
 
 ---
 
-### Task 5: Wire the composition root
+### Task 6: Wire the composition root
 
 **Files:**
-- Modify: `desktop/src/Reva.Desktop/MainWindow.xaml.cs`
-- Modify: `desktop/src/Reva.Desktop/App.xaml.cs`
-
-**Interfaces:**
-- Consumes: `WindowsAppExecutor`, `CommandRouter` (Tasks 2-3).
+- Modify: `desktop/src/Reva.Desktop/MainWindow.xaml.cs`, `desktop/src/Reva.Desktop/App.xaml.cs`
 
 - [ ] **Step 1: `MainWindow.xaml.cs`**
-
-Change the constructor signature and the `AssistantViewModel` construction:
 
 ```csharp
     public MainWindow(
@@ -1106,25 +1623,18 @@ Change the constructor signature and the `AssistantViewModel` construction:
 
 - [ ] **Step 2: `App.xaml.cs`**
 
-Between the existing `lifecycle` construction and `new MainWindow(...)`:
-
 ```csharp
         var commandRouter = new CommandRouter(new WindowsAppExecutor());
 
         _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice(), commandRouter);
 ```
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: Build and run the full suite**
 
-Run: `dotnet build desktop/Reva.Desktop.sln`
-Expected: succeeds, 0 errors.
+Run: `dotnet build desktop/Reva.Desktop.sln` then `dotnet test desktop/Reva.Desktop.sln`
+Expected: both succeed, 0 failures.
 
-- [ ] **Step 4: Run the full suite one more time**
-
-Run: `dotnet test desktop/Reva.Desktop.sln`
-Expected: PASS, 0 failures.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add desktop/src/Reva.Desktop/MainWindow.xaml.cs desktop/src/Reva.Desktop/App.xaml.cs
@@ -1133,48 +1643,60 @@ git commit -m "feat(desktop): wire CommandRouter/WindowsAppExecutor into the com
 
 ---
 
-### Task 6: Physical open/confirmed-close acceptance run
+### Task 7: Physical acceptance run
 
 **Files:** none (verification task).
 
-- [ ] **Step 1: Full automated suite, one last time**
+- [ ] **Step 1: Full automated suite**
 
 Run: `dotnet test desktop/Reva.Desktop.sln`
-Expected: PASS, 0 failures.
+Expected: PASS, 0 failures. Green before touching a real process.
 
-- [ ] **Step 2: Build Release, run it**
+- [ ] **Step 2: Build Release and run it**
 
-Run: `dotnet build desktop/Reva.Desktop.sln -c Release`, then run the produced `Reva.Desktop.exe` with `reva_core` reachable (same setup as the transcription-only voice slice's Task 9).
+`dotnet build desktop/Reva.Desktop.sln -c Release`, then run the produced `Reva.Desktop.exe` with `reva_core` reachable (same setup as the transcription slice's Task 9).
 
 - [ ] **Step 3: Open acceptance — one per allowlist entry**
 
-For each of: `/open chrome`, `open Chrome`, `launch Notepad`, `start Calculator`, `open Edge`, `open VS Code`, `open File Explorer`, `open Settings` — type it, press Send. Confirm: the typed text appears as a "You" message, a "REVA" message follows ("Opened X."), the target application's window actually appears, and no request hits `reva_core` (watch its logs/audit for the correlation window — no `v1/messages` POST for these turns).
+For each of `/open chrome`, `open Chrome`, `launch Notepad`, `start Calculator`, `open Edge`, `open VS Code`, `open File Explorer`, `open Settings`: type it, press Send. Confirm the typed text appears as a "You" message, a "REVA" message follows ("Opened X."), the target window actually appears, and **no** `v1/messages` POST hits Core for that turn.
 
-- [ ] **Step 4: Close + confirm acceptance**
+Record `open VS Code` specifically: if it fails, the design's HKCU App Paths assumption is wrong and the `%LOCALAPPDATA%` fallback goes into the descriptor as a recorded finding.
 
-With Chrome running (from Step 3), type `close Chrome`. Confirm the "Close Google Chrome? Unsaved work may be lost. Type 'confirm' or 'cancel'." message appears. Type `confirm`. Confirm Chrome's window closes (or prompts to save, if it has unsaved state — `CloseMainWindow` was issued, not `Kill`) and a "Closing Google Chrome." message appears.
+- [ ] **Step 4: UI responsiveness during a cold launch**
 
-- [ ] **Step 5: Close + cancel acceptance**
+Close Chrome entirely, then `open chrome` from a cold start. **The REVA window must stay responsive while Chrome launches** — drag the window, scroll the message list. A freeze here means `Task.Run` didn't take effect and Task 3 needs revisiting.
 
-Open Notepad (Step 3's flow), type `close Notepad`, then type `cancel` instead of `confirm`. Confirm Notepad's window is still open and a "Cancelled." message appears.
+- [ ] **Step 5: Close + typed confirm**
 
-- [ ] **Step 6: Not-running acceptance**
+With Chrome running, type `close Chrome` → confirm the prompt appears → type `confirm` → Chrome's window closes (or prompts to save) and "Closing Google Chrome." appears.
 
-With no Calculator window open, type `close Calculator`. Confirm the immediate reply is "Calculator isn't running." with no confirmation prompt.
+- [ ] **Step 6: Close + cancel**
 
-- [ ] **Step 7: Unsupported command falls through to ordinary chat**
+Open Notepad, type `close Notepad`, then `cancel`. Notepad stays open; "Cancelled." appears.
 
-Type `open Photoshop`. Confirm it behaves exactly like typing any other chat message — it goes to the assistant (watch for the `v1/messages` request in Core's logs) and gets a normal assistant reply, not a router message.
+- [ ] **Step 7: THE SPOKEN-CONFIRM CHECK — the reason this plan is v2**
 
-- [ ] **Step 8: Explorer/Settings close-not-supported check**
+With Notepad open **and unsaved text in it**, type `close Notepad` and wait for the prompt. Then use Hold-to-Talk and say "confirm". Release, and press Send.
 
-Type `close explorer` and `close settings`. Confirm both fall through to ordinary chat (per Step 7's check) rather than producing any router response — they were deliberately excluded from the close allowlist.
+Confirm: **Notepad does not close.** The message goes to the assistant as ordinary chat. `command.state=ConfirmIgnored reason=transcribed_source` appears in the desktop log. Then type `confirm` and verify it *does* close, proving the pending action survived the spoken attempt.
 
-- [ ] **Step 9: Report**
+If Notepad closes on the spoken confirm, stop — Task 4's source tracking or Task 5's capture-before-clear ordering is wrong, and that is the one defect in this slice that destroys user data.
 
-Summarize which of the 8 open commands and the confirm/cancel/not-running/fallthrough behaviors were verified, any deviations, and confirm no `reva_core` request occurred for any successfully-routed command (cross-check Core's own request logs for the run's time window).
+- [ ] **Step 8: Race check — target closed during the window**
 
-- [ ] **Step 10: Commit any last-mile fixes**
+Open Calculator, type `close Calculator`, then close Calculator yourself with the mouse, then type `confirm`. Expect "Calculator isn't running." and **no unhandled exception dialog**. This is the v1 crash path.
+
+- [ ] **Step 9: Not-running, fallthrough, and open-only**
+
+- No Calculator open → `close Calculator` → immediate "Calculator isn't running.", no prompt.
+- `open Photoshop` → ordinary assistant reply (watch for the `v1/messages` request).
+- `close explorer` and `close settings` → "I can't close File Explorer." / "I can't close Windows Settings.", **not** an assistant reply. (v1 expected fallthrough here; v2 deliberately changed it.)
+
+- [ ] **Step 10: Report**
+
+Which of the 8 opens succeeded; the confirm/cancel/not-running/fallthrough/open-only results; the spoken-confirm result from Step 7 verbatim; the race result from Step 8; UI responsiveness from Step 4; and confirmation that no `reva_core` request occurred for any routed command (cross-check Core's request log for the window).
+
+- [ ] **Step 11: Commit any last-mile fixes**
 
 ```bash
 git status
@@ -1182,14 +1704,43 @@ git add -A
 git commit -m "fix(desktop): address app-command acceptance findings"
 ```
 
-(Skip if `git status` is clean.)
-
 ---
 
-## Self-Review Notes
+## Coverage table
 
-- **Spec coverage:** flow steps 1-9 (Task 4's insertion point + Task 2's routing), commands table (Task 2's regex + Task 1's allowlist aliases), initial allowlist (Task 1), security boundaries (Global Constraints, each verified against Task 1-3's actual code), opening mechanics (Task 3), closing mechanics + confirm/cancel/expiry (Task 2), physical acceptance (Task 6).
-- **No placeholders:** every allowlist entry has a concrete literal `OpenTarget`/`CloseProcessNames` (including the documented Calculator dual-process-name handling, decided in-plan rather than left TBD); every regex is the actual pattern, not a description of one.
-- **Small, independently revertible commits:** each of the 6 tasks is one commit (Task 1: types+allowlist, Task 2: router, Task 3: executor, Task 4: ViewModel integration, Task 5: DI wiring, Task 6: any acceptance fixes) — reverting any one doesn't require reverting another (Task 3's executor has no compile-time dependents until Task 5 wires it in; Task 4's ViewModel change is additive/optional-parameter, so reverting it alone doesn't break Tasks 1-3).
-- **Existing behavior confirmed unchanged:** Task 4 Step 5's full-suite run and the explicit `SendMessageAsync_NoCommandRouterProvided_BehavesExactlyAsBeforeThisSlice`/`RouterReturnsNotACommand_FallsThroughToCoreUnchanged` tests directly verify typed chat's non-command path is untouched; the voice-turn code path (`FinishVoiceInputAsync`) never calls `SendMessageCoreAsync` at all (confirmed by recon), so it cannot be affected by this insertion; memory (`MemoryViewModel`) and TTS (already dead code post-voice-slice) are in files this plan never touches.
-- **Type consistency:** `AppDescriptor`/`ICommandRouter`/`IAppExecutor`/enums (Task 1) used identically by `CommandRouter` (Task 2), `WindowsAppExecutor` (Task 3), and `AssistantViewModel` (Task 4). `CommandRouter`'s constructor signature (Task 2) matches exactly what `App.xaml.cs` calls (Task 5).
+Replaces v1's prose self-review, which asserted full coverage without demonstrating it.
+
+| Requirement | Test / step | Task |
+|---|---|---|
+| Allowlist is exactly 7 fixed entries | `All_HasExactlySevenEntries` | 1 |
+| No shell or REVA in the allowlist | `All_NoEntryTargetsAShellOrRevaItself` | 1 |
+| Aliases unique and lowercase | `All_AliasesAreUnique…`, `All_AliasesAreAlreadyLowercase` | 1 |
+| Exact-alias matching (injection defense) | `FindByAlias_UnknownOrInjectionLike…`, `RouteAsync_OpenWithExtraWords…` | 1, 2 |
+| Multi-line input is never a command | `RouteAsync_MultiLineMessage_IsNeverACommand` | 2 |
+| Open verbs + `/` prefix + case-insensitivity | `RouteAsync_RecognizedOpenCommand…` (6 cases) | 2 |
+| Open failure is reported safely | `RouteAsync_OpenExecutorFails_ReturnsRejected` | 2 |
+| Close on a running app prompts first | `RouteAsync_CloseRunningApp_AwaitsConfirmation…` | 2 |
+| Close on a stopped app answers immediately | `RouteAsync_CloseAllowlistedButNotRunning…` | 2 |
+| Open-only apps decline out loud | `RouteAsync_CloseOpenOnlyApp_ReturnsRejected…`, Step 9 | 2, 7 |
+| **Spoken confirm cannot close** | `RouteAsync_TranscribedConfirm…`, `…TranscribedCancel…`, `SendMessageAsync_TranscribedText_PassesTranscribedSource…`, **Step 7** | 2, 5, 7 |
+| Spoken open is still honored | `RouteAsync_SpokenOpenCommand_IsHonored` | 2 |
+| 30s expiry boundary | `…AfterExpiry…`, `…WellInsideTheWindow…`, `…AtExactlyThirtySeconds…` | 2 |
+| Last-write-wins on a new close | `RouteAsync_NewCloseRequestWhilePending…` | 2 |
+| Duplicate confirm is inert | `RouteAsync_DuplicateConfirm…` | 2 |
+| Target exits during the window | `…TargetExitsBetweenPromptAndConfirm…`, **Step 8** | 2, 7 |
+| Graceful close failure mapping | `WindowsAppExecutorTests` false/Win32/handle-failure/mixed-result cases | 3 |
+| Minimized allowlisted windows close gracefully | `CloseAsync_MinimizedEligibleWindow_ReceivesBoundedCloseRequest`, physical minimized-window acceptance | 3, 7 |
+| Fallback targets only matched app windows | `CloseAsync_UnrelatedProcessWindows_AreNeverTargeted`, `CloseAsync_HiddenOrOwnedHelperWindows_AreNeverTargeted` | 3 |
+| Process handles disposed once | `CloseAsync_EveryEnumeratedProcess_DisposedExactlyOnce`, `OpenAsync_ReturnedProcessHandle_DisposedExactlyOnce` | 3 |
+| Window wrappers disposed once | `CloseAsync_EveryEnumeratedWindow_DisposedExactlyOnce` | 3 |
+| Inaccessible `MainWindowHandle` is running | `IsRunningAsync_MainWindowHandleThrowsWin32Exception_ReturnsTrue` | 3 |
+| Never `Kill()` | Code review of `WindowsAppExecutor`; Step 5 (save prompt appears) | 3, 7 |
+| No UI-thread process work | Step 4 | 3, 7 |
+| Source tracking typed/transcribed/edited/reset | 4 `ComposerSource_*` tests | 4 |
+| Recognized command never reaches Core | `SendMessageAsync_RouterRecognizesCommand_NeverCallsCore`, Step 3 | 5, 7 |
+| Non-command path unchanged | `…FallsThroughToCoreUnchanged`, `…NoCommandRouterProvided…`, full suite each task | 5 |
+| Router bug can't wedge the UI | `SendMessageAsync_RouterThrows…` | 5 |
+
+**Not covered by automated tests, by design:** real OS process behavior such as whether `Code.exe`/`CalculatorApp` resolve on this specific machine and whether launched windows appear/respond physically (Task 7). The deterministic `WindowsAppExecutor` outcome mapping and disposal rules are covered through the internal process-runtime boundary.
+
+**Commit granularity:** seven tasks, seven commits, each independently revertible. Task 3's executor has no compile-time dependents until Task 6; Task 4's source tracking is additive and useful on its own; Task 5's ViewModel change is an optional parameter, so reverting it alone leaves Tasks 1-4 intact.
