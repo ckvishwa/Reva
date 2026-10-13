@@ -194,11 +194,13 @@ pub fn register_peer(
             )?;
         }
         Some(_) => {
-            // Re-pairing a revoked device is an explicit, user-approved act: new key, cursors restart
-            // from the peer's last acknowledged positions so nothing is re-sent needlessly.
+            // Re-pairing a revoked device is an explicit, user-approved act: new key, and both cursors
+            // restart from zero. The peer may have been reset or replaced while revoked, so nothing is
+            // assumed about what it holds; replays are harmless because apply is idempotent.
             conn.execute(
                 "UPDATE sync_peers SET public_key = ?2, label = ?3, scopes = ?4, status = 'active',
-                        paired_at = ?5, revoked_at = NULL WHERE device_id = ?1",
+                        paired_at = ?5, revoked_at = NULL, send_cursor = 0, recv_cursor = 0
+                  WHERE device_id = ?1",
                 params![device_id, public_key, label.trim(), scopes_json, civil::now_iso()],
             )?;
         }
@@ -209,6 +211,16 @@ pub fn register_peer(
                 params![device_id, public_key, label.trim(), scopes_json, civil::now_iso()],
             )?;
         }
+    }
+    Ok(())
+}
+
+/// Forget what a peer is believed to hold, so the next export starts from the beginning of the log.
+pub fn reset_peer_cursors(conn: &Connection, device_id: &str) -> DomainResult<()> {
+    let changed =
+        conn.execute("UPDATE sync_peers SET send_cursor = 0, recv_cursor = 0 WHERE device_id = ?1", [device_id])?;
+    if changed == 0 {
+        return Err(DomainError::not_found(format!("device {device_id}")));
     }
     Ok(())
 }
