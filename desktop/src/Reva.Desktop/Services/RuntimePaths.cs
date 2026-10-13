@@ -11,4 +11,7 @@ public static class RuntimePaths
 {
     public static string GetDefaultDataDirectory() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Reva");
+
+    public static string GetDefaultLogDirectory() =>
+        Path.Combine(GetDefaultDataDirectory(), "logs");
 }

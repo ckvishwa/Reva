@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     log_level: Literal["debug", "info", "warning", "error"] = "info"
 
+    # Where the generated Domain Kernel Python binding lives (`tools/kernel/build_bindings.py`).
+    # `REVA_KERNEL_BINDINGS` overrides it. None = `kernel/bindings/python` in the checkout.
+    kernel_bindings_dir: Path | None = None
+
     # Placeholder for a future real provider credential. Never a real key in
     # Phase 0 — no provider integration exists yet. Documented future path:
     # Windows Credential Manager / DPAPI, not plaintext `.env`, for prod.

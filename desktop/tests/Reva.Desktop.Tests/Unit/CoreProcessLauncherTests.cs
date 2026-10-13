@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Reva.Desktop.Services;
 
 namespace Reva.Desktop.Tests.Unit;
@@ -51,6 +52,64 @@ public class CoreProcessLauncherTests
         }
 
         Assert.Equal(7, handle.ExitCode);
+    }
+
+    [Fact]
+    public void Launch_ExposesRealProcessId_ForDiagnosticsOnly()
+    {
+        var launcher = new CoreProcessLauncher();
+        using var handle = launcher.Launch(CmdResolution("/c ping -n 3 127.0.0.1 >nul"), Path.GetTempPath(), 18756);
+
+        Assert.NotNull(handle.Pid);
+        using var osProcess = Process.GetProcessById(handle.Pid!.Value);
+        Assert.False(osProcess.HasExited);
+    }
+
+    [Fact]
+    public void Stop_TerminatesTheRealProcess()
+    {
+        var launcher = new CoreProcessLauncher();
+        using var handle = launcher.Launch(CmdResolution("/c ping -n 60 127.0.0.1 >nul"), Path.GetTempPath(), 18756);
+        var pid = handle.Pid!.Value;
+
+        handle.Stop();
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        var stillRunning = true;
+        while (stillRunning && DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                stillRunning = !Process.GetProcessById(pid).HasExited;
+            }
+            catch (ArgumentException)
+            {
+                stillRunning = false; // process fully gone
+            }
+
+            if (stillRunning)
+            {
+                Thread.Sleep(50);
+            }
+        }
+
+        Assert.False(stillRunning);
+    }
+
+    [Fact]
+    public void Stop_OnAlreadyExitedProcess_DoesNotThrow()
+    {
+        var launcher = new CoreProcessLauncher();
+        using var handle = launcher.Launch(CmdResolution("/c exit 0"), Path.GetTempPath(), 18756);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!handle.HasExited && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(50);
+        }
+
+        var exception = Record.Exception(() => handle.Stop());
+
+        Assert.Null(exception);
     }
 
     [Fact]

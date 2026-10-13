@@ -29,6 +29,12 @@ public sealed class ShellViewModel : ObservableObject
 
     public string CoreStatusText => _lifecycle.StatusText;
 
+    /// <summary>Forwards to <see cref="IRevaCoreLifecycle.ShutdownAsync"/> —
+    /// the real app-shutdown path (Task 6, Slice 8A). Called from
+    /// <c>MainWindow.MainWindow_Closed</c> alongside, not instead of, the
+    /// existing wake-word disposal.</summary>
+    public Task ShutdownAsync() => _lifecycle.ShutdownAsync();
+
     private void OnLifecycleStateChanged(object? sender, EventArgs e)
     {
         RaisePropertyChanged(nameof(LifecycleState));

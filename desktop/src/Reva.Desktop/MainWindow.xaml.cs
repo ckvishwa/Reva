@@ -16,21 +16,69 @@ public sealed partial class MainWindow : Window
 
     public MemoryViewModel Memory { get; }
 
-    public MainWindow(IRevaCoreClient coreClient, IRevaCoreLifecycle lifecycle, IVoiceDevice? voiceDevice = null)
+    public WakeWordCoordinator? WakeWord { get; }
+
+    public MainWindow(
+        ShellViewModel shell,
+        AssistantViewModel assistant,
+        MemoryViewModel memory,
+        WakeWordCoordinator? wakeWord = null)
     {
         InitializeComponent();
-        Shell = new ShellViewModel(lifecycle);
-        Assistant = new AssistantViewModel(coreClient, voiceDevice, lifecycle);
-        Memory = new MemoryViewModel(coreClient);
+        Shell = shell;
+        Assistant = assistant;
+        Memory = memory;
+        WakeWord = wakeWord;
         Shell.PropertyChanged += OnShellPropertyChanged;
         ApplyStatusDotColor();
         RegisterVoicePointerHandlers();
         Closed += MainWindow_Closed;
     }
 
-    private void MainWindow_Closed(object sender, WindowEventArgs args)
+    private bool _shutdownComplete;
+
+    private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        // Slice 8A, Task 6 root cause: for an unpackaged WinUI app, the
+        // process's message loop exits as soon as this handler returns —
+        // and `async void` returns at its first `await`, long before the
+        // awaited cleanup (wake-word disposal, Core shutdown) actually
+        // finishes. Every previous version of this handler was fire-and-
+        // forget in practice: the process was gone before ShutdownAsync's
+        // Stop() call ever ran, confirmed by a real launch/close/tasklist
+        // repro that still showed the orphan even after ShutdownAsync
+        // itself was correct in isolation. `Handled = true` cancels this
+        // close so the async work can run to completion; the explicit
+        // Close() below re-fires this handler once, past the `if`, to let
+        // the window actually go away.
+        if (_shutdownComplete)
+        {
+            return;
+        }
+
+        args.Handled = true;
+
         Assistant.DetachLifecycle();
+        await RunShutdownSequenceAsync(
+            () => Shell.ShutdownAsync(),
+            () => WakeWord is not null ? WakeWord.DisposeAsync().AsTask() : Task.CompletedTask);
+
+        _shutdownComplete = true;
+        Close();
+    }
+
+    /// <summary>Core stop before wake-word disposal, not after — Core stop
+    /// runs in ~tens of milliseconds; wake-word disposal's latency (mic
+    /// lease release, native detector teardown) is unbounded by anything
+    /// this class controls. Ordering it first means anyone who kills REVA
+    /// from Task Manager during that window still finds the owned Core
+    /// process already stopped, rather than exposed for however long
+    /// wake-word teardown takes. Extracted as a static, WinUI-free method
+    /// so the ordering itself is unit-testable without a live Window.</summary>
+    internal static async Task RunShutdownSequenceAsync(Func<Task> stopCoreAsync, Func<Task> disposeWakeWordAsync)
+    {
+        await stopCoreAsync().ConfigureAwait(true);
+        await disposeWakeWordAsync().ConfigureAwait(true);
     }
 
     private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -116,6 +164,11 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer pressed handler reached");
         e.Handled = true;
         VoiceButton.CapturePointer(e.Pointer);
+        if (WakeWord is not null)
+        {
+            await WakeWord.SuspendForHoldToTalkAsync();
+        }
+
         await Assistant.StartVoiceInputAsync();
     }
 
@@ -124,7 +177,7 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer released handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
-        await Assistant.FinishVoiceInputAsync();
+        await FinishVoiceInputAndResumeWakeAsync();
     }
 
     private async void VoiceButton_PointerCanceled(object sender, PointerRoutedEventArgs e)
@@ -132,7 +185,7 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer canceled handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
-        await Assistant.FinishVoiceInputAsync();
+        await FinishVoiceInputAndResumeWakeAsync();
     }
 
     private async void VoiceButton_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
@@ -140,7 +193,22 @@ public sealed partial class MainWindow : Window
         DesktopLogger.Info("voice pointer capture lost handler reached");
         e.Handled = true;
         VoiceButton.ReleasePointerCaptures();
-        await Assistant.FinishVoiceInputAsync();
+        await FinishVoiceInputAndResumeWakeAsync();
+    }
+
+    private async Task FinishVoiceInputAndResumeWakeAsync()
+    {
+        try
+        {
+            await Assistant.FinishVoiceInputAsync();
+        }
+        finally
+        {
+            if (WakeWord is not null)
+            {
+                await WakeWord.ResumeAfterHoldToTalkAsync();
+            }
+        }
     }
 
     private void StopSpeakingButton_Click(object sender, RoutedEventArgs e)

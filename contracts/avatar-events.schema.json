@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/avatar-events/2.0",
+  "title": "REVA avatar events (host to page, page to host)",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "state",
+        "turn_epoch"
+      ],
+      "properties": {
+        "type": {
+          "const": "avatar.state"
+        },
+        "state": {
+          "enum": [
+            "idle",
+            "listening",
+            "thinking",
+            "speaking",
+            "approval",
+            "error"
+          ]
+        },
+        "turn_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "t_ms",
+        "turn_epoch"
+      ],
+      "properties": {
+        "type": {
+          "const": "avatar.mouth"
+        },
+        "t_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rms": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "viseme": {
+          "enum": [
+            "sil",
+            "aa",
+            "ih",
+            "ou",
+            "ee",
+            "oh"
+          ]
+        },
+        "turn_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "rms"
+          ]
+        },
+        {
+          "required": [
+            "viseme"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "cause"
+      ],
+      "properties": {
+        "type": {
+          "const": "avatar.expression"
+        },
+        "name": {
+          "enum": [
+            "neutral",
+            "happy",
+            "sad",
+            "relaxed",
+            "surprised"
+          ]
+        },
+        "cause": {
+          "enum": [
+            "verified_outcome",
+            "greeting",
+            "error",
+            "idle_variation"
+          ]
+        },
+        "action_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 64
+        }
+      },
+      "if": {
+        "properties": {
+          "cause": {
+            "const": "verified_outcome"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "action_id"
+        ]
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "enabled"
+      ],
+      "properties": {
+        "type": {
+          "const": "avatar.settings"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "reduced_motion": {
+          "type": "boolean"
+        },
+        "quality": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "avatar.ready",
+            "avatar.error"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    }
+  ]
+}

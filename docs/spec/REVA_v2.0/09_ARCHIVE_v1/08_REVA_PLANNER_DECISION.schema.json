@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.reva.local/agent/planner-decision.v1.json",
+  "title": "REVA Planner Decision v1",
+  "description": "Strict, UNTRUSTED model proposal. Authorization and execution happen outside this schema.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/answer"
+    },
+    {
+      "$ref": "#/$defs/clarify"
+    },
+    {
+      "$ref": "#/$defs/action"
+    },
+    {
+      "$ref": "#/$defs/plan"
+    }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "turn_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "schema_version",
+        "session_id",
+        "turn_id"
+      ]
+    },
+    "answer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "answer"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "clarify": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "clarify"
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "kind",
+            "question"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "tool": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capability_id": {
+              "const": "app.launch"
+            },
+            "target_device_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "app_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "app_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "capability_id",
+            "target_device_id",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capability_id": {
+              "const": "app.close"
+            },
+            "target_device_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "app_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "app_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "capability_id",
+            "target_device_id",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capability_id": {
+              "const": "ui.inspect"
+            },
+            "target_device_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "app_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "window_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "app_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "capability_id",
+            "target_device_id",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capability_id": {
+              "const": "ui.invoke"
+            },
+            "target_device_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "app_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "window_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "snapshot_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "element_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": [
+                "app_id",
+                "window_id",
+                "snapshot_id",
+                "element_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "capability_id",
+            "target_device_id",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capability_id": {
+              "const": "ui.set_text"
+            },
+            "target_device_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "args": {
+              "type": "object",
+              "properties": {
+                "app_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "window_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "snapshot_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "element_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "app_id",
+                "window_id",
+                "snapshot_id",
+                "element_id",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "capability_id",
+            "target_device_id",
+            "args"
+          ]
+        }
+      ]
+    },
+    "action": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "propose_action"
+            },
+            "tool": {
+              "$ref": "#/$defs/tool"
+            }
+          },
+          "required": [
+            "kind",
+            "tool"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "plan": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "propose_plan"
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 5,
+              "items": {
+                "$ref": "#/$defs/tool"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "steps"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

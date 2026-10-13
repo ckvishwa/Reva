@@ -5,6 +5,38 @@ namespace Reva.Desktop.Services;
 
 public static class WavAudio
 {
+    public static byte[] FromPcm16Mono(IReadOnlyList<short> samples, int sampleRate)
+    {
+        const short channels = 1;
+        const short bitsPerSample = 16;
+        var dataBytes = samples.Count * sizeof(short);
+        var blockAlign = (short)(channels * bitsPerSample / 8);
+        var byteRate = sampleRate * blockAlign;
+
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        writer.Write("RIFF"u8.ToArray());
+        writer.Write(36 + dataBytes);
+        writer.Write("WAVE"u8.ToArray());
+        writer.Write("fmt "u8.ToArray());
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write(channels);
+        writer.Write(sampleRate);
+        writer.Write(byteRate);
+        writer.Write(blockAlign);
+        writer.Write(bitsPerSample);
+        writer.Write("data"u8.ToArray());
+        writer.Write(dataBytes);
+
+        foreach (var sample in samples)
+        {
+            writer.Write(sample);
+        }
+
+        return stream.ToArray();
+    }
+
     public static bool TryGetDurationMs(byte[]? wav, out int durationMs)
     {
         durationMs = 0;

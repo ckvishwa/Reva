@@ -11,11 +11,12 @@ namespace Reva.Desktop.ViewModels;
 /// history reload, no memory creation (that's Slice 4's "Remember this"
 /// action, a deliberately separate, explicit code path — ADR-006).
 /// </summary>
-public sealed class AssistantViewModel : ObservableObject
+public sealed class AssistantViewModel : ObservableObject, IComposerSink
 {
     private readonly IRevaCoreClient _coreClient;
     private readonly IVoiceDevice _voiceDevice;
     private readonly IRevaCoreLifecycle? _lifecycle;
+    private readonly ICommandRouter _commandRouter;
     private readonly DispatcherQueue? _dispatcherQueue = TryGetDispatcherQueue();
     private string _composerText = string.Empty;
     private bool _isPending;
@@ -33,11 +34,13 @@ public sealed class AssistantViewModel : ObservableObject
     public AssistantViewModel(
         IRevaCoreClient coreClient,
         IVoiceDevice? voiceDevice = null,
-        IRevaCoreLifecycle? lifecycle = null)
+        IRevaCoreLifecycle? lifecycle = null,
+        ICommandRouter? commandRouter = null)
     {
         _coreClient = coreClient;
         _voiceDevice = voiceDevice ?? new UnavailableVoiceDevice();
         _lifecycle = lifecycle;
+        _commandRouter = commandRouter ?? new NullCommandRouter();
         _isVoiceAvailable = _voiceDevice.IsAvailable;
         _voiceState = _isVoiceAvailable
             ? (IsCoreConnected ? VoiceUiState.ReadyToTalk : VoiceUiState.SttUnavailable)
@@ -142,10 +145,41 @@ public sealed class AssistantViewModel : ObservableObject
 
     public ObservableCollection<AssistantMessage> Messages { get; } = new();
 
+    private CommandSource _composerSource = CommandSource.Typed;
+
+    public CommandSource ComposerSource => _composerSource;
+
     public string ComposerText
     {
         get => _composerText;
-        set => SetProperty(ref _composerText, value);
+        set
+        {
+            SetProperty(ref _composerText, value);
+
+            // Any write through the public setter is user authorship — the
+            // x:Bind TwoWay path and every test call site land here. This is
+            // unconditional (not gated on SetProperty detecting a change):
+            // re-assigning the same text the user is looking at (e.g. a
+            // TextBox TwoWay sync firing after a no-op edit) still counts as
+            // the user having touched it.
+            _composerSource = CommandSource.Typed;
+        }
+    }
+
+    /// <summary>The transcription path's write. Same append semantics as a
+    /// user edit, but marks the text as machine-authored so a spoken
+    /// "confirm" can't resolve a pending destructive command.</summary>
+    public void AppendTranscription(string text) => AppendTranscribedText(text);
+
+    private void AppendTranscribedText(string text)
+    {
+        var merged = string.IsNullOrWhiteSpace(_composerText)
+            ? text
+            : $"{_composerText.TrimEnd()} {text}";
+
+        SetProperty(ref _composerText, merged, nameof(ComposerText));
+
+        _composerSource = CommandSource.Transcribed;   // after the setter, not before
     }
 
     public bool IsPending
@@ -299,6 +333,63 @@ public sealed class AssistantViewModel : ObservableObject
         await SendMessageCoreAsync(trimmed, clearComposer: true, cancellationToken);
     }
 
+    public async Task<WakeWordSubmitResult> SubmitTranscriptionAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.Empty);
+        }
+
+        if (IsPending)
+        {
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.Empty);
+        }
+
+        ErrorMessage = null;
+        IsPending = true;
+        RaiseVoiceAvailabilityProperties();
+
+        try
+        {
+            var routeResult = await _commandRouter.RouteAsync(
+                trimmed,
+                CommandSource.Transcribed,
+                cancellationToken).ConfigureAwait(true);
+
+            if (routeResult.Outcome == CommandOutcome.NotACommand)
+            {
+                AppendTranscribedText(trimmed);
+                return new WakeWordSubmitResult(WakeWordSubmitOutcome.ComposerPopulated);
+            }
+
+            Messages.Add(AssistantMessage.FromUser(trimmed));
+            if (!string.IsNullOrEmpty(routeResult.ResultMessage))
+            {
+                Messages.Add(AssistantMessage.FromAssistant(routeResult.ResultMessage));
+            }
+
+            _composerSource = CommandSource.Typed;
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.RoutedCommand);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            ErrorMessage = "Something went wrong sending that message. Try again.";
+            return new WakeWordSubmitResult(WakeWordSubmitOutcome.Empty);
+        }
+        finally
+        {
+            IsPending = false;
+            RaiseVoiceAvailabilityProperties();
+        }
+    }
+
     public async Task StartVoiceInputAsync(CancellationToken cancellationToken = default)
     {
         if (!_isVoiceAvailable)
@@ -401,9 +492,7 @@ public sealed class AssistantViewModel : ObservableObject
                 return;
             }
 
-            ComposerText = string.IsNullOrWhiteSpace(ComposerText)
-                ? text
-                : $"{ComposerText.TrimEnd()} {text}";
+            AppendTranscribedText(text);
             VoiceErrorMessage = null;
             VoiceState = VoiceUiState.TranscriptionReady;
             DesktopLogger.Info("voice.state=TranscriptionReady");
@@ -459,6 +548,8 @@ public sealed class AssistantViewModel : ObservableObject
             return null;
         }
 
+        var source = _composerSource; // captured before the clear below resets it
+
         ErrorMessage = null;
         IsPending = true;
         RaiseVoiceAvailabilityProperties();
@@ -466,10 +557,23 @@ public sealed class AssistantViewModel : ObservableObject
         if (clearComposer)
         {
             ComposerText = string.Empty;
+            _composerSource = CommandSource.Typed; // an empty composer has no author
         }
 
         try
         {
+            var routeResult = await _commandRouter.RouteAsync(trimmed, source, cancellationToken)
+                .ConfigureAwait(true);
+            if (routeResult.Outcome != CommandOutcome.NotACommand)
+            {
+                if (!string.IsNullOrEmpty(routeResult.ResultMessage))
+                {
+                    Messages.Add(AssistantMessage.FromAssistant(routeResult.ResultMessage));
+                }
+
+                return null;
+            }
+
             var result = await _coreClient.SendMessageAsync(trimmed, cancellationToken);
             if (result.IsSuccess)
             {
@@ -482,6 +586,18 @@ public sealed class AssistantViewModel : ObservableObject
                 ErrorMessage = result.Error!.SafeMessage;
                 return null;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // A bug anywhere in this pipeline (most plausibly the command
+            // router — WindowsAppExecutor already catches its own OS-level
+            // failures internally) must not leave Send permanently disabled.
+            ErrorMessage = "Something went wrong sending that message. Try again.";
+            return null;
         }
         finally
         {

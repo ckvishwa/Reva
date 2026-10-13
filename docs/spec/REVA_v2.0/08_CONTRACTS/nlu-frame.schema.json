@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/nlu-frame/2.0",
+  "title": "REVA NLU frame (output of normalize + rules/planner + resolution)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "turn_id",
+    "turn_epoch",
+    "transcript",
+    "language",
+    "source",
+    "intent",
+    "slots"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "turn_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "turn_epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "transcript": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "language": {
+      "enum": [
+        "en",
+        "te",
+        "te-en"
+      ]
+    },
+    "source": {
+      "enum": [
+        "rule",
+        "planner"
+      ]
+    },
+    "rule_id": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string",
+      "pattern": "^[a-z_]+(\\.[a-z_]+)+$"
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "phrase",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "phrase": {
+            "type": "string"
+          },
+          "value": {},
+          "status": {
+            "enum": [
+              "resolved",
+              "ambiguous",
+              "unresolved",
+              "missing"
+            ]
+          },
+          "resolution": {
+            "enum": [
+              "exact",
+              "alias",
+              "confirmed_clarification",
+              "lexical",
+              "fuzzy",
+              "vector",
+              "typed_value"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "score"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "unresolved_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "phrase": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

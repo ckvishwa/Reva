@@ -20,6 +20,7 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        DesktopLogger.EnsureFileLoggingInitialized();
         var configuration = DesktopConfiguration.CreateDefault();
         var tokenProvider = new LocalTokenProvider(configuration);
         var httpClient = new System.Net.Http.HttpClient
@@ -39,8 +40,42 @@ public partial class App : Application
             coreClient, tokenProvider, new DeveloperModeCoreExecutableLocator(), new CoreProcessLauncher(), configuration);
         _lifecycle = lifecycle;
 
-        _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice());
+        var commandRouter = new CommandRouter(new WindowsAppExecutor());
+        var microphoneArbiter = new MicrophoneArbiter();
+        var wakeWordOptions = WakeWordRuntimeOptions.FromEnvironment();
+        WakeWordProviderDiagnostics.Create(wakeWordOptions).Log();
+        var assistant = new ViewModels.AssistantViewModel(
+            coreClient,
+            new ArbiterVoiceDevice(new WindowsVoiceDevice(), microphoneArbiter),
+            lifecycle,
+            commandRouter);
+        IWakeWordDetector detector = wakeWordOptions.IsEnabled
+            ? new PorcupineWakeWordDetector(
+                wakeWordOptions.AccessKey,
+                wakeWordOptions.KeywordDirectory,
+                new RealFileSystemProbe(),
+                wakeWordOptions.ModelManifest)
+            : new NullWakeWordDetector();
+        var wakeWord = new ViewModels.WakeWordCoordinator(
+            detector,
+            microphoneArbiter,
+            new PvRecorderWakeSpeechCapture(),
+            coreClient,
+            assistant,
+            new SystemChimePlayer(),
+            lifecycle,
+            new WindowsWakeWordRecoveryEvents());
+
+        _window = new MainWindow(
+            new ViewModels.ShellViewModel(lifecycle),
+            assistant,
+            new ViewModels.MemoryViewModel(coreClient),
+            wakeWord);
         _window.Activate();
+        if (wakeWordOptions.IsEnabled)
+        {
+            await wakeWord.EnableAsync(wakeWordOptions.Configuration);
+        }
 
         // Deliberately started after Activate(), not awaited before it: the
         // window (and its "Starting Core…" initial state) must appear
