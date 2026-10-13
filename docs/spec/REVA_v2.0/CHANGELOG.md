@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.5 — 2026-10-12
+- ARD-700: new section 2.3 Implementation notes (API names, error variants, event signatures, sync API, Finance rules, key handling on both devices, privacy store). The API block in 2.1 now matches the code.
+- ARD-500 section 3: note on P-256 device-key signatures and per-peer cursors.
+- There is no 2.0.4 entry in this pack; 2.0.5 follows 2.0.3.
+
 ## 2.0.3 — 2026-10-12
 - New `11_PROMPTS/REVA_Slice_Playbook_and_Prompts_v2.0.md`: build order with reasons, feature first/second-version splits, Claude Code session preamble, detailed prompts for V1, S00–S10, V2, V3 and compact prompts for S11–S27, V4, A1–A4.
 - `Merge-RevaVoiceWorkspace.ps1` fixed after the first real run: `-Force` for hidden/read-only items; every copy/move wrapped so one failure no longer stops the run; identical files already in the repo marked `ALREADY_DONE`; symlinks and model caches (`tmpdir`, `pretrained_models`, `.cache`, `huggingface`) skipped in code copies and not hashed; manifest built from everything already moved, so resumed runs keep complete entries. Tested with PowerShell 7.4: hidden folder, read-only files, broken symlinks, partial earlier run, forced move failure, resume.

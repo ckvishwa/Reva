@@ -12,6 +12,8 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 ## Current state (update this section at the end of every slice)
 
+- **INT-1 (branch `integration/alpha-2`, not pushed until approved):** `main` + S00-S03 + FIN-1 + FIN-2 + AND-1 + SYNC-1a merged in that order, no textual conflicts (the four branches are one linear chain from `fixing-things`). Clean-tree results: cargo test 93 passed / 1 ignored, clippy and fmt clean; Python 409 passed / 2 skipped with ruff, ruff format, mypy and the contracts check clean; .NET 518 passed (+4 FlaUI smoke with `REVA_RUN_UI_TESTS=1`); Android 86 JVM tests; instrumented suite 18 passed + 1 opt-in skipped on API 31 and API 36 in airplane mode; Kotlin conformance 97 steps. Review and decisions: `docs/security/INT-1-finance-track-review.md`. Spec pack is 2.0.5 (ARD-700 section 2.3 implementation notes).
+- SYNC-1a (branch `feat/sync-1-sync`): Kernel sync core only: P-256 device-key signed events (host implements `DeviceSigner`), peer registry with scopes and revoke, per-peer cursors, whole-batch rejection, delete always wins (AC-018). The pairing gateway, QR, Devices screens, Android sync client and conflict banners (SYNC-1b to SYNC-1d) are not built.
 - AND-1 (branch `feat/and-1-android`, based on `feat/fin-2-finance-ui`): `android/` app with Today, Finance, Talk placeholder, More on the Kernel via Kotlin binding; Keystore-wrapped key in noBackupFilesDir. Build: `python tools/android/build_apk.py`. 85 JVM tests; 18 instrumented tests pass on API 31 and 36 in airplane mode. CI `android` lane is still a placeholder.
 
 - FIN-2 (branch `feat/fin-2-finance-ui`): WinUI Finance page + Today card + nav (non-built sections say coming soon), Core support (`source` column, `conflict.resolve`, privacy store, `REVA_DOMAIN_KEYSTORE=memory` test-only). .NET 518 passed; FlaUI smoke in `desktop/tests/Reva.Desktop.UiTests` is opt-in (`REVA_RUN_UI_TESTS=1`, needs `REVA_CORE_PYTHON_EXE`). Fixtures regenerate with `tools/desktop/generate_finance_fixtures.py`.
@@ -30,7 +32,7 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
   - The merge script pattern misses `LDR*` names.
   - The working tree still holds uncommitted PIPE-1 and planner files that are also on the branches above.
 
-- **FIN-1 (S04 + Finance) is built on branch `feat/fin-1-kernel`, tagged `v2.0.0-alpha.1`:** Rust Domain Kernel with the Finance domain; one 97-step conformance suite passes natively, through Python and through Kotlin (JVM); Android arm64-v8a and x86_64 libraries build (not yet run on a device); Core has a Windows Credential Manager key provider (`reva.domain.finance`), `/v1/domains/*` and `/v1/today`. Details: `kernel/README.md`, ledger rows dated 2026-10-12. Not merged into `fixing-things` yet: it needs the PIPE-1 and planner branches merged around it (shared files: `app.py`, `lifecycle.py`, `settings.py`, the two route-whitelist tests, `pyproject.toml`).
+- **FIN-1 (S04 + Finance) is built on branch `feat/fin-1-kernel`, tagged `v2.0.0-alpha.1`:** Rust Domain Kernel with the Finance domain; one 97-step conformance suite passes natively, through Python and through Kotlin (JVM); Android arm64-v8a and x86_64 libraries build (not yet run on a device); Core has a Windows Credential Manager key provider (`reva.domain.finance`), `/v1/domains/*` and `/v1/today`. Details: `kernel/README.md`, ledger rows dated 2026-10-12. It is merged on `integration/alpha-2` but not into `fixing-things`: the PIPE-1 and planner branches still need merging around it (shared files: `app.py`, `lifecycle.py`, `settings.py`, the two route-whitelist tests, `pyproject.toml`).
 - FIN-1 Part C (your existing data) is discovery only: nothing imported. See the FIN-1 report: the old local `reva-finance.sqlite3` is a plaintext, near-empty profile; Aura-Prod Supabase is paused; `F:\reva-data\finance-import\` does not exist.
 
 ## Working rules (non-negotiable)
@@ -74,12 +76,12 @@ Real layout after S03-lite (the `core/` and `windows/` renames are not done).
 reva_core/   Python Core (api, agent, memory, models, orchestration, security, storage). Moves to core/ later.
 desktop/     WinUI 3 app and tests (NAudio capture/playback, WebView2 avatar host, executor). Moves to windows/ later.
 kernel/      Rust Domain Kernel (crate reva-kernel: SQLCipher, event log, Finance) + UniFFI bindings (generated)
-android/     Kotlin/Compose app (placeholder until S11)
+android/     Kotlin/Compose app (Today, Finance, Talk placeholder, More; Kernel through the Kotlin binding; Keystore)
 avatar/      three.js + three-vrm web package (placeholder until S08)
 contracts/   JSON Schemas, capability registry (copy of docs/spec/REVA_v2.0/08_CONTRACTS, checked by CI)
 assets/avatar/  .blend + .vrm (Git LFS rules in .gitattributes; folder created when assets arrive)
 tests/       unit, integration, contract, security, e2e, evidence/ledger.csv; voice-evals is opt-in (REVA_RUN_VOICE_EVALS=1)
-tools/ci/    CI helper scripts; tools/voice-lab/ voice experiments (untracked, no hardcoded paths)
+tools/ci/    CI helper scripts; tools/kernel/ bindings, Android libs, conformance runners, paired_devices test helper; tools/android/ build_apk.py; tools/desktop/ fixture generator; tools/voice-lab/ voice experiments (untracked, no hardcoded paths)
 docs/        spec/REVA_v2.0/, persona/, archive/, voice/, plus older adr/ architecture/ development/ plans/ product/ security/ superpowers/ testing/
 .github/workflows/ci.yml   lanes: python, csharp-desktop, contracts, kernel, android
 ```
@@ -93,7 +95,7 @@ Run from the repo root. `.venv\Scripts\python -m ...` is the Core environment.
 - .NET: `dotnet build desktop\Reva.Desktop.sln` · `dotnet test desktop\Reva.Desktop.sln` (run with `REVA_DATA_DIR` unset)
 - Rust: `cargo test -p reva-kernel` · `cargo clippy --workspace --all-targets -- -D warnings` · `cargo fmt --all`
 - Kernel bindings: `python tools/kernel/build_bindings.py` · `python -m pytest tests/cross_binding` · `python tools/kernel/run_kotlin_conformance.py` · `python tools/kernel/build_android.py`
-- Android (after S11): `./gradlew lint testDebugUnitTest`
+- Android (`cd android`, `ANDROID_HOME` set): `./gradlew :app:testDebugUnitTest` · sideload APK: `python tools/android/build_apk.py` · emulator suite: `./gradlew :app:connectedDebugAndroidTest -Preva.uiTests=true -Pandroid.testInstrumentationRunnerArguments.requireAirplane=true` (set `ANDROID_SERIAL`, turn airplane mode on first)
 
 ## Skills to use in this repo
 

@@ -1,6 +1,6 @@
 # REVA 2.0 — Specification Pack
 
-**Version:** 2.0.3 · **Date:** 2026-10-12 · **Status:** Proposed specification. Nothing in this pack claims a feature is built; every requirement is PLANNED until the evidence ledger (ARD-800 §5) says VERIFIED.
+**Version:** 2.0.5 · **Date:** 2026-10-12 · **Status:** Proposed specification. Nothing in this pack claims a feature is built; every requirement is PLANNED until the evidence ledger (ARD-800 §5) says VERIFIED.
 
 **What REVA 2.0 is:** one product, two full devices. A WinUI 3 Windows app and a Kotlin/Compose Android app, each with voice, an animated Blender/VRM avatar, and eight life domains (Memory, Finance, Health, Coach, Career, Learn, Cyber, Personal) that work offline on either device through one shared Rust Domain Kernel. A Python Core on the PC is the strongest brain; the phone has its own local brain. Devices sync over the LAN or an optional relay that stores only ciphertext. FRIDAY OS/AuraO is merged in by harvesting its proven designs.
 

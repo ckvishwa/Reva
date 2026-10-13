@@ -1,6 +1,6 @@
 # ARD-700 — Life Domains and Domain Kernel v2.0
 
-**Document ID:** REVA-ARD-700 · **Version:** 2.0.1 · **Date:** 2026-10-11 · **Status:** Proposed
+**Document ID:** REVA-ARD-700 · **Version:** 2.0.5 · **Date:** 2026-10-12 · **Status:** Proposed
 **New in v2.** **Decisions:** ADR-027, ADR-028, ADR-029, ADR-032, ADR-033, ADR-034.
 
 ## 1. Summary
@@ -33,18 +33,49 @@ open_domain(domain, key_provider, data_dir) -> DomainHandle | DomainError
 DomainHandle.command(kind, payload_json) -> CommitResult{event_id, aggregate_id, version}
 DomainHandle.query(name, params_json) -> QueryResult{rows_json, source_ids}
 DomainHandle.export(format) -> bytes
-DomainHandle.import(format, bytes) -> ImportReport{accepted, rejected[]}
-DomainHandle.pending_events(limit) -> EventBatch
-DomainHandle.apply_events(batch) -> ApplyReport{applied, duplicates, conflicts[]}
-DomainHandle.ack(cursor)
+DomainHandle.import_data(format, bytes, options_json) -> ImportReport{accepted, rejected[]}   (see 2.3)
+DomainHandle.sync_export(peer, limit) -> SyncBatch          (signed events after the peer's cursor)
+DomainHandle.sync_apply(peer, batch) -> ApplyReport{applied, duplicates, conflicts[]}
+DomainHandle.sync_ack(peer, cursor)
+DomainHandle.set_signer / register_peer / revoke_peer / list_peers   (device keys and trusted peers)
 today(handles) -> TodaySummary
 ```
 
-Errors: `Locked` (no key), `WrongKey`, `Corrupt`, `MigrationFailed`, `Validation{field, reason}`, `Conflict`, `NotFound`, `Deleted`.
+Errors: `Locked` (no key), `WrongKey`, `Corrupt`, `MigrationFailed`, `Validation{field, reason}`, `Conflict`, `NotFound`, `Deleted`, `Internal`, `Rejected{reason}` (sync refused).
 
 ### 2.2 Write model
 
 Every command produces an event appended to the domain log and outbox inside one transaction, then updates projection tables. Projections can be dropped and rebuilt from the log (AR-DOM-004). Deletes are tombstone events. Lamport clocks per device order concurrent events; ties break by `origin_device_id`.
+
+### 2.3 Implementation notes (2.0.5)
+
+What the first three implementations (FIN-1 Kernel and Core, FIN-2 Windows Finance page, AND-1 Android app, SYNC-1a sync core) settled. Where this differs from §2.1 above, this section is the current truth.
+
+**API names and errors**
+- `import` is `import_data(format, data, options_json)`: `import` is a Python keyword, and an import needs options (`account_id`, column `mapping`, `dry_run`). A dry run runs the real import inside a transaction that is rolled back, so its report equals the real run's and commits nothing.
+- Error variants carry `detail` (not `message`, which collides with Kotlin's `Throwable.message`). `Rejected{reason}` was added for sync refusals; the Core maps it to HTTP 403 `sync_rejected`.
+- Sync entry points: `set_signer(DeviceSigner)`, `device_fingerprint()`, `register_peer(device_id, public_key, label, scopes)`, `revoke_peer`, `list_peers`, `sync_export(peer, limit)`, `sync_ack(peer, cursor)`, `sync_apply(peer, batch)`. The older unauthenticated `pending_events` / `ack` / `apply_events` exist only as Rust-visible test helpers and are **not** in the Python or Kotlin bindings, so a host cannot apply an event that skipped the peer checks.
+
+**Events**
+- Payloads carry the full resulting state of the aggregate. Projections rebuild by replaying the log in `(lamport, origin_device_id, seq)` order. A tombstoned aggregate is never projected again, whatever the clocks say (AR-DATA-011, AC-008, AC-018).
+- `signature` has two forms. In the local log it is an HMAC-SHA256 tag under a key derived from the domain key (tamper check on this device). On export it becomes `es256:` + hex of a DER ECDSA P-256/SHA-256 signature by the device key over the canonical event bytes without `signature`. The Kernel holds no private key: the host implements `DeviceSigner` over Credential Manager / Android Keystore. P-256 was chosen because Android Keystore supports Ed25519 only from API 33 and minSdk is 31. Public keys travel as X.509 SubjectPublicKeyInfo DER; the device fingerprint is the SHA-256 of that DER.
+- A received batch is rejected as a whole if any event is unsigned, mis-signed, from an unknown / revoked / out-of-scope device, or names this device as origin. Limits: 500 events, 8 MB, Lamport values up to 2^53-1. Cursors are per peer, advance only on `sync_ack` and only forward; an event is never sent back to its origin.
+- Concurrent edits to the same version of an amount (`transaction`, `bill`, `budget`: `amount_minor`; `account`: `opening_balance_minor`) are recorded as conflicts on both devices and resolved with `conflict.resolve`, which is itself an event.
+
+**Finance**
+- `bill` and `recurring` are one aggregate: a bill has a `recurrence` and a `kind` (`bill`, `subscription`, `income`). `bill.mark_paid` records payment only; it can also record the matching ledger transaction.
+- Money is integer minor units plus an ISO 4217 code; parsing refuses to round. Budgets and reports are per currency; there is no conversion.
+- Import limits: 8 MB and 50,000 rows per file for CSV, OFX and the Kernel JSON format. Export CSV prefixes any text cell that starts with `=`, `+`, `-`, `@`, tab or CR with an apostrophe. The JSON export is unencrypted; both apps say so before sharing.
+- Core routes: `/v1/domains/*` and `/v1/today`, all behind the local bearer token. `GET/PATCH /v1/domains/{domain}/privacy` stores `sync` and `hosted_model_access` per domain in the Core data directory (defaults as §4). The sync transport must read the `sync` switch on send and receive; that wiring comes with the pairing gateway.
+
+**Keys and files**
+- Windows: one 32-byte key per domain in Credential Manager under `reva.domain.<domain>`. Only that prefix is ever read or written; the legacy `com.aura.assistant.finance` entry is never touched. A key is never replaced.
+- Android: the Kernel creates the key; the host wraps it with an Android Keystore AES-256-GCM key (alias `reva.domain.<domain>`, StrongBox when available) and stores IV(12) + key(32) + tag(16) = 60 bytes in `noBackupFilesDir/keys/<domain>.key`. A missing Keystore key or a blob that fails to authenticate is an error, never "no key". Domain files live in `noBackupFilesDir/domains`; the backup and data-extraction rules exclude them.
+- `REVA_DOMAIN_KEYSTORE=memory` (throw-away in-memory keys for UI tests) is refused in a packaged build and for any data directory outside the OS temp directory, checked both in `load_settings` and where the key provider is built.
+- Kernel calls run on `Dispatchers.IO` on Android and off the event loop in the Core (AR-DOM-015).
+
+**Today**
+- `today(handles, as_of)` is read-only. Finance supplies `budget_status` (this month) and `upcoming_bills` (next 7 days); `as_of` is a parameter so tests never depend on the clock.
 
 ## 3. Domain catalog
 
