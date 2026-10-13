@@ -144,6 +144,24 @@ class ExportShareTest {
     }
 }
 
+class ExportCleanupTest {
+    @Test fun clear_removes_every_shared_export_and_only_those() {
+        val cache = Files.createTempDirectory("reva-cache-").toFile()
+        try {
+            File(cache, "exports").mkdirs()
+            File(cache, "exports/reva-finance-2026-10-12.csv").writeText("secret")
+            File(cache, "exports/reva-finance-2026-10-11.json").writeText("secret")
+            File(cache, "other.tmp").writeText("keep")
+            ExportShare.clear(cache)
+            assertEquals(0, File(cache, "exports").listFiles()!!.size)
+            assertTrue(File(cache, "other.tmp").exists())
+            ExportShare.clear(File(cache, "missing")) // no directory yet: harmless
+        } finally {
+            cache.deleteRecursively()
+        }
+    }
+}
+
 class ReadUpToTest {
     @Test fun reads_everything_under_the_limit_and_stops_one_past_it() {
         val data = ByteArray(200_000) { (it % 251).toByte() }

@@ -103,6 +103,9 @@ class AndroidKeystoreWrapper : KeyWrapper {
             generate(domain, strongBox = true)
         } catch (_: StrongBoxUnavailableException) {
             generate(domain, strongBox = false)
+        } catch (_: java.security.ProviderException) {
+            // Some phones report a missing StrongBox this way instead.
+            generate(domain, strongBox = false)
         }
     }
 
