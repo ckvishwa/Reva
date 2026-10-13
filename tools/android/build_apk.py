@@ -3,7 +3,7 @@
 Usage:  python tools/android/build_apk.py [--skip-kernel] [--task assembleDebug]
 
 Steps (each prints what it does):
-  1. python tools/kernel/build_bindings.py   Kotlin binding for the Kernel (kernel/bindings, git-ignored)
+  1. python tools/kernel/build_bindings.py   Kotlin binding (kernel/bindings, git-ignored)
   2. python tools/kernel/build_android.py    libreva_kernel.so for arm64-v8a and x86_64 (readelf)
   3. copy the two libraries to android/app/build/kernel-libs/<abi>/
   4. android/gradlew :app:assembleDebug      signed with the standard Android debug key
