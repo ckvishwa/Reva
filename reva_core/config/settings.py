@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from reva_core.shared.errors import ConfigurationError
@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # only so UI and end-to-end tests never create entries in the user's real vault, and it is
     # refused unless the data directory is inside the system temp directory.
     domain_keystore: Literal["windows", "memory"] = "windows"
+
+    # The pairing gateway (a separate, opt-in LAN listener; off until the Devices setting turns it
+    # on). `gateway_host` None = the machine's LAN address; the Core API above stays on loopback.
+    gateway_host: str | None = None
+    gateway_port: int = Field(default=47821, ge=0, le=65535)
 
     # Placeholder for a future real provider credential. Never a real key in
     # Phase 0 — no provider integration exists yet. Documented future path:

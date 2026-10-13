@@ -277,6 +277,37 @@ fn re_pairing_after_revocation_is_possible_but_a_key_swap_is_not() {
 }
 
 #[test]
+fn re_pairing_a_revoked_device_resets_both_cursors_and_resends_everything() {
+    let (a, b) = pair();
+    seed(&a.handle);
+    a.push(&b);
+    b.push(&a);
+    let before = &a.handle.list_peers().unwrap()[0];
+    assert!(before.send_cursor > 0 && before.recv_cursor > 0, "{before:?}");
+
+    a.handle.revoke_peer(b.id()).unwrap();
+    assert!(a.handle.list_peers().unwrap()[0].send_cursor > 0, "revoking alone keeps the cursors");
+    a.trust(&b);
+    let after = &a.handle.list_peers().unwrap()[0];
+    assert_eq!((after.send_cursor, after.recv_cursor), (0, 0));
+    let batch = a.handle.sync_export(b.id(), 500).unwrap();
+    assert_eq!((batch.cursor_from, batch.count), (0, 2), "the whole log is offered again");
+    // The peer already holds it all: replaying is harmless.
+    let report = b.handle.sync_apply(a.id(), batch).unwrap();
+    assert_eq!((report.applied, report.duplicates), (0, 2));
+}
+
+#[test]
+fn cursors_can_be_reset_explicitly_for_a_paired_peer() {
+    let (a, b) = pair();
+    seed(&a.handle);
+    a.push(&b);
+    a.handle.reset_peer_cursors(b.id()).unwrap();
+    assert_eq!(a.handle.list_peers().unwrap()[0].send_cursor, 0);
+    assert_eq!(code(&a.handle.reset_peer_cursors("unknown-device-1".into()).unwrap_err()), "not_found");
+}
+
+#[test]
 fn registering_peers_validates_ids_keys_and_scopes() {
     let a = Device::new(1);
     let key = TestSigner::new(2).public();
