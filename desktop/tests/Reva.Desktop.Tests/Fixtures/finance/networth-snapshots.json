@@ -1,0 +1,23 @@
+{
+  "collection": "networth-snapshots",
+  "domain": "finance",
+  "items": [
+    {
+      "as_of": "2026-10-12",
+      "by_currency": {
+        "USD": {
+          "assets_minor": 2300000,
+          "liabilities_minor": 29650,
+          "net_minor": 2270350
+        }
+      },
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "id": "nw-20261012",
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "version": 1
+    }
+  ],
+  "source_ids": [
+    "nw-20261012"
+  ]
+}

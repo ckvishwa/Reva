@@ -41,7 +41,7 @@ fn fresh_install_generates_and_stores_a_key_then_creates_an_encrypted_file() {
     let key = keys.get("finance").expect("a key must have been stored");
     assert_eq!(key.len(), 32);
     assert_eq!(*keys.store_calls.lock().unwrap(), 1);
-    assert_eq!(h.schema_version().unwrap(), 2);
+    assert_eq!(h.schema_version().unwrap(), 3);
     let bytes = fs::read(domain_file(dir.path())).unwrap();
     assert_ne!(&bytes[..16], b"SQLite format 3\0", "the file must not be plaintext SQLite");
     assert!(!h.device_id().is_empty());

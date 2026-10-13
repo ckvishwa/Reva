@@ -66,10 +66,16 @@ public partial class App : Application
             lifecycle,
             new WindowsWakeWordRecoveryEvents());
 
+        var financeApi = new Finance.FinanceApiClient(
+            httpClient, tokenProvider, configuration.RequestTimeout);
+        var today = new ViewModels.TodayViewModel(financeApi);
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),
             assistant,
             new ViewModels.MemoryViewModel(coreClient),
+            new ViewModels.NavigationViewModel(),
+            new ViewModels.FinanceViewModel(financeApi),
+            today,
             wakeWord);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)
@@ -83,5 +89,6 @@ public partial class App : Application
         // Core boots — confirmed necessary during manual smoke testing of
         // the equivalent one-shot health check in Slice 3.
         await lifecycle.StartAsync();
+        await today.RefreshAsync();
     }
 }

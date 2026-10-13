@@ -1,0 +1,7 @@
+{
+  "domain": "finance",
+  "privacy": {
+    "hosted_model_access": true,
+    "sync": true
+  }
+}

@@ -1,0 +1,47 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.ConflictBanner"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views">
+
+    <!-- Sync-conflict banner (design: Finance board, inside the transactions card). -->
+    <Border
+        x:Name="Panel"
+        Background="{StaticResource RevaConflictBackgroundBrush}"
+        BorderBrush="{StaticResource RevaAccentBrush}"
+        BorderThickness="1"
+        CornerRadius="12"
+        Padding="14,10"
+        AutomationProperties.AutomationId="ConflictBanner"
+        AutomationProperties.LiveSetting="Assertive">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+            <TextBlock
+                Grid.Column="0"
+                Text="Sync conflict"
+                FontFamily="{StaticResource RevaSansSemiBold}"
+                Foreground="{StaticResource RevaAccentLightBrush}"
+                VerticalAlignment="Center" />
+            <TextBlock
+                x:Name="MessageText"
+                Grid.Column="1"
+                Style="{StaticResource RevaBodyText}"
+                VerticalAlignment="Center" />
+            <Button
+                x:Name="KeepPcButton"
+                Grid.Column="2"
+                Content="Keep PC"
+                AutomationProperties.AutomationId="ConflictKeepPc"
+                AutomationProperties.Name="Keep the amount from this PC"
+                Style="{StaticResource RevaAccentOutlineButton}"
+                Click="KeepPc_Click" />
+            <Button
+                x:Name="KeepPhoneButton"
+                Grid.Column="3"
+                Content="Keep phone"
+                AutomationProperties.AutomationId="ConflictKeepPhone"
+                AutomationProperties.Name="Keep the amount from your phone"
+                Style="{StaticResource RevaAccentOutlineButton}"
+                Click="KeepPhone_Click" />
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,146 @@
+<ContentDialog
+    x:Class="Reva.Desktop.Views.ImportDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views"
+    xmlns:vm="using:Reva.Desktop.ViewModels"
+    Title="Import"
+    PrimaryButtonText="{x:Bind Vm.ConfirmText, Mode=OneWay}"
+    IsPrimaryButtonEnabled="{x:Bind Vm.CanConfirm, Mode=OneWay}"
+    CloseButtonText="Close"
+    DefaultButton="Close"
+    Background="{StaticResource RevaSurfaceBrush}"
+    BorderBrush="{StaticResource RevaBorderBrush}"
+    CornerRadius="16"
+    PrimaryButtonStyle="{StaticResource RevaPrimaryButton}"
+    CloseButtonStyle="{StaticResource RevaSecondaryButton}"
+    PrimaryButtonClick="Confirm_Click"
+    AutomationProperties.AutomationId="ImportDialog">
+
+    <ContentDialog.Resources>
+        <!-- ContentDialog's default max width is 548; the report table needs more room. -->
+        <x:Double x:Key="ContentDialogMaxWidth">900</x:Double>
+        <DataTemplate x:Key="ReportRowTemplate" x:DataType="vm:ImportRowViewModel">
+            <Border BorderBrush="{StaticResource RevaBorderBrush}" BorderThickness="0,1,0,0">
+                <Grid
+                    ColumnDefinitions="56,110,*,*"
+                    MinHeight="36"
+                    Padding="0,4"
+                    AutomationProperties.Name="{x:Bind AccessibleName}">
+                    <TextBlock Grid.Column="0" Text="{x:Bind RowText}" Style="{StaticResource RevaMonoText}" Padding="6,0" VerticalAlignment="Center" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{x:Bind StatusText}"
+                        Style="{StaticResource RevaBodyText}"
+                        Foreground="{x:Bind local:ImportDialog.StatusBrush(Status)}"
+                        Padding="6,0"
+                        VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{x:Bind Summary}" Style="{StaticResource RevaBodyText}" Padding="6,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="{x:Bind Detail}" Style="{StaticResource RevaCaptionText}" Padding="6,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </ContentDialog.Resources>
+
+    <ScrollViewer MinWidth="640" MaxHeight="600">
+        <StackPanel Spacing="12" Padding="0,0,12,0">
+            <TextBlock
+                Text="Pick a bank CSV, an OFX/QFX file, or a REVA JSON export. REVA checks every row first and shows you the result. Nothing is saved until you confirm."
+                Style="{StaticResource RevaMutedText}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button
+                    x:Name="ChooseButton"
+                    Content="Choose file…"
+                    Style="{StaticResource RevaSecondaryButton}"
+                    AutomationProperties.AutomationId="ImportChooseFile"
+                    Click="Choose_Click" />
+                <TextBlock
+                    Text="{x:Bind Vm.FileName, Mode=OneWay}"
+                    Style="{StaticResource RevaBodyText}"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="ImportFileName" />
+            </StackPanel>
+
+            <ComboBox
+                Header="Import into account"
+                HorizontalAlignment="Stretch"
+                MinHeight="44"
+                ItemsSource="{x:Bind Vm.Accounts}"
+                DisplayMemberPath="Display"
+                SelectedItem="{x:Bind Vm.SelectedAccount, Mode=TwoWay}"
+                Visibility="{x:Bind local:Vis.Show(Vm.NeedsAccount), Mode=OneWay}"
+                AutomationProperties.AutomationId="ImportAccount" />
+
+            <!-- CSV column mapping: built in code from the file's header row. -->
+            <StackPanel
+                x:Name="MappingPanel"
+                Spacing="10"
+                Visibility="{x:Bind local:Vis.Show(Vm.IsCsv), Mode=OneWay}">
+                <TextBlock Text="Match the columns" Style="{StaticResource RevaSectionTitleText}" />
+                <StackPanel x:Name="MappingCombos" Spacing="8" />
+                <ComboBox
+                    x:Name="DateFormatBox"
+                    Header="Date format"
+                    HorizontalAlignment="Stretch"
+                    MinHeight="44"
+                    ItemsSource="{x:Bind Vm.DateFormats}"
+                    SelectedItem="{x:Bind Vm.DateFormat, Mode=TwoWay}"
+                    AutomationProperties.AutomationId="ImportDateFormat" />
+                <TextBlock
+                    Text="This file's dates could be day-first or month-first. Check the format above against a row before importing."
+                    Style="{StaticResource RevaErrorText}"
+                    Visibility="{x:Bind local:Vis.Show(Vm.DateFormatIsAmbiguous), Mode=OneWay}" />
+                <CheckBox
+                    Content="Flip the sign (my bank shows spending as positive)"
+                    MinHeight="44"
+                    IsChecked="{x:Bind Vm.InvertSign, Mode=TwoWay}"
+                    AutomationProperties.AutomationId="ImportInvertSign" />
+            </StackPanel>
+
+            <Button
+                Content="Check file"
+                Style="{StaticResource RevaPrimaryButton}"
+                HorizontalAlignment="Left"
+                IsEnabled="{x:Bind Vm.CanCheck, Mode=OneWay}"
+                AutomationProperties.AutomationId="ImportCheck"
+                Click="Check_Click" />
+
+            <TextBlock
+                Text="{x:Bind Vm.Error, Mode=OneWay}"
+                Style="{StaticResource RevaErrorText}"
+                Visibility="{x:Bind local:Vis.ShowText(Vm.Error), Mode=OneWay}"
+                AutomationProperties.AutomationId="ImportError"
+                AutomationProperties.LiveSetting="Assertive" />
+
+            <!-- Dry-run report -->
+            <StackPanel Spacing="8" Visibility="{x:Bind local:Vis.Show(Vm.HasReport), Mode=OneWay}">
+                <TextBlock
+                    Text="{x:Bind Vm.SummaryText, Mode=OneWay}"
+                    Style="{StaticResource RevaSectionTitleText}"
+                    AutomationProperties.AutomationId="ImportSummary"
+                    AutomationProperties.LiveSetting="Polite" />
+                <Grid ColumnDefinitions="56,110,*,*" AutomationProperties.AccessibilityView="Raw">
+                    <TextBlock Grid.Column="0" Text="Row" Style="{StaticResource RevaCaptionText}" Padding="6,0" />
+                    <TextBlock Grid.Column="1" Text="Result" Style="{StaticResource RevaCaptionText}" Padding="6,0" />
+                    <TextBlock Grid.Column="2" Text="What REVA read" Style="{StaticResource RevaCaptionText}" Padding="6,0" />
+                    <TextBlock Grid.Column="3" Text="Note" Style="{StaticResource RevaCaptionText}" Padding="6,0" />
+                </Grid>
+                <ItemsControl
+                    ItemsSource="{x:Bind Vm.ReportRows}"
+                    ItemTemplate="{StaticResource ReportRowTemplate}"
+                    IsTabStop="False"
+                    AutomationProperties.AutomationId="ImportReportRows"
+                    AutomationProperties.Name="Import report rows" />
+            </StackPanel>
+
+            <TextBlock
+                Text="{x:Bind Vm.ResultText, Mode=OneWay}"
+                Style="{StaticResource RevaBodyText}"
+                Foreground="{StaticResource RevaSuccessBrush}"
+                Visibility="{x:Bind local:Vis.ShowText(Vm.ResultText), Mode=OneWay}"
+                AutomationProperties.AutomationId="ImportResult"
+                AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

@@ -14,6 +14,7 @@ from pathlib import Path
 from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.config.settings import Settings
 from reva_core.domains.keys import DomainKeyProvider, default_key_provider
+from reva_core.domains.privacy import DomainPrivacyStore
 from reva_core.domains.service import DomainService
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
@@ -57,6 +58,7 @@ class CoreLifecycle:
         self._ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG
         self._domain_key_provider = domain_key_provider
         self._domain_service: DomainService | None = None
+        self._domain_privacy = DomainPrivacyStore(settings.data_dir)
 
     def startup(self) -> HealthStatus:
         self._status = CoreStatus.STARTING
@@ -66,7 +68,8 @@ class CoreLifecycle:
         # Domain files open lazily on first use, so a locked vault never blocks Core startup.
         self._domain_service = DomainService(
             self._settings.data_dir,
-            self._domain_key_provider or default_key_provider(),
+            self._domain_key_provider
+            or default_key_provider(self._settings.domain_keystore, self._settings.data_dir),
             self._settings.kernel_bindings_dir,
         )
         self._embedding_provider = OllamaEmbeddingProvider(
@@ -222,6 +225,10 @@ class CoreLifecycle:
         "deterministic" default is active, not that startup() hasn't run.
         """
         return self._assistant_orchestrator
+
+    @property
+    def domain_privacy(self) -> DomainPrivacyStore:
+        return self._domain_privacy
 
     @property
     def domain_service(self) -> DomainService:
