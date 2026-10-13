@@ -99,7 +99,7 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          Get-ChildItem "${{ runner.temp }}" -Filter "vstest-diag*" | ForEach-Object { "=== $($_.Name)"; Get-Content $_.FullName -Tail 60 }
+          Get-ChildItem "${{ runner.temp }}" -Filter "vstest-diag*" | ForEach-Object { "=== $($_.Name)"; Get-Content $_.FullName | Where-Object { $_ -notmatch "Polling on remoteEndPoint" } | Select-Object -First 70 | ForEach-Object { $_.Substring(0, [Math]::Min(260, $_.Length)) } }
 
   contracts:
     # Every schema in contracts/ must be a valid JSON Schema, and contracts/
