@@ -105,6 +105,32 @@ fun FinanceScreen(
                 )
             }
         }
+        if (state.conflicts.isNotEmpty()) {
+            item {
+                RevaCard(radius = 14.dp, borderColor = RevaColors.Accent, modifier = Modifier.testTag("conflict_banner")) {
+                    SectionTitle(if (state.conflicts.size == 1) "1 amount differs from your PC" else "${state.conflicts.size} amounts differ from your PC")
+                    MutedText("You and your PC changed the same amount while apart. Pick the one to keep; both devices will agree.")
+                    state.conflicts.forEach { row ->
+                        Column(
+                            Modifier.fillMaxWidth().padding(top = 10.dp).testTag("conflict_${row.id}"),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(row.title, style = MaterialTheme.typography.bodyLarge, color = RevaColors.Text)
+                            Text(
+                                "This phone: ${row.mineText} · PC: ${row.pcText}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = RevaColors.Secondary,
+                                modifier = Modifier.semantics { contentDescription = row.a11y },
+                            )
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SecondaryButton("Keep mine", { vm.resolveConflict(row.id, true) }, Modifier.testTag("keep_mine_${row.id}"), enabled = !state.isBusy)
+                                SecondaryButton("Keep PC's", { vm.resolveConflict(row.id, false) }, Modifier.testTag("keep_pc_${row.id}"), enabled = !state.isBusy)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         state.error?.let { message ->
             item {
                 RevaCard(radius = 14.dp, borderColor = RevaColors.Error) {
