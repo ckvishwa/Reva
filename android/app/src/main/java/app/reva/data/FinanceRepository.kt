@@ -1,5 +1,7 @@
 package app.reva.data
 
+import kotlinx.coroutines.flow.StateFlow
+
 enum class ErrorKind { Locked, KeyLost, Corrupt, Validation, Conflict, NotFound, Deleted, Internal }
 
 /** Why a Finance call failed, in words that are safe to show: never SQL, paths or key material. */
@@ -18,6 +20,16 @@ val <T> Outcome<T>.valueOrNull: T? get() = (this as? Outcome.Ok)?.value
  * (AR-DOM-015). Tests use a fake.
  */
 interface FinanceRepository {
+    /**
+     * Counts committed changes: every local write and every sync batch that applied events. A screen that
+     * is already open collects this and reloads when it moves, so it never waits for a tab switch (SYNC-1e).
+     * It holds no data.
+     */
+    val changes: StateFlow<Long>
+
+    /** The sync client calls this after a batch applied events from the PC. */
+    fun markChanged()
+
     suspend fun balances(): Outcome<List<AccountBalance>>
 
     suspend fun categories(): Outcome<List<Category>>

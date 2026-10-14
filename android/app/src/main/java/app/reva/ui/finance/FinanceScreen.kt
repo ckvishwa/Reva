@@ -60,6 +60,7 @@ fun FinanceScreen(
     onImport: () -> Unit,
     onExport: (format: String) -> Unit,
     modifier: Modifier = Modifier,
+    syncStatus: String? = null,
 ) {
     val state by vm.state.collectAsState()
     LazyColumn(
@@ -70,6 +71,7 @@ fun FinanceScreen(
         item {
             Column {
                 CaptionText("Encrypted on this phone · stays on this device until you pair a PC")
+                syncStatus?.let { CaptionText(it, Modifier.testTag("sync_status")) }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         "Finance",

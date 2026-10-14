@@ -2,12 +2,14 @@ package app.reva.ui.devices
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -15,12 +17,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.reva.sync.AutoSyncController
 import app.reva.ui.CaptionText
 import app.reva.ui.ErrorText
 import app.reva.ui.MutedText
@@ -36,7 +40,13 @@ import app.reva.ui.theme.RevaText
  * [DevicesViewModel]; scanning is a separate screen ([QrScanner]) opened by [onScan].
  */
 @Composable
-fun DevicesScreen(vm: DevicesViewModel, onScan: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun DevicesScreen(
+    vm: DevicesViewModel,
+    onScan: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    autoSync: AutoSyncController? = null,
+) {
     val state by vm.state.collectAsState()
     var typedCode by remember { mutableStateOf("") }
     LazyColumn(
@@ -92,6 +102,17 @@ fun DevicesScreen(vm: DevicesViewModel, onScan: () -> Unit, onBack: () -> Unit, 
                     CaptionText(state.lastSyncText ?: "Not synced yet")
                     CaptionText("Syncs Finance only. Key ${pc.tlsSha256.take(8)}…")
                     PrimaryButton("Sync now", vm::syncNow, Modifier.testTag("sync_now"), enabled = !state.isBusy)
+                    if (autoSync != null) {
+                        val automatic by autoSync.enabled.collectAsState()
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Switch(
+                                checked = automatic,
+                                onCheckedChange = autoSync::setEnabled,
+                                modifier = Modifier.testTag("auto_sync_switch").semantics { contentDescription = "Sync automatically while the app is open" },
+                            )
+                            MutedText("Sync automatically while the app is open (every minute, when your PC answers)")
+                        }
+                    }
                     SecondaryButton("Forget this PC", vm::forget, Modifier.testTag("forget_pc"), enabled = !state.isBusy)
                     CaptionText("Removes this PC from the phone. To fully cut access, also click Revoke on the PC.", Modifier.testTag("forget_note"))
                 }

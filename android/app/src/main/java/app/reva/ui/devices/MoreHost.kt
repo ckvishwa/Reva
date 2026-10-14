@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.reva.sync.AutoSyncController
 import app.reva.sync.SyncService
 import app.reva.ui.more.MoreScreen
 
@@ -22,7 +23,7 @@ private class DevicesViewModelFactory(private val service: SyncService, private 
 
 /** The More tab: the section list, with Devices (pair, sync, forget) and the QR scanner one tap away. */
 @Composable
-fun MoreHost(sync: SyncService?, versionName: String, onSynced: () -> Unit) {
+fun MoreHost(sync: SyncService?, versionName: String, onSynced: () -> Unit, autoSync: AutoSyncController? = null) {
     if (sync == null) {
         MoreScreen(versionName)
         return
@@ -39,7 +40,7 @@ fun MoreHost(sync: SyncService?, versionName: String, onSynced: () -> Unit) {
             },
             onCancel = { page = MorePage.Devices },
         )
-        MorePage.Devices -> DevicesScreen(vm, onScan = { page = MorePage.Scan }, onBack = { page = MorePage.More })
+        MorePage.Devices -> DevicesScreen(vm, onScan = { page = MorePage.Scan }, onBack = { page = MorePage.More }, autoSync = autoSync)
         MorePage.More -> MoreScreen(
             versionName,
             devicesSummary = state.pc?.let { "Paired with your PC. ${state.lastSyncText ?: ""}".trim() },
