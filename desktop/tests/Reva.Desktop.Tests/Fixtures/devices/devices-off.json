@@ -1,0 +1,12 @@
+{
+  "devices": [],
+  "gateway": {
+    "enabled": false,
+    "error": null,
+    "host": null,
+    "listening": false,
+    "pairing": null,
+    "port": null,
+    "tls_sha256": null
+  }
+}

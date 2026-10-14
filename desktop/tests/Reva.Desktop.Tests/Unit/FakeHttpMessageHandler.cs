@@ -31,6 +31,20 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
     public static FakeHttpMessageHandler ThrowingTimeout() =>
         new((_, ct) => throw new TaskCanceledException("The request timed out", new TimeoutException()));
 
+    /// <summary>Simulates a slow server response. Must honor the
+    /// cancellation token via Task.Delay(delay, cancellationToken) — an
+    /// unhonored token would make timeout tests hang instead of failing
+    /// fast when the per-call CTS fires.</summary>
+    public static FakeHttpMessageHandler Delayed(TimeSpan delay, System.Net.HttpStatusCode status, string json) =>
+        new(async (_, cancellationToken) =>
+        {
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            return new HttpResponseMessage(status)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            };
+        });
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {

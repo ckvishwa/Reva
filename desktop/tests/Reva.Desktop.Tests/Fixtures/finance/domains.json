@@ -1,0 +1,14 @@
+{
+  "domains": [
+    {
+      "domain": "finance",
+      "enabled": true,
+      "privacy": {
+        "hosted_model_access": false,
+        "sync": true
+      },
+      "schema_version": 3,
+      "state": "ready"
+    }
+  ]
+}

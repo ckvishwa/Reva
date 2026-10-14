@@ -20,4 +20,14 @@ public class RuntimePathsTests
     {
         Assert.Equal(RuntimePaths.GetDefaultDataDirectory(), RuntimePaths.GetDefaultDataDirectory());
     }
+
+    [Fact]
+    public void GetDefaultLogDirectory_ReturnsLogsFolderUnderDataDirectory()
+    {
+        var expected = Path.Combine(RuntimePaths.GetDefaultDataDirectory(), "logs");
+
+        var actual = RuntimePaths.GetDefaultLogDirectory();
+
+        Assert.Equal(expected, actual);
+    }
 }

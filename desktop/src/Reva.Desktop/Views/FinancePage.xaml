@@ -1,0 +1,397 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.FinancePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views"
+    xmlns:vm="using:Reva.Desktop.ViewModels">
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="AccountCardTemplate" x:DataType="vm:AccountCardViewModel">
+            <Border
+                Style="{StaticResource RevaSmallCard}"
+                MinHeight="168"
+                AutomationProperties.Name="{x:Bind AccessibleName}"
+                AutomationProperties.AutomationId="AccountCard">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{x:Bind Title}" Style="{StaticResource RevaMutedText}" />
+                    <TextBlock Text="{x:Bind BalanceText}" Style="{StaticResource RevaBigNumberText}" />
+                    <TextBlock Text="{x:Bind Caption}" Style="{StaticResource RevaCaptionText}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="NetWorthTemplate" x:DataType="vm:NetWorthCardViewModel">
+            <Border
+                Style="{StaticResource RevaSmallCard}"
+                MinHeight="168"
+                AutomationProperties.Name="{x:Bind AccessibleName}"
+                AutomationProperties.AutomationId="NetWorthCard">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Net worth snapshot" Style="{StaticResource RevaMutedText}" />
+                    <TextBlock Text="{x:Bind ValueText}" Style="{StaticResource RevaBigNumberText}" TextWrapping="Wrap" FontSize="{x:Bind local:FinancePage.NetWorthFontSize(HasSnapshot)}" />
+                    <TextBlock Text="{x:Bind Caption}" Style="{StaticResource RevaCaptionText}" />
+                    <Button
+                        Content="Take snapshot"
+                        Margin="0,6,0,0"
+                        Style="{StaticResource RevaSecondaryButton}"
+                        AutomationProperties.AutomationId="SnapshotButton"
+                        Click="Snapshot_Click" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <local:StripTemplateSelector x:Key="StripSelector" Account="{StaticResource AccountCardTemplate}" NetWorth="{StaticResource NetWorthTemplate}" />
+
+        <DataTemplate x:Key="BudgetTemplate" x:DataType="vm:BudgetRowViewModel">
+            <StackPanel Spacing="6" AutomationProperties.Name="{x:Bind AccessibleName}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{x:Bind Name}" Style="{StaticResource RevaBodyText}" />
+                    <TextBlock Grid.Column="1" Text="{x:Bind AmountsText}" Style="{StaticResource RevaMonoText}" />
+                </Grid>
+                <ProgressBar
+                    Minimum="0"
+                    Maximum="1"
+                    Value="{x:Bind Fraction}"
+                    Height="8"
+                    MinHeight="8"
+                    CornerRadius="4"
+                    Background="{StaticResource RevaTrackBrush}"
+                    Foreground="{x:Bind local:Vis.BarBrush(IsNearLimit)}"
+                    AutomationProperties.AccessibilityView="Raw" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BillTemplate" x:DataType="vm:BillRowViewModel">
+            <Grid
+                ColumnDefinitions="*,Auto,150"
+                ColumnSpacing="16"
+                MinHeight="32"
+                AutomationProperties.Name="{x:Bind AccessibleName}">
+                <TextBlock Text="{x:Bind Name}" Style="{StaticResource RevaBodyText}" VerticalAlignment="Center" />
+                <TextBlock
+                    Grid.Column="1"
+                    Text="{x:Bind AmountText}"
+                    Style="{StaticResource RevaMonoText}"
+                    VerticalAlignment="Center" />
+                <TextBlock
+                    Grid.Column="2"
+                    Text="{x:Bind DueText}"
+                    Style="{StaticResource RevaBodyText}"
+                    Foreground="{x:Bind local:Vis.DueBrush(IsSoon)}"
+                    VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TransactionTemplate" x:DataType="vm:TransactionRowViewModel">
+            <Border BorderBrush="{StaticResource RevaBorderBrush}" BorderThickness="0,1,0,0">
+                <Grid
+                    ColumnDefinitions="96,*,170,130,120,210"
+                    MinHeight="44"
+                    Padding="0,2"
+                    AutomationProperties.Name="{x:Bind AccessibleName}"
+                    AutomationProperties.AutomationId="TransactionRow">
+                    <TextBlock Grid.Column="0" Text="{x:Bind DateText}" Style="{StaticResource RevaBodyText}" Padding="8,0" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{x:Bind Description}" Style="{StaticResource RevaBodyText}" Padding="8,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{x:Bind CategoryText}" Style="{StaticResource RevaBodyText}" Padding="8,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="{x:Bind AccountText}" Style="{StaticResource RevaBodyText}" Padding="8,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock
+                        Grid.Column="4"
+                        Text="{x:Bind AmountText}"
+                        Style="{StaticResource RevaMonoText}"
+                        Foreground="{x:Bind local:Vis.AmountBrush(IsIncome)}"
+                        Padding="8,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        Grid.Column="5"
+                        Text="{x:Bind SourceText}"
+                        Style="{StaticResource RevaMonoText}"
+                        FontSize="12"
+                        Foreground="{x:Bind local:Vis.SourceBrush(IsVoice)}"
+                        Padding="8,0"
+                        VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TabNavigation="Local">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="1280" />
+                    </VisualState.StateTriggers>
+                </VisualState>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="BillsCard.(Grid.Column)" Value="0" />
+                        <Setter Target="BillsCard.(Grid.Row)" Value="1" />
+                        <Setter Target="BillsCard.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="BillsCard.Margin" Value="0,22,0,0" />
+                        <Setter Target="BudgetsCard.(Grid.ColumnSpan)" Value="2" />
+                        <Setter Target="HeaderButtons.(Grid.Column)" Value="0" />
+                        <Setter Target="HeaderButtons.(Grid.Row)" Value="1" />
+                        <Setter Target="HeaderButtons.Margin" Value="0,12,0,0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+        <StackPanel Padding="32,28,32,40" Spacing="22" MaxWidth="1400" HorizontalAlignment="Stretch">
+
+            <!-- Header -->
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16">
+                <StackPanel>
+                    <TextBlock x:Name="HeaderCaption" Style="{StaticResource RevaMutedText}" FontSize="13" />
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+                        <TextBlock Text="Finance" Style="{StaticResource RevaTitleText}" />
+                        <ProgressRing
+                            Width="22"
+                            Height="22"
+                            IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                            Visibility="{x:Bind local:Vis.Show(ViewModel.IsLoading), Mode=OneWay}"
+                            Foreground="{StaticResource RevaAccentBrush}"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Loading Finance" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel x:Name="HeaderButtons" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                    <Button
+                        x:Name="AddTransactionButton"
+                        Content="Add transaction"
+                        Style="{StaticResource RevaPrimaryButton}"
+                        AutomationProperties.AutomationId="AddTransactionButton"
+                        IsEnabled="{x:Bind ViewModel.HasAccounts, Mode=OneWay}"
+                        Click="AddTransaction_Click" />
+                    <Button
+                        Content="Add account"
+                        Style="{StaticResource RevaSecondaryButton}"
+                        AutomationProperties.AutomationId="AddAccountButton"
+                        IsEnabled="{x:Bind local:Vis.Not(ViewModel.IsLocked), Mode=OneWay}"
+                        Click="AddAccount_Click" />
+                    <Button
+                        Content="Import CSV / OFX"
+                        Style="{StaticResource RevaSecondaryButton}"
+                        AutomationProperties.AutomationId="ImportButton"
+                        IsEnabled="{x:Bind ViewModel.HasAccounts, Mode=OneWay}"
+                        Click="Import_Click" />
+                    <Button
+                        Content="Export"
+                        Style="{StaticResource RevaSecondaryButton}"
+                        AutomationProperties.AutomationId="ExportButton"
+                        IsEnabled="{x:Bind local:Vis.Not(ViewModel.IsLocked), Mode=OneWay}">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Transactions (CSV)" Click="ExportCsv_Click" />
+                                <MenuFlyoutItem Text="Everything (JSON backup)" Click="ExportJson_Click" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Fixed note: REVA cannot move money -->
+            <Border
+                x:Name="NotePanel"
+                Background="{StaticResource RevaSurfaceBrush}"
+                BorderBrush="{StaticResource RevaNoteBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="16,12"
+                AutomationProperties.AutomationId="NoMoneyMovementNote"
+                AutomationProperties.LandmarkType="Custom">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <FontIcon Glyph="&#xE72E;" FontSize="18" Foreground="{StaticResource RevaAccentBrush}" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw" />
+                    <TextBlock x:Name="NoteText" Style="{StaticResource RevaBodyText}" Foreground="{StaticResource RevaSecondaryBrush}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- Error / locked -->
+            <Border
+                Visibility="{x:Bind local:Vis.Show(ViewModel.HasError), Mode=OneWay}"
+                x:Name="ErrorPanel"
+                Style="{StaticResource RevaSmallCard}"
+                BorderBrush="{StaticResource RevaErrorBrush}"
+                AutomationProperties.AutomationId="FinanceError"
+                AutomationProperties.LiveSetting="Assertive">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock
+                        Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                        Foreground="{StaticResource RevaErrorBrush}"
+                        Style="{StaticResource RevaBodyText}"
+                        VerticalAlignment="Center" />
+                    <Button
+                        Grid.Column="1"
+                        Content="Try again"
+                        Style="{StaticResource RevaSecondaryButton}"
+                        AutomationProperties.AutomationId="FinanceRetry"
+                        Click="Retry_Click" />
+                </Grid>
+            </Border>
+
+            <!-- Empty state -->
+            <Border
+                x:Name="EmptyPanel"
+                Visibility="{x:Bind local:Vis.Show(ViewModel.ShowEmptyState), Mode=OneWay}"
+                Style="{StaticResource RevaCard}"
+                AutomationProperties.AutomationId="FinanceEmpty">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="No accounts yet" Style="{StaticResource RevaSectionTitleText}" />
+                    <TextBlock
+                        Text="Add an account to start tracking. You can also import a bank CSV or OFX file, or restore a REVA JSON export."
+                        Style="{StaticResource RevaMutedText}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            Content="Add account"
+                            Style="{StaticResource RevaPrimaryButton}"
+                            AutomationProperties.AutomationId="EmptyAddAccountButton"
+                            Click="AddAccount_Click" />
+                        <Button
+                            Content="Import a file"
+                            Style="{StaticResource RevaSecondaryButton}"
+                            Click="ImportRestore_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Accounts strip + net worth: one wrapping grid, as in the design (4 across when wide) -->
+            <ItemsRepeater
+                x:Name="Strip"
+                Visibility="{x:Bind local:Vis.Show(ViewModel.HasAccounts), Mode=OneWay}"
+                ItemTemplate="{StaticResource StripSelector}"
+                AutomationProperties.Name="Accounts"
+                AutomationProperties.LandmarkType="Custom">
+                <ItemsRepeater.Layout>
+                    <UniformGridLayout MinItemWidth="230" MinColumnSpacing="14" MinRowSpacing="14" ItemsStretch="Fill" />
+                </ItemsRepeater.Layout>
+            </ItemsRepeater>
+
+            <!-- Budgets + bills -->
+            <Grid x:Name="MiddleRow" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="22">
+                <Border x:Name="BudgetsCard" Style="{StaticResource RevaCard}" VerticalAlignment="Top" AutomationProperties.Name="Budgets" AutomationProperties.LandmarkType="Custom">
+                    <StackPanel Spacing="16">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Text="{x:Bind local:FinancePage.BudgetTitle(ViewModel.BudgetPeriod), Mode=OneWay}" Style="{StaticResource RevaSectionTitleText}" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Period" Style="{StaticResource RevaMutedText}" VerticalAlignment="Center" />
+                                <ComboBox
+                                    x:Name="PeriodBox"
+                                    MinHeight="44"
+                                    MinWidth="130"
+                                    ItemsSource="{x:Bind ViewModel.BudgetPeriods}"
+                                    SelectedIndex="0"
+                                    AutomationProperties.Name="Budget period"
+                                    AutomationProperties.AutomationId="BudgetPeriod"
+                                    SelectionChanged="Period_SelectionChanged" />
+                            </StackPanel>
+                        </Grid>
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Budgets, Mode=OneWay}" ItemTemplate="{StaticResource BudgetTemplate}" IsTabStop="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="16" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <TextBlock
+                            Text="No budgets for this period."
+                            Style="{StaticResource RevaMutedText}"
+                            Visibility="{x:Bind local:Vis.ShowWhenZero(ViewModel.Budgets.Count), Mode=OneWay}" />
+                        <TextBlock Text="Bars over 90% turn light orange. Ask: “How much did I spend on food this month?”" Style="{StaticResource RevaCaptionText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="BillsCard" Grid.Column="1" Style="{StaticResource RevaCard}" VerticalAlignment="Top" AutomationProperties.Name="Bills and recurring" AutomationProperties.LandmarkType="Custom">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Bills &amp; recurring" Style="{StaticResource RevaSectionTitleText}" />
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Bills, Mode=OneWay}" ItemTemplate="{StaticResource BillTemplate}" IsTabStop="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <TextBlock
+                            Text="No bills or recurring items yet."
+                            Style="{StaticResource RevaMutedText}"
+                            Visibility="{x:Bind local:Vis.ShowWhenZero(ViewModel.Bills.Count), Mode=OneWay}" />
+                        <TextBlock Text="Reminders are created with your approval (T2) and appear in Today on both devices." Style="{StaticResource RevaCaptionText}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Transactions -->
+            <Border Style="{StaticResource RevaCard}" AutomationProperties.Name="Transactions" AutomationProperties.LandmarkType="Custom">
+                <StackPanel Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Text="Recent transactions" Style="{StaticResource RevaSectionTitleText}" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Search" Style="{StaticResource RevaMutedText}" VerticalAlignment="Center" />
+                            <TextBox
+                                x:Name="SearchBox"
+                                Width="260"
+                                PlaceholderText="merchant, category, note"
+                                Style="{StaticResource RevaTextBox}"
+                                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.Name="Search transactions"
+                                AutomationProperties.AutomationId="TransactionSearch"
+                                KeyDown="Search_KeyDown"
+                                TextChanged="Search_TextChanged" />
+                        </StackPanel>
+                    </Grid>
+
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Auto">
+                        <StackPanel MinWidth="800">
+                            <Grid ColumnDefinitions="96,*,170,130,120,210" Padding="0,0,0,8" AutomationProperties.AccessibilityView="Raw">
+                                <TextBlock Grid.Column="0" Text="Date" Style="{StaticResource RevaCaptionText}" Padding="8,0" />
+                                <TextBlock Grid.Column="1" Text="Description" Style="{StaticResource RevaCaptionText}" Padding="8,0" />
+                                <TextBlock Grid.Column="2" Text="Category" Style="{StaticResource RevaCaptionText}" Padding="8,0" />
+                                <TextBlock Grid.Column="3" Text="Account" Style="{StaticResource RevaCaptionText}" Padding="8,0" />
+                                <TextBlock Grid.Column="4" Text="Amount" Style="{StaticResource RevaCaptionText}" Padding="8,0" HorizontalAlignment="Right" />
+                                <TextBlock Grid.Column="5" Text="Source" Style="{StaticResource RevaCaptionText}" Padding="8,0" />
+                            </Grid>
+                            <ItemsControl
+                                x:Name="TransactionsList"
+                                ItemsSource="{x:Bind ViewModel.Transactions, Mode=OneWay}"
+                                ItemTemplate="{StaticResource TransactionTemplate}"
+                                IsTabStop="False"
+                                AutomationProperties.AutomationId="TransactionsList"
+                                AutomationProperties.Name="Transactions" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.TransactionsEmptyText, Mode=OneWay}"
+                                Style="{StaticResource RevaMutedText}"
+                                Margin="8,12,0,0"
+                                Visibility="{x:Bind local:Vis.Hide(ViewModel.HasTransactions), Mode=OneWay}" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <local:ConflictBanner x:Name="Banner" Resolved="Banner_Resolved" />
+                </StackPanel>
+            </Border>
+
+            <!-- Privacy switches -->
+            <StackPanel Spacing="6" AutomationProperties.Name="Finance privacy" AutomationProperties.LandmarkType="Custom">
+                <StackPanel Orientation="Horizontal" Spacing="28">
+                    <CheckBox
+                        Content="Sync Finance to paired phone"
+                        MinHeight="44"
+                        IsChecked="{x:Bind ViewModel.SyncEnabled, Mode=TwoWay}"
+                        AutomationProperties.AutomationId="PrivacySync" />
+                    <CheckBox
+                        Content="Let a cloud model see Finance data"
+                        MinHeight="44"
+                        IsChecked="{x:Bind ViewModel.HostedModelEnabled, Mode=TwoWay}"
+                        AutomationProperties.AutomationId="PrivacyHostedModel" />
+                </StackPanel>
+                <TextBlock Text="These record your choices. Nothing is sent anywhere until a phone is paired or a cloud model is set up and enabled." Style="{StaticResource RevaCaptionText}" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.PrivacyMessage, Mode=OneWay}"
+                    Style="{StaticResource RevaErrorText}"
+                    Visibility="{x:Bind local:Vis.ShowText(ViewModel.PrivacyMessage), Mode=OneWay}"
+                    AutomationProperties.LiveSetting="Assertive" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

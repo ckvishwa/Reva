@@ -1,0 +1,71 @@
+{
+  "domain": "finance",
+  "report": "upcoming_bills",
+  "rows": [
+    {
+      "account_id": null,
+      "active": true,
+      "amount_minor": 120000,
+      "anchor_day": 14,
+      "category_id": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "currency": "USD",
+      "days_until": 2,
+      "due_date": "2026-10-14",
+      "id": "bill-rent-001",
+      "kind": "bill",
+      "last_paid_date": null,
+      "name": "Rent",
+      "notes": null,
+      "overdue": false,
+      "recurrence": "monthly",
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "version": 1
+    },
+    {
+      "account_id": null,
+      "active": true,
+      "amount_minor": 4500,
+      "anchor_day": 18,
+      "category_id": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "currency": "USD",
+      "days_until": 6,
+      "due_date": "2026-10-18",
+      "id": "bill-phone-01",
+      "kind": "bill",
+      "last_paid_date": null,
+      "name": "Phone",
+      "notes": null,
+      "overdue": false,
+      "recurrence": "monthly",
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "version": 1
+    },
+    {
+      "account_id": null,
+      "active": true,
+      "amount_minor": 1500,
+      "anchor_day": 2,
+      "category_id": null,
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "currency": "USD",
+      "days_until": 21,
+      "due_date": "2026-11-02",
+      "id": "bill-stream-1",
+      "kind": "subscription",
+      "last_paid_date": null,
+      "name": "Streaming",
+      "notes": null,
+      "overdue": false,
+      "recurrence": "monthly",
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "version": 1
+    }
+  ],
+  "source_ids": [
+    "bill-rent-001",
+    "bill-phone-01",
+    "bill-stream-1"
+  ]
+}

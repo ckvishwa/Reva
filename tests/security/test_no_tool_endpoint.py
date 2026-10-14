@@ -10,6 +10,29 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("GET", "/v1/audit-events"),
     ("POST", "/v1/voice/speech"),
     ("POST", "/v1/voice/transcriptions"),
+    ("GET", "/v1/domains"),
+    ("GET", "/v1/domains/{domain}/export"),
+    ("GET", "/v1/domains/{domain}/privacy"),
+    ("PATCH", "/v1/domains/{domain}/privacy"),
+    ("GET", "/v1/domains/finance/conflicts"),
+    ("POST", "/v1/domains/finance/conflicts/{conflict_id}/resolve"),
+    ("POST", "/v1/domains/{domain}/import"),
+    ("GET", "/v1/domains/{domain}/reports/{name}"),
+    ("GET", "/v1/domains/{domain}/{collection}"),
+    ("POST", "/v1/domains/{domain}/{collection}"),
+    ("GET", "/v1/domains/{domain}/{collection}/{item_id}"),
+    ("PATCH", "/v1/domains/{domain}/{collection}/{item_id}"),
+    ("DELETE", "/v1/domains/{domain}/{collection}/{item_id}"),
+    ("POST", "/v1/domains/finance/bills/{item_id}/mark-paid"),
+    ("GET", "/v1/today"),
+    # Devices page controls for the pairing gateway (SYNC-1b). The phone-facing gateway is a
+    # separate app, covered by tests/gateway/test_listener.py.
+    ("GET", "/v1/devices"),
+    ("PATCH", "/v1/devices/gateway"),
+    ("POST", "/v1/devices/pairing"),
+    ("POST", "/v1/devices/pairing/approve"),
+    ("POST", "/v1/devices/pairing/deny"),
+    ("POST", "/v1/devices/{device_id}/revoke"),
 }
 
 _ALLOWED_NON_DOMAIN_PREFIXES = {

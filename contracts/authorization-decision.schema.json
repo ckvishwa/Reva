@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/authorization-decision/2.0",
+  "title": "REVA AuthorizationDecision (pure authorize() output)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "allowed",
+    "reason",
+    "authorizer_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "proposal_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "allowed": {
+      "type": "boolean"
+    },
+    "reason": {
+      "enum": [
+        "OK",
+        "UNKNOWN_CAPABILITY",
+        "INVALID_ARGS",
+        "UNRESOLVED_TERMS",
+        "AMBIGUOUS_ENTITY",
+        "LOW_EVIDENCE",
+        "STATE_MISMATCH",
+        "CONSENT_REQUIRED",
+        "APPROVAL_REQUIRED",
+        "DENIED_TIER",
+        "FORBIDDEN_CAPABILITY"
+      ]
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "question_template": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tier": {
+      "enum": [
+        "T0",
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    "authorizer_version": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "allowed": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "const": "OK"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "UNRESOLVED_TERMS",
+              "AMBIGUOUS_ENTITY",
+              "LOW_EVIDENCE"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "clarification"
+        ]
+      }
+    }
+  ]
+}

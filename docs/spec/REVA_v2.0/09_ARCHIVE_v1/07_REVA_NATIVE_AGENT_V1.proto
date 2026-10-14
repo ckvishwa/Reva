@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package reva.agent.v1;
+option csharp_namespace = "Reva.Agent.V1";
+option java_multiple_files = true;
+option java_package = "ai.reva.agent.v1";
+
+import "google/protobuf/timestamp.proto";
+
+// PROPOSED native adapter contract. This service must never be exposed unauthenticated.
+// Caller identity MUST come from authenticated transport, not merely these string fields.
+// The policy engine issues action-bound authorization grants; an LLM cannot mint grants.
+service DeviceAgent {
+  rpc Capabilities(CapabilitiesRequest) returns (CapabilitiesResponse);
+  rpc InspectUi(InspectUiRequest) returns (UiSnapshot);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc Observe(ObserveRequest) returns (ObserveResponse);
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+}
+
+message RequestContext {
+  string request_id = 1;       // Unique UUID; audit correlation
+  string session_id = 2;
+  string turn_id = 3;
+  string target_device_id = 4;
+  string idempotency_key = 5;  // Required for any effectful operation
+  google.protobuf.Timestamp created_at = 6;
+  uint32 deadline_ms = 7;     // Trusted server caps this value
+  uint32 schema_major = 8;    // v1 = 1
+}
+
+// Opaque policy authorization. Not a plain "approved=true" flag.
+message AuthorizationGrant {
+  bytes signed_or_opaque_proof = 1;
+  string grant_id = 2;
+  // Target adapter MUST verify actor, operation digest, device, expiry, and replay.
+}
+
+message CapabilitiesRequest {
+  RequestContext ctx = 1;
+}
+message Capability {
+  string capability_id = 1;    // e.g. app.launch, ui.inspect, ui.invoke
+  uint32 capability_version = 2;
+  bool enabled = 3;
+  string disabled_reason_code = 4;
+}
+message CapabilitiesResponse {
+  string device_id = 1;
+  repeated Capability capabilities = 2;
+  google.protobuf.Timestamp observed_at = 3;
+}
+
+message InspectUiRequest {
+  RequestContext ctx = 1;
+  AuthorizationGrant grant = 2;   // Inspection is sensitive too.
+  string scope_app_id = 3;         // Canonical app ID registered locally
+  string scope_window_id = 4;      // Opaque native handle ID
+  uint32 max_nodes = 5;           // Hard-capped by adapter
+  bool include_visible_text = 6;  // Policy gate; redact secrets
+}
+
+message UiElement {
+  string element_id = 1;          // Opaque, expires with snapshot
+  string role = 2;                // e.g. button, edit, menuitem
+  string accessible_name = 3;    // Redacted; untrusted content
+  string automation_id = 4;      // Best-effort, may be blank
+  bool enabled = 5;
+  bool visible = 6;
+  bool sensitive = 7;
+  repeated string supported_patterns = 8;
+  string parent_element_id = 9;
+}
+message UiSnapshot {
+  string snapshot_id = 1;
+  string device_id = 2;
+  string app_id = 3;
+  string window_id = 4;
+  google.protobuf.Timestamp observed_at = 5;
+  repeated UiElement elements = 6;
+  bool truncated = 7;
+  repeated string redaction_codes = 8;
+  string status_code = 9;
+}
+
+message LaunchApp { string app_id = 1; }
+message CloseApp { string app_id = 1; } // Graceful, allowlisted, never force-kill default
+message InvokeUiElement {
+  string app_id = 1;
+  string window_id = 2;
+  string snapshot_id = 3;
+  string element_id = 4;
+}
+message SetUiText {
+  string app_id = 1;
+  string window_id = 2;
+  string snapshot_id = 3;
+  string element_id = 4;
+  string text = 5; // Must not target password/OTP/sensitive fields.
+}
+message ScrollUi {
+  string app_id = 1;
+  string window_id = 2;
+  string snapshot_id = 3;
+  string element_id = 4;
+  int32 direction = 5;  // -1 back/up, +1 forward/down, nonzero only
+  uint32 pages = 6;    // Hard cap
+}
+
+message ExecuteRequest {
+  RequestContext ctx = 1;
+  AuthorizationGrant grant = 2;
+  string action_id = 3;
+  oneof operation {
+    LaunchApp launch_app = 10;
+    CloseApp close_app = 11;
+    InvokeUiElement invoke_ui = 12;
+    SetUiText set_ui_text = 13;
+    ScrollUi scroll_ui = 14;
+  }
+  // No shell/script/OS command/stringly-typed arbitrary executable field.
+}
+
+enum ActionOutcome {
+  ACTION_OUTCOME_UNSPECIFIED = 0;
+  ACTION_DENIED = 1;
+  ACTION_FAILED = 2;
+  ACTION_CANCELLED = 3;
+  ACTION_EFFECT_UNKNOWN = 4;
+  ACTION_EXECUTED_UNVERIFIED = 5;
+  ACTION_VERIFIED_SUCCESS = 6;
+}
+
+message Observation {
+  string method = 1;                 // e.g. process_state, uia_value, app_api
+  string target_ref = 2;             // Redacted native ref
+  string verified_property = 3;      // e.g. text_equals_expected
+  bool verified = 4;
+  google.protobuf.Timestamp observed_at = 5;
+}
+message ExecuteResponse {
+  string request_id = 1;
+  string action_id = 2;
+  ActionOutcome outcome = 3;
+  string error_code = 4;
+  repeated Observation observations = 5;
+  uint64 duration_ms = 6;
+  string trace_id = 7;
+}
+
+message ObserveRequest {
+  RequestContext ctx = 1;
+  AuthorizationGrant grant = 2;
+  string action_id = 3;
+}
+message ObserveResponse {
+  string action_id = 1;
+  ActionOutcome last_known_outcome = 2;
+  repeated Observation observations = 3;
+  string error_code = 4;
+}
+message CancelRequest {
+  RequestContext ctx = 1;
+  AuthorizationGrant grant = 2;
+  string action_id = 3;
+}
+message CancelResponse {
+  string action_id = 1;
+  bool cancellation_requested = 2;
+  bool effect_may_have_occurred = 3;
+}

@@ -1,0 +1,257 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.DevicesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views"
+    xmlns:vm="using:Reva.Desktop.ViewModels">
+
+    <UserControl.Resources>
+        <!-- On = the accent, like every other active control; the default switch would use the system colour. -->
+        <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="{StaticResource RevaAccentColor}" />
+        <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#F7B97C" />
+        <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#E09446" />
+        <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="{StaticResource RevaAccentColor}" />
+        <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#F7B97C" />
+        <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#E09446" />
+        <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="{StaticResource RevaGroundColor}" />
+        <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="{StaticResource RevaGroundColor}" />
+        <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="{StaticResource RevaGroundColor}" />
+        <DataTemplate x:Key="DeviceTemplate" x:DataType="vm:DeviceRowViewModel">
+            <Border
+                Style="{StaticResource RevaSmallCard}"
+                AutomationProperties.Name="{x:Bind AccessibleName}"
+                AutomationProperties.AutomationId="DeviceRow">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                    <StackPanel Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="{x:Bind Name}" Style="{StaticResource RevaSectionTitleText}" />
+                            <TextBlock
+                                Text="{x:Bind StatusText}"
+                                Style="{StaticResource RevaMonoText}"
+                                FontSize="12"
+                                Foreground="{x:Bind local:Vis.StatusBrush(IsActive)}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{x:Bind ScopesText}" Style="{StaticResource RevaBodyText}" />
+                        <TextBlock Text="{x:Bind LastSeenText}" Style="{StaticResource RevaMutedText}" />
+                        <TextBlock Style="{StaticResource RevaCaptionText}">
+                            <Run Text="{x:Bind PairedText}" /><Run Text=" · key " /><Run Text="{x:Bind FingerprintText}" FontFamily="{StaticResource RevaMono}" />
+                        </TextBlock>
+                    </StackPanel>
+                    <Button
+                        Grid.Column="1"
+                        Content="Revoke"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource RevaSecondaryButton}"
+                        Visibility="{x:Bind local:Vis.Show(IsActive)}"
+                        AutomationProperties.AutomationId="RevokeButton"
+                        AutomationProperties.Name="{x:Bind Name}"
+                        Click="Revoke_Click" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TabNavigation="Local">
+        <StackPanel Padding="32,28,32,40" Spacing="22" MaxWidth="1000" HorizontalAlignment="Stretch">
+
+            <!-- Header -->
+            <StackPanel>
+                <TextBlock Text="{x:Bind local:DevicesPage.ScopeNoteText}" Style="{StaticResource RevaMutedText}" FontSize="13" />
+                <TextBlock Text="Devices" Style="{StaticResource RevaTitleText}" Margin="0,4,0,0" />
+            </StackPanel>
+
+            <!-- Errors from Core, in plain words -->
+            <Border
+                Visibility="{x:Bind local:Vis.Show(ViewModel.HasError), Mode=OneWay}"
+                Style="{StaticResource RevaSmallCard}"
+                BorderBrush="{StaticResource RevaErrorBrush}"
+                AutomationProperties.AutomationId="DevicesError"
+                AutomationProperties.LiveSetting="Assertive">
+                <TextBlock
+                    Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                    Foreground="{StaticResource RevaErrorBrush}"
+                    Style="{StaticResource RevaBodyText}"
+                    TextWrapping="Wrap" />
+            </Border>
+
+            <!-- Gateway -->
+            <Border Style="{StaticResource RevaCard}" AutomationProperties.Name="Pairing gateway" AutomationProperties.LandmarkType="Custom">
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Pairing gateway" Style="{StaticResource RevaSectionTitleText}" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                                Style="{StaticResource RevaBodyText}"
+                                TextWrapping="Wrap"
+                                AutomationProperties.AutomationId="GatewayStatus"
+                                AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.KeyText, Mode=OneWay}"
+                                Visibility="{x:Bind local:Vis.Show(ViewModel.HasKey), Mode=OneWay}"
+                                Style="{StaticResource RevaCaptionText}"
+                                FontFamily="{StaticResource RevaMono}"
+                                AutomationProperties.AutomationId="GatewayKey" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            x:Name="GatewayToggle"
+                            Grid.Column="1"
+                            OnContent="On"
+                            OffContent="Off"
+                            VerticalAlignment="Center"
+                            IsEnabled="{x:Bind local:Vis.Not(ViewModel.IsBusy), Mode=OneWay}"
+                            AutomationProperties.Name="Pairing gateway"
+                            AutomationProperties.AutomationId="GatewayToggle"
+                            Toggled="GatewayToggle_Toggled" />
+                    </Grid>
+                    <TextBlock
+                        Text="It is off until you switch it on. It listens only on your local network and never on the internet."
+                        Style="{StaticResource RevaCaptionText}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <!-- Pairing -->
+            <Border Style="{StaticResource RevaCard}" AutomationProperties.Name="Pair a phone" AutomationProperties.LandmarkType="Custom">
+                <StackPanel Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <TextBlock Text="Pair a phone" Style="{StaticResource RevaSectionTitleText}" VerticalAlignment="Center" />
+                        <Button
+                            Grid.Column="1"
+                            Content="Pair a phone"
+                            Style="{StaticResource RevaPrimaryButton}"
+                            IsEnabled="{x:Bind ViewModel.CanPair, Mode=OneWay}"
+                            AutomationProperties.AutomationId="PairButton"
+                            Click="Pair_Click" />
+                    </Grid>
+
+                    <TextBlock
+                        Text="Turn the pairing gateway on to pair a phone."
+                        Style="{StaticResource RevaMutedText}"
+                        Visibility="{x:Bind local:Vis.Hide(ViewModel.IsListening), Mode=OneWay}" />
+
+                    <!-- QR code: one-time, short-lived -->
+                    <Grid
+                        Visibility="{x:Bind local:Vis.Show(ViewModel.ShowsQr), Mode=OneWay}"
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="24"
+                        AutomationProperties.Name="Scan the QR code to pair a phone"
+                        AutomationProperties.AutomationId="PairingQrPanel">
+                        <Border Background="#ECEEF1" CornerRadius="12" Padding="8">
+                            <Image
+                                x:Name="QrImage"
+                                Width="240"
+                                Height="240"
+                                AutomationProperties.AutomationId="PairingQr"
+                                AutomationProperties.Name="Pairing QR code. Scan it with REVA on your phone." />
+                        </Border>
+                        <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Center">
+                            <TextBlock Text="Scan with REVA on your phone" Style="{StaticResource RevaSectionTitleText}" />
+                            <TextBlock
+                                Text="Open REVA on the phone, choose Devices, then Pair with a PC. Your phone and this PC must be on the same network."
+                                Style="{StaticResource RevaBodyText}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.CountdownText, Mode=OneWay}"
+                                Style="{StaticResource RevaMonoText}"
+                                Foreground="{StaticResource RevaAccentBrush}"
+                                AutomationProperties.AutomationId="PairingCountdown"
+                                AutomationProperties.LiveSetting="Off" />
+                            <Button
+                                Content="Cancel"
+                                Style="{StaticResource RevaSecondaryButton}"
+                                AutomationProperties.AutomationId="PairCancelButton"
+                                Click="Deny_Click" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- A phone scanned it: compare the digits, then approve -->
+                    <StackPanel
+                        Visibility="{x:Bind local:Vis.Show(ViewModel.ShowsPending), Mode=OneWay}"
+                        Spacing="12"
+                        AutomationProperties.Name="A phone is waiting for your approval"
+                        AutomationProperties.AutomationId="PairingPendingPanel">
+                        <TextBlock
+                            Text="{x:Bind local:DevicesPage.PendingTitle(ViewModel.PendingDeviceName), Mode=OneWay}"
+                            Style="{StaticResource RevaSectionTitleText}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Text="Do these six digits match the ones on your phone? Only approve if they match exactly."
+                            Style="{StaticResource RevaBodyText}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Text="{x:Bind ViewModel.PendingFingerprintText, Mode=OneWay}"
+                            Style="{StaticResource RevaBigNumberText}"
+                            FontSize="56"
+                            CharacterSpacing="150"
+                            Foreground="{StaticResource RevaAccentLightBrush}"
+                            AutomationProperties.AutomationId="PairingFingerprint"
+                            AutomationProperties.Name="{x:Bind local:DevicesPage.DigitsName(ViewModel.PendingFingerprintText), Mode=OneWay}" />
+                        <TextBlock
+                            Text="{x:Bind ViewModel.CountdownText, Mode=OneWay}"
+                            Style="{StaticResource RevaMonoText}"
+                            Foreground="{StaticResource RevaAccentBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Content="Approve"
+                                Style="{StaticResource RevaPrimaryButton}"
+                                IsEnabled="{x:Bind local:Vis.Not(ViewModel.IsBusy), Mode=OneWay}"
+                                AutomationProperties.AutomationId="PairApproveButton"
+                                Click="Approve_Click" />
+                            <Button
+                                Content="Deny"
+                                Style="{StaticResource RevaSecondaryButton}"
+                                IsEnabled="{x:Bind local:Vis.Not(ViewModel.IsBusy), Mode=OneWay}"
+                                AutomationProperties.AutomationId="PairDenyButton"
+                                Click="Deny_Click" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Outcome of the last pairing or revoke -->
+                    <Grid
+                        Visibility="{x:Bind local:Vis.Show(ViewModel.HasPairingMessage), Mode=OneWay}"
+                        ColumnDefinitions="*,Auto"
+                        ColumnSpacing="12">
+                        <TextBlock
+                            Text="{x:Bind ViewModel.PairingMessage, Mode=OneWay}"
+                            Style="{StaticResource RevaBodyText}"
+                            TextWrapping="Wrap"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="PairingMessage"
+                            AutomationProperties.LiveSetting="Polite" />
+                        <Button
+                            Grid.Column="1"
+                            Content="Dismiss"
+                            Style="{StaticResource RevaSecondaryButton}"
+                            AutomationProperties.AutomationId="PairingDismissButton"
+                            Click="Dismiss_Click" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Paired phones -->
+            <Border Style="{StaticResource RevaCard}" AutomationProperties.Name="Paired phones" AutomationProperties.LandmarkType="Custom">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Paired phones" Style="{StaticResource RevaSectionTitleText}" />
+                    <ItemsControl
+                        ItemsSource="{x:Bind ViewModel.Devices, Mode=OneWay}"
+                        ItemTemplate="{StaticResource DeviceTemplate}"
+                        IsTabStop="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="10" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <TextBlock
+                        Text="No phone is paired yet."
+                        Style="{StaticResource RevaMutedText}"
+                        Visibility="{x:Bind local:Vis.ShowWhenZero(ViewModel.Devices.Count), Mode=OneWay}"
+                        AutomationProperties.AutomationId="DevicesEmpty" />
+                    <TextBlock Text="{x:Bind local:DevicesPage.RevokeNote}" Style="{StaticResource RevaCaptionText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -10,6 +10,12 @@ import pytest
         ("post", "/v1/memories", {"json": {"content": "hi"}}),
         ("get", "/v1/memories", {"params": {"q": "hi"}}),
         ("get", "/v1/audit-events", {}),
+        ("get", "/v1/devices", {}),
+        ("patch", "/v1/devices/gateway", {"json": {"enabled": True}}),
+        ("post", "/v1/devices/pairing", {}),
+        ("post", "/v1/devices/pairing/approve", {"json": {"fingerprint": "123456"}}),
+        ("post", "/v1/devices/pairing/deny", {}),
+        ("post", "/v1/devices/some-device/revoke", {}),
         ("post", "/v1/voice/speech", {"json": {"text": "hi", "language": "en"}}),
         (
             "post",

@@ -1,0 +1,7 @@
+{
+  "body": {
+    "correlation_id": "CORRELATION",
+    "error": "gateway_off"
+  },
+  "status": 409
+}
