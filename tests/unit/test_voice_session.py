@@ -433,3 +433,41 @@ async def test_two_sessions_count_their_epochs_independently():
 
     assert one.turn_epoch == 2 and two.turn_epoch == 1
     assert calls == [(one.id, 1), (one.id, 2), (two.id, 1)]
+
+
+async def test_a_barge_in_cancels_the_clarification_that_was_being_spoken():
+    from reva_core.language.dialogue import Option
+
+    session, _, _ = _session()
+    await _to_speaking(session)
+    session.dialogue.ask("which-account", [Option("a-1", "Checking"), Option("a-2", "Card")])
+
+    await session.interrupt()
+
+    assert session.dialogue.state.pending_clarification is None
+    assert session.dialogue.state.turn_epoch == session.turn_epoch == 1
+
+
+async def test_dialogue_state_resumes_for_the_same_device_in_a_new_session():
+    from reva_core.language.dialogue import Entity, MemoryDialogueStore
+
+    store = MemoryDialogueStore()
+    first = SessionCoordinator(dialogue_store=store).open("device-0001")
+    first.dialogue.accept_proposal("act-1", [Entity("tx-1", "transaction", "Lunch")])
+    await first.close()
+
+    resumed = SessionCoordinator(dialogue_store=store).open("device-0001")
+
+    assert resumed.dialogue.undo_target() == "act-1"
+    assert resumed.dialogue.resolve_reference("it").entity.id == "tx-1"
+    other = SessionCoordinator(dialogue_store=store).open("device-0002")
+    assert other.dialogue.undo_target() is None
+
+
+async def test_a_cancel_bumps_the_dialogue_epoch_too():
+    session, _, _ = _session()
+    await _to_speaking(session)
+
+    await session.cancel()
+
+    assert session.dialogue.state.turn_epoch == session.turn_epoch

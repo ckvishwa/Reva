@@ -31,6 +31,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from reva_core.api.auth import build_auth_dependency, record_auth_failure
 from reva_core.api.correlation import resolve_correlation_id
+from reva_core.language.dialogue import FileDialogueStore
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.session.coordinator import SessionCoordinator, VoiceSession
 from reva_core.session.events import SessionErrorCode, SessionEventKind
@@ -78,7 +79,10 @@ def build_voice_session_router(
 ) -> tuple[APIRouter, SessionCoordinator]:
     router = APIRouter(prefix="/v1")
     require_token = build_auth_dependency(lifecycle)
-    coordinator = SessionCoordinator(stop_speaking=make_stop_speaking(lifecycle))
+    coordinator = SessionCoordinator(
+        stop_speaking=make_stop_speaking(lifecycle),
+        dialogue_store=FileDialogueStore(lifecycle.settings.data_dir / "dialogue"),
+    )
 
     @router.post(
         "/voice/sessions",

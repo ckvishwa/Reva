@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from reva_core.language.dialogue import DialogueStore, DialogueTracker
 from reva_core.session.ack import ACK_AFTER_SECONDS, ack_text
 from reva_core.session.events import (
     EventSubscription,
@@ -112,6 +113,7 @@ class VoiceSession:
         clock: Callable[[], float],
         speak_ack: SpeakAck | None = None,
         ack_delay: float = ACK_AFTER_SECONDS,
+        dialogue_store: DialogueStore | None = None,
     ) -> None:
         self.id = session_id
         self.device_id = device_id
@@ -134,6 +136,8 @@ class VoiceSession:
         self._ack_task: asyncio.Task[None] | None = None
         self._ack_active = False
         self.turn_number = 0
+        # What was talked about, per device: survives a new session after a crash or restart.
+        self.dialogue = DialogueTracker(device_id, dialogue_store)
         self._emit_state(previous=None, reason=None)
 
     # ------------------------------------------------------------ subscriptions
@@ -303,6 +307,7 @@ class VoiceSession:
 
     def _bump_epoch(self) -> None:
         self.turn_epoch += 1
+        self.dialogue.barge_in(self.turn_epoch)  # a clarification being spoken is cancelled
         if self._epoch_changed is not None and not self._epoch_changed.done():
             self._epoch_changed.set_result(None)
         self._epoch_changed = None
@@ -386,6 +391,7 @@ class SessionCoordinator:
         clock: Callable[[], float] = time.monotonic,
         speak_ack: SpeakAck | None = None,
         ack_delay_seconds: float = ACK_AFTER_SECONDS,
+        dialogue_store: DialogueStore | None = None,
     ) -> None:
         self._max_sessions = max_sessions
         self._deadlines = deadlines or DeadlineConfig()
@@ -393,6 +399,7 @@ class SessionCoordinator:
         self._clock = clock
         self._speak_ack = speak_ack
         self._ack_delay = ack_delay_seconds
+        self._dialogue_store = dialogue_store
         self._sessions: dict[str, VoiceSession] = {}
 
     @property
@@ -410,6 +417,7 @@ class SessionCoordinator:
             clock=self._clock,
             speak_ack=self._speak_ack,
             ack_delay=self._ack_delay,
+            dialogue_store=self._dialogue_store,
         )
         self._sessions[session.id] = session
         return session
