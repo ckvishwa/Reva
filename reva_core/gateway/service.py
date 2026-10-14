@@ -246,6 +246,9 @@ class GatewayService:
             report = handle.sync_apply(grant.kernel_ids[DOMAIN], batch)
         except module.DomainError as exc:
             raise _map(module, exc) from exc
+        if report.applied:
+            # Tell open screens (PC Finance and Today) to reload: they wait on this counter.
+            self._domains().note_change(DOMAIN)
         self._store.audit(
             "sync_push", AuditOutcome.SUCCESS, device_id=grant.device_id, applied=report.applied
         )

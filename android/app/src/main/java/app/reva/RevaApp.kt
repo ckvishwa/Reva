@@ -2,6 +2,11 @@ package app.reva
 
 import android.app.Application
 import android.content.Context
+import app.reva.sync.AutoSyncController
+import app.reva.sync.SharedPrefsAutoSyncSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import app.reva.data.FinanceRepository
 import app.reva.data.KernelFinanceRepository
 import app.reva.data.KeystoreKeyProvider
@@ -45,6 +50,17 @@ class AppContainer(private val context: Context) {
             store = PairedPcStore(File(syncRoot, "paired_pc.json")),
             transport = PinnedHttpsTransport(),
             deviceName = android.os.Build.MODEL ?: "Android phone",
+            // A sync that applied events from the PC moves the change counter, so open screens reload.
+            onApplied = { kernelRepository.markChanged() },
+        )
+    }
+
+    /** Syncs with the paired PC on its own while the app is in front (setting, default on). */
+    val autoSync: AutoSyncController by lazy {
+        AutoSyncController(
+            service = syncService,
+            settings = SharedPrefsAutoSyncSettings(context.getSharedPreferences("reva_sync", Context.MODE_PRIVATE)),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
     }
 }

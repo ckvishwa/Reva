@@ -59,6 +59,9 @@ public sealed partial class FinancePage : UserControl
     /// <summary>Loads (or reloads) everything from Core; called whenever the page is opened.</summary>
     public Task RefreshAsync() => ViewModel?.RefreshAsync() ?? Task.CompletedTask;
 
+    /// <summary>Reloads without the progress ring; used when Core says a sync changed Finance.</summary>
+    public Task RefreshQuietlyAsync() => ViewModel?.RefreshAsync(showLoading: false) ?? Task.CompletedTask;
+
     private DispatcherQueueTimer? _conflictTimer;
 
     /// <summary>While Finance is the open section, look for a sync conflict every 10 seconds, because a paired

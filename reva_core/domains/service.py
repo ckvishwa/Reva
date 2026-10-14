@@ -3,10 +3,15 @@
 No domain rule lives here. The service only owns the handle lifecycle: open lazily on first
 use (so a locked or missing vault never stops Core from starting), keep one handle per
 domain, and close on shutdown.
+
+It also keeps a change counter per domain (SYNC-1e). The counter is bumped on every local commit
+and every applied sync batch, and a screen waits on it (`wait_for_change`) instead of polling
+or reloading only when it is opened. The counter holds no data.
 """
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from pathlib import Path
 from types import ModuleType
@@ -59,9 +64,17 @@ def translate(binding: ModuleType, exc: BaseException) -> DomainRequestError:
     return DomainRequestError(code, status)
 
 
+# Most long-polls that may wait at once. A person has a handful of screens open, not hundreds.
+DEFAULT_MAX_WATCHERS = 8
+
+
 class DomainService:
     def __init__(
-        self, data_dir: Path, key_provider: DomainKeyProvider, bindings: Path | None = None
+        self,
+        data_dir: Path,
+        key_provider: DomainKeyProvider,
+        bindings: Path | None = None,
+        max_watchers: int = DEFAULT_MAX_WATCHERS,
     ) -> None:
         self._data_dir = Path(data_dir)
         self._keys = key_provider
@@ -69,6 +82,9 @@ class DomainService:
         self._lock = threading.Lock()
         self._handles: dict[str, Any] = {}
         self._module: ModuleType | None = None
+        self._counters: dict[str, int] = dict.fromkeys(ENABLED_DOMAINS, 0)
+        self._max_watchers = max_watchers
+        self._waiters: list[tuple[str, asyncio.AbstractEventLoop, asyncio.Future[None]]] = []
 
     @property
     def enabled_domains(self) -> tuple[str, ...]:
@@ -98,6 +114,59 @@ class DomainService:
             self._handles[domain] = opened
             return opened
 
+    # ------------------------------------------------------------------ change counter
+
+    def change_counter(self, domain: str) -> int:
+        with self._lock:
+            return self._counter_locked(domain)
+
+    def note_change(self, domain: str) -> int:
+        """Record that `domain` changed (a local commit or an applied sync batch). Thread-safe."""
+        with self._lock:
+            self._counter_locked(domain)
+            self._counters[domain] += 1
+            counter = self._counters[domain]
+            woken = [w for w in self._waiters if w[0] == domain]
+            self._waiters = [w for w in self._waiters if w[0] != domain]
+        for _, loop, future in woken:
+            try:
+                loop.call_soon_threadsafe(_resolve, future)
+            except RuntimeError:  # that waiter's loop is already closed
+                continue
+        return counter
+
+    async def wait_for_change(self, domain: str, since: int | None, timeout: float) -> int:
+        """The counter once it differs from `since`, or after `timeout` seconds unchanged.
+
+        `since=None` means no baseline: the current counter is returned at once. A counter that
+        is *lower* than `since` also counts as a change: Core restarted and the caller's baseline
+        is from the previous run.
+        """
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[None] = loop.create_future()
+        with self._lock:
+            counter = self._counter_locked(domain)
+            if since is None or counter != since:
+                return counter
+            if len(self._waiters) >= self._max_watchers:
+                raise DomainRequestError("too_many_watchers", 429, "too many open watchers")
+            entry = (domain, loop, future)
+            self._waiters.append(entry)
+        try:
+            await asyncio.wait_for(future, timeout=timeout)
+        except TimeoutError:
+            pass
+        finally:
+            with self._lock:
+                if entry in self._waiters:
+                    self._waiters.remove(entry)
+        return self.change_counter(domain)
+
+    def _counter_locked(self, domain: str) -> int:
+        if domain not in self._counters:
+            raise DomainRequestError("not_found", 404, f"unknown domain {domain!r}")
+        return self._counters[domain]
+
     def status(self, domain: str) -> dict[str, Any]:
         """Current state of a domain without raising: ready, or why it is not."""
         try:
@@ -118,3 +187,8 @@ class DomainService:
             close = getattr(handle, "close", None)
             if close is not None:
                 close()
+
+
+def _resolve(future: asyncio.Future[None]) -> None:
+    if not future.done():
+        future.set_result(None)

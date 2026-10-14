@@ -16,6 +16,10 @@ import app.reva.data.Outcome
 import app.reva.data.TodaySummary
 import app.reva.data.Transaction
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 data class ImportCall(
     val format: String,
@@ -31,6 +35,12 @@ data class ImportCall(
  * it was asked to do. Real Kernel behaviour is tested through the Kernel itself (instrumented suite).
  */
 class FakeFinanceRepository : FinanceRepository {
+    private val counter = MutableStateFlow(0L)
+
+    override val changes: StateFlow<Long> = counter.asStateFlow()
+
+    override fun markChanged() = counter.update { it + 1 }
+
     var balances = mutableListOf<AccountBalance>()
     var categories = mutableListOf<Category>()
     var transactions = mutableListOf<Transaction>()
@@ -84,6 +94,7 @@ class FakeFinanceRepository : FinanceRepository {
     override suspend fun resolveConflict(id: Long, keepMine: Boolean) = call("resolveConflict") {
         resolved += id to keepMine
         conflicts.removeAll { it.id == id }
+        markChanged()
         Unit
     }
 
@@ -98,6 +109,7 @@ class FakeFinanceRepository : FinanceRepository {
             ),
         )
         balances[balances.indexOf(account)] = account.copy(balanceMinor = account.balanceMinor + request.amountMinor)
+        markChanged()
     }
 
     override suspend fun addAccount(request: NewAccount) = call("addAccount") {
@@ -105,6 +117,7 @@ class FakeFinanceRepository : FinanceRepository {
         balances += AccountBalance(
             "acct-${balances.size + 1}", request.name, request.kind, request.currency, false, request.openingBalanceMinor,
         )
+        markChanged()
     }
 
     override suspend fun takeSnapshot() = call("takeSnapshot") { Unit }

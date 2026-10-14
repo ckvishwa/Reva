@@ -15,8 +15,11 @@ import app.reva.data.NetWorthSnapshot
 import app.reva.data.Outcome
 import app.reva.data.Transaction
 import java.time.LocalDate
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,6 +88,7 @@ class FinanceViewModel(
     private val repository: FinanceRepository,
     private val today: () -> LocalDate = { LocalDate.now() },
     private val searchDebounceMillis: Long = 300,
+    private val changeDebounceMillis: Long = 300,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FinanceUiState())
@@ -96,6 +100,18 @@ class FinanceViewModel(
     private var searchGeneration = 0
     private var searchJob: Job? = null
 
+    init {
+        // Something committed (a local write, or a sync batch from the PC): reload what is on screen
+        // without waiting for a tab switch. Bursts become one reload. Nothing loads before the first load.
+        val seen = repository.changes.value // a change after this point must not be missed, even before collecting starts
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class)
+            repository.changes.dropWhile { it == seen }.debounce(changeDebounceMillis).collect {
+                if (_state.value.hasLoaded) refreshNow(showLoading = false)
+            }
+        }
+    }
+
     val accountsForForms: List<AccountBalance> get() = balances.filter { !it.archived }
     val categoriesForForms: List<Category> get() = categories
 
@@ -103,9 +119,10 @@ class FinanceViewModel(
         viewModelScope.launch { refreshNow() }
     }
 
-    suspend fun refreshNow() {
+    /** [showLoading] is false for a reload that a sync or commit caused, so the spinner does not flash. */
+    suspend fun refreshNow(showLoading: Boolean = true) {
         val generation = ++refreshGeneration
-        _state.update { it.copy(isLoading = true) }
+        _state.update { it.copy(isLoading = showLoading) }
         val search = _state.value.search.takeIf { it.isNotBlank() }
         val period = _state.value.budgetPeriod
 
