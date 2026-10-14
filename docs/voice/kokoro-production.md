@@ -67,6 +67,9 @@ manifest also names private recordings and stays under the asset root, outside g
 
 ## License check (recorded, not a legal approval)
 
+The full per-package record, generated from the installed packages, is in
+`docs/licenses/THIRD_PARTY.md`. The bundling decision is deferred to S25.
+
 | Component | What was checked | Result |
 |---|---|---|
 | Kokoro-82M weights and voices | model card metadata `license: apache-2.0`; card text "Apache-licensed weights" | Apache-2.0 declared. The card lists training audio under permissive terms including CC BY 3.0 and CC BY 4.0 sources, which ask for attribution. The card is stored beside the weights. |

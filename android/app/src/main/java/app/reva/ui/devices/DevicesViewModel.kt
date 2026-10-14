@@ -7,6 +7,7 @@ import app.reva.sync.PairedPc
 import app.reva.sync.SyncException
 import app.reva.sync.SyncReport
 import app.reva.sync.SyncService
+import app.reva.sync.SyncStatusText
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -135,16 +136,7 @@ class DevicesViewModel(
     private fun idle(message: String?, error: Boolean) =
         _state.update { it.copy(phase = DevicesPhase.Idle, fingerprint = null, message = message, isError = error) }
 
-    private fun lastSync(pc: PairedPc?): String? {
-        val at = pc?.lastSyncAtSeconds ?: return if (pc == null) null else "Not synced yet"
-        val minutes = (nowSeconds() - at).coerceAtLeast(0) / 60
-        return when {
-            minutes < 1 -> "Synced just now"
-            minutes < 60 -> "Synced $minutes min ago"
-            minutes < 24 * 60 -> "Synced ${minutes / 60} h ago"
-            else -> "Synced ${minutes / (24 * 60)} d ago"
-        }
-    }
+    private fun lastSync(pc: PairedPc?): String? = SyncStatusText.format(pc, nowSeconds())
 
     private fun summary(report: SyncReport): String {
         val parts = mutableListOf<String>()

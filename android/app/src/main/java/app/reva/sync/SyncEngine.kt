@@ -5,6 +5,8 @@ import java.io.IOException
 import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -119,10 +121,14 @@ class SyncEngine(
     private val deviceName: String,
     private val clockSeconds: () -> Long = { System.currentTimeMillis() / 1000 },
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** Called once after a sync that applied events from the PC, so open screens reload (SYNC-1e). */
+    private val onApplied: () -> Unit = {},
 ) : SyncService {
 
     private class Pending(val target: GatewayTarget, val sessionId: String, val phoneKey: ByteArray)
 
+    /** One sync at a time: a manual tap and the automatic sync never run over each other. */
+    private val syncLock = Mutex()
     private val random = SecureRandom()
     private val lock = Any()
     private var pending: Pending? = null
@@ -230,7 +236,9 @@ class SyncEngine(
         }
     }
 
-    override suspend fun syncNow(): SyncReport = withContext(dispatcher) {
+    override suspend fun syncNow(): SyncReport = syncLock.withLock { syncLocked() }
+
+    private suspend fun syncLocked(): SyncReport = withContext(dispatcher) {
         val pc = store.load() ?: throw SyncException(SyncFailure.Other, "This phone is not paired with a PC.")
         val handle = prepared()
         var sent = 0L
@@ -287,6 +295,8 @@ class SyncEngine(
             throw SyncException(SyncFailure.Rejected, "The events from the PC were refused: they did not check out.")
         }
         store.save(pc.copy(lastSyncAtSeconds = clockSeconds()))
+        // Open screens reload when events from the PC were applied (SYNC-1e).
+        if (applied > 0 || conflicts > 0) onApplied()
         SyncReport(sent, received, applied, duplicates, conflicts, withheld)
     }
 
