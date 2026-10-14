@@ -43,9 +43,11 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _ERROR_BROKEN_PIPE = 109
 _ERROR_NO_DATA = 232
 _POLL_SECONDS = 0.01
+_EXIT_JOIN_SECONDS = 10.0
 
 # The protocol channel. `main()` points sys.stdout at stderr so library output cannot reach it.
 _protocol: TextIO = sys.stdout
+_emit_lock = threading.Lock()
 
 
 def _claim_protocol_channel() -> None:
@@ -55,8 +57,9 @@ def _claim_protocol_channel() -> None:
 
 
 def _emit(payload: dict[str, Any]) -> None:
-    _protocol.write(json.dumps(payload) + "\n")
-    _protocol.flush()
+    with _emit_lock:
+        _protocol.write(json.dumps(payload) + "\n")
+        _protocol.flush()
 
 
 def _blocking_lines(fd: int, pending: bytes = b"") -> Iterator[str]:
@@ -156,53 +159,77 @@ def _write_wav(path: Path, samples: list[float]) -> None:
         wav.writeframes(pcm.tobytes())
 
 
-def _stop_requested(commands: queue.Queue[dict[str, Any] | None]) -> bool | None:
-    """True on `stop`, None on EOF, False otherwise."""
-    try:
-        pending = commands.get_nowait()
-    except queue.Empty:
-        return False
-    if pending is None:
-        return None
-    return pending.get("command") == "stop"
+class _Utterance:
+    """One `speak` request. Exactly one terminal message is ever sent for it."""
+
+    def __init__(self, request_id: Any) -> None:
+        self.id = request_id
+        self.cancelled = threading.Event()
+        self.thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+        self._ended = False
+
+    @property
+    def running(self) -> bool:
+        return self.thread is not None and self.thread.is_alive()
+
+    def end(self, status: str, **extra: Any) -> bool:
+        with self._lock:
+            if self._ended:
+                return False
+            self._ended = True
+            _emit({"id": self.id, "status": status, **extra})
+            return True
+
+    def emit_chunk(self, payload: dict[str, Any]) -> bool:
+        """Send a chunk unless the utterance already ended (stopped, failed)."""
+        with self._lock:
+            if self._ended or self.cancelled.is_set():
+                return False
+            _emit(payload)
+            return True
+
+    def stop(self) -> None:
+        """Acknowledge at once. The sentence being synthesized finishes unseen."""
+        self.cancelled.set()
+        self.end("stopped")
 
 
-def _speak(
-    pipeline: Any,
-    voice_path: str,
-    request: dict[str, Any],
-    commands: queue.Queue[dict[str, Any] | None],
-) -> bool:
+def _synthesize(
+    pipeline: Any, voice_path: str, request: dict[str, Any], utterance: _Utterance
+) -> None:
     request_id = request["id"]
     output_dir = Path(request["output_dir"])
     sentences = [s for s in _SENTENCE_SPLIT.split(str(request["text"]).strip()) if s]
-    for index, sentence in enumerate(sentences):
-        stop = _stop_requested(commands)
-        if stop is None:
-            return False
-        if stop:
-            _emit({"id": request_id, "status": "stopped"})
-            return True
-        samples: list[float] = []
-        for result in pipeline(sentence, voice=voice_path, speed=1.0):
-            samples.extend(_segment_audio(result).detach().cpu().flatten().tolist())
-        if not samples:
-            continue
-        path = output_dir / f"chunk-{request_id}-{index}.wav"
-        _write_wav(path, samples)
-        _emit(
-            {
-                "id": request_id,
-                "status": "chunk",
-                "index": index,
-                "output_path": str(path),
-                "sample_rate": SAMPLE_RATE,
-                "duration_ms": int(len(samples) * 1000 / SAMPLE_RATE),
-                "final": index == len(sentences) - 1,
-            }
-        )
-    _emit({"id": request_id, "status": "completed"})
-    return True
+    try:
+        for index, sentence in enumerate(sentences):
+            if utterance.cancelled.is_set():
+                return
+            samples: list[float] = []
+            for result in pipeline(sentence, voice=voice_path, speed=1.0):
+                samples.extend(_segment_audio(result).detach().cpu().flatten().tolist())
+            if not samples or utterance.cancelled.is_set():
+                continue
+            path = output_dir / f"chunk-{request_id}-{index}.wav"
+            _write_wav(path, samples)
+            sent = utterance.emit_chunk(
+                {
+                    "id": request_id,
+                    "status": "chunk",
+                    "index": index,
+                    "output_path": str(path),
+                    "sample_rate": SAMPLE_RATE,
+                    "duration_ms": int(len(samples) * 1000 / SAMPLE_RATE),
+                    "final": index == len(sentences) - 1,
+                }
+            )
+            if not sent:
+                path.unlink(missing_ok=True)  # stopped while this sentence was being written
+                return
+        utterance.end("completed")
+    except Exception:
+        # Never leak engine internals over the protocol; Core maps this to UNAVAILABLE.
+        utterance.end("error", kind="engine")
 
 
 def main() -> int:
@@ -218,11 +245,20 @@ def main() -> int:
     commands: queue.Queue[dict[str, Any] | None] = queue.Queue()
     threading.Thread(target=_reader, args=(commands,), daemon=True).start()
     pipeline: Any = None
+    active: _Utterance | None = None
     while True:
         request = commands.get()
         if request is None:
+            if active is not None and active.running:
+                active.stop()
+                if active.thread is not None:
+                    active.thread.join(timeout=_EXIT_JOIN_SECONDS)
             return 0
         command = request.get("command")
+        if command == "stop":
+            if active is not None and request.get("id") in (None, active.id):
+                active.stop()
+            continue
         try:
             if command == "health":
                 if pipeline is None:
@@ -238,8 +274,16 @@ def main() -> int:
             elif command == "speak":
                 if pipeline is None:
                     pipeline = _load_pipeline(args)
-                if not _speak(pipeline, args.voice_path, request, commands):
-                    return 0
+                if active is not None and active.thread is not None:
+                    # The model is shared: let an interrupted sentence finish before reusing it.
+                    active.thread.join()
+                active = _Utterance(request["id"])
+                active.thread = threading.Thread(
+                    target=_synthesize,
+                    args=(pipeline, args.voice_path, request, active),
+                    daemon=True,
+                )
+                active.thread.start()
         except Exception:
             # Never leak engine internals over the protocol; Core maps this to UNAVAILABLE.
             _emit({"id": request.get("id"), "status": "error", "kind": "engine"})
