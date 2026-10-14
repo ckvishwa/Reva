@@ -39,8 +39,9 @@ class _Clock:
 def _session(**kwargs) -> tuple[VoiceSession, list[int], _Clock]:
     stops: list[int] = []
 
-    async def stop_speaking(epoch: int) -> None:
+    async def stop_speaking(session_id: str, epoch: int) -> None:
         stops.append(epoch)
+        kwargs.get("scopes", []).append(session_id)
 
     clock = _Clock()
     coordinator = SessionCoordinator(
@@ -401,3 +402,34 @@ async def test_coordinator_bounds_the_number_of_sessions_and_releases_on_close()
     assert await coordinator.close(first.id) is True
     assert coordinator.get(first.id) is None
     coordinator.open("device-0001")
+
+
+async def test_the_stop_hook_is_told_which_session_to_silence():
+    scopes: list[str] = []
+    session, stops, _ = _session(scopes=scopes)
+    await _to_speaking(session)
+
+    await session.interrupt()
+
+    assert stops == [1]
+    assert scopes == [session.id]
+
+
+async def test_two_sessions_count_their_epochs_independently():
+    calls: list[tuple[str, int]] = []
+
+    async def stop_speaking(session_id: str, epoch: int) -> None:
+        calls.append((session_id, epoch))
+
+    coordinator = SessionCoordinator(stop_speaking=stop_speaking)
+    one = coordinator.open("device-0001")
+    two = coordinator.open("device-0002")
+    await _to_speaking(one)
+    await _to_speaking(two)
+
+    await one.interrupt()
+    await one.cancel()
+    await two.interrupt()
+
+    assert one.turn_epoch == 2 and two.turn_epoch == 1
+    assert calls == [(one.id, 1), (one.id, 2), (two.id, 1)]
