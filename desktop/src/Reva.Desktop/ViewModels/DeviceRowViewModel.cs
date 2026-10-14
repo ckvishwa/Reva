@@ -50,7 +50,7 @@ public sealed class DeviceRowViewModel
     }
 
     private static string LastSeen(string? iso, DateTimeOffset now) =>
-        iso is null ? "Never synced" : $"Last seen {RelativeTime(iso, now)}";
+        iso is null ? "Never synced" : $"Synced {RelativeTime(iso, now)}";
 
     public static string RelativeTime(string? iso, DateTimeOffset now)
     {

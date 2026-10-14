@@ -61,10 +61,10 @@ public sealed class TodayViewModel : ObservableObject
     public string AccessibleSummary =>
         HasError ? ErrorMessage! : $"Budget left this month: {BudgetLeftText} {BudgetOfText}. {BillsText}";
 
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    public async Task RefreshAsync(CancellationToken cancellationToken = default, bool showLoading = true)
     {
         var generation = Interlocked.Increment(ref _generation);
-        IsLoading = true;
+        IsLoading = showLoading;
         try
         {
             var result = await _api.GetTodayAsync(cancellationToken).ConfigureAwait(true);
