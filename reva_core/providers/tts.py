@@ -130,12 +130,12 @@ class RegistryTTS:
         """A provider that supports speak + stop, or `ProviderError`."""
         return (await self._select(_INTERRUPTIBLE)).provider
 
-    async def stop(self, *, turn_epoch: int) -> None:
+    async def stop(self, *, turn_epoch: int, scope: str = "") -> None:
         """Silence every provider already in use. Never loads one just to stop it."""
         for provider in self._registry.instances(ProviderKind.TTS):
             stop = getattr(provider, "stop", None)
             if stop is not None:
-                await stop(turn_epoch=turn_epoch)
+                await stop(turn_epoch=turn_epoch, scope=scope)
 
     async def shutdown(self) -> None:
         for provider in self._registry.instances(ProviderKind.TTS):

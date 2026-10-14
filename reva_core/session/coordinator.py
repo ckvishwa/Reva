@@ -35,7 +35,8 @@ from reva_core.shared.time import utc_now
 
 logger = get_logger("session")
 
-StopSpeaking = Callable[[int], Awaitable[None]]
+# (session id, turn_epoch): epochs are per session, so the hook says whose speech to stop.
+StopSpeaking = Callable[[str, int], Awaitable[None]]
 
 _HISTORY_SIZE = 64
 _NEW_TURN_FROM = frozenset(
@@ -257,7 +258,7 @@ class VoiceSession:
     async def _silence(self) -> None:
         if self._stop_speaking is not None:
             try:
-                await self._stop_speaking(self.turn_epoch)
+                await self._stop_speaking(self.id, self.turn_epoch)
             except Exception:
                 logger.warning("stop-speaking hook failed", exc_info=True)
 

@@ -61,14 +61,14 @@ class VoiceSessionResponse(BaseModel):
     deadlines_ms: dict[str, int]
 
 
-def make_stop_speaking(lifecycle: Any) -> Callable[[int], Awaitable[None]]:
+def make_stop_speaking(lifecycle: Any) -> Callable[[str, int], Awaitable[None]]:
     """Hook that silences the active TTS provider when a turn is interrupted."""
 
-    async def stop_speaking(turn_epoch: int) -> None:
+    async def stop_speaking(session_id: str, turn_epoch: int) -> None:
         provider = lifecycle.text_to_speech_provider
         stop = getattr(provider, "stop", None)
         if stop is not None:
-            await stop(turn_epoch=turn_epoch)
+            await stop(turn_epoch=turn_epoch, scope=session_id)
 
     return stop_speaking
 
