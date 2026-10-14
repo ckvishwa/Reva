@@ -4,12 +4,15 @@ Runs under a dedicated interpreter that has the `kokoro` package; Core never
 imports it. Core passes manifest-verified local files, so nothing is
 downloaded at run time.
 
-UNVERIFIED against a real Kokoro install: this repository's CI and the
-audit machine have no `kokoro` package or weights. The protocol, chunking
-and stop handling are covered by `tests/fixtures/fake_kokoro_worker.py`,
-which speaks the same protocol. The `kokoro` API calls below follow the
-upstream 0.9.x `KModel` / `KPipeline` interface and must be confirmed by a
-real synthesis run before anyone relies on them.
+Verified against kokoro 0.9.4 + torch 2.14.1 (CPU) with the Kokoro-82M v1.0
+weights by `tests/integration/test_kokoro_real.py` (opt-in: it needs the
+interpreter and assets named in `docs/voice/kokoro-production.md`). CI has no
+`kokoro` package; there the protocol, chunking and stop handling are covered by
+`tests/fixtures/fake_kokoro_worker.py` and `tests/unit/test_kokoro_worker_protocol.py`.
+
+stdout is the protocol channel and nothing else may write to it. Kokoro prints
+log lines to stdout while it loads, so the real stdout is saved for `_emit`
+and `sys.stdout` is pointed at stderr before the library is imported.
 
 Commands:
   health                      load the model, reply {"status": "ready"}
@@ -32,13 +35,17 @@ from array import array
 from pathlib import Path
 from typing import Any
 
+# The protocol channel. Library output goes to stderr (see the module docstring).
+_PROTOCOL = sys.stdout
+sys.stdout = sys.stderr
+
 SAMPLE_RATE = 24_000
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 
 def _emit(payload: dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(payload) + "\n")
-    sys.stdout.flush()
+    _PROTOCOL.write(json.dumps(payload) + "\n")
+    _PROTOCOL.flush()
 
 
 def _reader(commands: queue.Queue[dict[str, Any] | None]) -> None:

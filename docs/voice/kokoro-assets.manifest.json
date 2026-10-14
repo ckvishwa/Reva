@@ -1,0 +1,54 @@
+{
+  "manifest_version": "1.0",
+  "asset_root": "<asset_root>",
+  "assets": [
+    {
+      "id": "models.tts.kokoro-82m.config",
+      "kind": "tts_model",
+      "path": "models\\tts\\kokoro\\1.0\\config.json",
+      "sha256": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+      "bytes": 2351,
+      "engine": "kokoro",
+      "version": "1.0 (f3ff357)",
+      "language": [
+        "en"
+      ],
+      "source": "hexgrad/Kokoro-82M @ f3ff3571791e39611d31c381e3a41a3af07b4987 (huggingface.co), downloaded 2026-10-14; runs under kokoro==0.9.4, misaki==0.9.4, torch==2.14.1 (tools/voice/kokoro-requirements.txt)",
+      "license": "Apache-2.0 as declared by the model card (README.md beside the files). The card lists training audio under permissive terms including CC BY 3.0 and CC BY 4.0 sources, which ask for attribution; the card is kept next to the weights for that reason.",
+      "provenance_status": "licensed",
+      "notes": "Kokoro-82M model configuration (vocab, hyper-parameters)."
+    },
+    {
+      "id": "models.tts.kokoro-82m.model",
+      "kind": "tts_model",
+      "path": "models\\tts\\kokoro\\1.0\\kokoro-v1_0.pth",
+      "sha256": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4",
+      "bytes": 327212226,
+      "engine": "kokoro",
+      "version": "1.0 (f3ff357)",
+      "language": [
+        "en"
+      ],
+      "source": "hexgrad/Kokoro-82M @ f3ff3571791e39611d31c381e3a41a3af07b4987 (huggingface.co), downloaded 2026-10-14; runs under kokoro==0.9.4, misaki==0.9.4, torch==2.14.1 (tools/voice/kokoro-requirements.txt)",
+      "license": "Apache-2.0 as declared by the model card (README.md beside the files). The card lists training audio under permissive terms including CC BY 3.0 and CC BY 4.0 sources, which ask for attribution; the card is kept next to the weights for that reason.",
+      "provenance_status": "licensed",
+      "notes": "Kokoro-82M v1.0 weights (82M parameters)."
+    },
+    {
+      "id": "models.tts.kokoro-82m.voice.af_heart",
+      "kind": "tts_model",
+      "path": "models\\tts\\kokoro\\1.0\\voices\\af_heart.pt",
+      "sha256": "0ab5709b8ffab19bfd849cd11d98f75b60af7733253ad0d67b12382a102cb4ff",
+      "bytes": 523425,
+      "engine": "kokoro",
+      "version": "1.0 (f3ff357)",
+      "language": [
+        "en"
+      ],
+      "source": "hexgrad/Kokoro-82M @ f3ff3571791e39611d31c381e3a41a3af07b4987 (huggingface.co), downloaded 2026-10-14; runs under kokoro==0.9.4, misaki==0.9.4, torch==2.14.1 (tools/voice/kokoro-requirements.txt)",
+      "license": "Apache-2.0 as declared by the model card (README.md beside the files). The card lists training audio under permissive terms including CC BY 3.0 and CC BY 4.0 sources, which ask for attribution; the card is kept next to the weights for that reason.",
+      "provenance_status": "licensed",
+      "notes": "Voice pack af_heart (American English, female), the REVA default voice."
+    }
+  ]
+}

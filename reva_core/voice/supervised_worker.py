@@ -14,13 +14,54 @@ import contextlib
 import json
 import sys
 from asyncio.subprocess import PIPE
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from reva_core.shared.errors import ProviderError, ProviderErrorKind
 from reva_core.shared.logging import get_logger
 
 logger = get_logger("voice.worker")
+
+# Variables a TTS worker may inherit. Everything else in Core's environment (tokens, API keys,
+# proxy settings, Python startup hooks) stays behind: a worker only needs to run and find its
+# libraries.
+_INHERITED_ENV = frozenset(
+    {
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+        "NUMBER_OF_PROCESSORS",
+        "PROCESSOR_ARCHITECTURE",
+        "OS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "CUDA_VISIBLE_DEVICES",
+    }
+)
+# Verified local files are handed to the worker; it must never reach for the network.
+_FORCED_ENV = {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "PYTHONIOENCODING": "utf-8",
+}
+
+
+def worker_environment(base: Mapping[str, str]) -> dict[str, str]:
+    """The environment a TTS worker gets: an allow-list of `base`, plus offline switches."""
+    env = {name: value for name, value in base.items() if name.upper() in _INHERITED_ENV}
+    env.update(_FORCED_ENV)
+    return env
+
 
 if sys.platform == "win32":
     import ctypes
@@ -141,10 +182,22 @@ class SupervisedWorker:
         self._process = process
 
     @classmethod
-    async def launch(cls, args: Sequence[str], *, job: ProcessJob | None) -> SupervisedWorker:
+    async def launch(
+        cls,
+        args: Sequence[str],
+        *,
+        job: ProcessJob | None,
+        env: Mapping[str, str] | None = None,
+        cwd: Path | None = None,
+    ) -> SupervisedWorker:
         try:
             process = await asyncio.create_subprocess_exec(
-                *args, stdin=PIPE, stdout=PIPE, stderr=asyncio.subprocess.DEVNULL
+                *args,
+                stdin=PIPE,
+                stdout=PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                env=None if env is None else dict(env),
+                cwd=cwd,
             )
         except OSError as exc:
             raise ProviderError(
