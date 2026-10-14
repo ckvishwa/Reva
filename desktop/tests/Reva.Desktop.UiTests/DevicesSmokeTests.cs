@@ -41,7 +41,7 @@ public class DevicesSmokeTests : IClassFixture<DevicesFixture>
     {
         if (!ok)
         {
-            throw new Xunit.Sdk.XunitException($"{what} Screenshot: {App.Screenshot(shot)}");
+            throw new Xunit.Sdk.XunitException($"{what} Focus: {App.FocusedDescription()}. Screenshot: {App.Screenshot(shot)}");
         }
     }
 
@@ -63,6 +63,9 @@ public class DevicesSmokeTests : IClassFixture<DevicesFixture>
     [UiFact]
     public async Task The_gateway_pairing_approval_sync_and_revoke_work_end_to_end_in_the_real_window()
     {
+        // Another window (an IDE, a chat) on top of the app stops it rendering new rows, so take the foreground
+        // first and again before each step that waits on what the page draws.
+        App.BringToFront();
         App.Require("Nav_devices").AsButton().Invoke();
         Assert.True(Wait(() => Present("GatewayToggle")), "The Devices page never appeared.");
 
@@ -84,10 +87,11 @@ public class DevicesSmokeTests : IClassFixture<DevicesFixture>
         // 3. Pair a phone: the QR code and its countdown appear; Cancel removes the code.
         App.Require("PairButton").AsButton().Invoke();
         Expect(Wait(() => Present("PairingQr")), "No QR code appeared.", "devices-no-qr");
-        var qr = App.Require("PairingQr");
-        Assert.True(qr.BoundingRectangle.Width > 150 && qr.BoundingRectangle.Height > 150, "The QR code is too small to scan.");
+        // A control below the fold (or half under the window edge) reports only its visible part, so bring the
+        // whole code on screen through the page's scroll pattern before measuring it. Never by coordinates.
+        var qr = App.ScrollIntoView("PairingQr", 200);
+        Assert.True(qr.BoundingRectangle.Width > 150 && qr.BoundingRectangle.Height > 150, $"The QR code is too small to scan: {qr.BoundingRectangle}.");
         Assert.StartsWith("Code expires in ", App.Require("PairingCountdown").Name);
-        App.ScrollIntoView("PairingQr", 120);
         Thread.Sleep(600);
         App.ScreenshotWindowContent("devices-qr");
         App.Require("PairCancelButton").AsButton().Invoke();
@@ -112,6 +116,7 @@ public class DevicesSmokeTests : IClassFixture<DevicesFixture>
         Assert.Equal(202, await phone.PollAsync());
 
         // 5. Approve on the PC: the phone gets its grant and appears in the list with a finance-only scope.
+        App.BringToFront();
         App.Require("PairApproveButton").AsButton().Invoke();
         Expect(Wait(() => Present("DeviceRow")), "The paired phone never appeared.", "devices-no-row");
         var row = App.Require("DeviceRow").Name;
@@ -128,6 +133,7 @@ public class DevicesSmokeTests : IClassFixture<DevicesFixture>
         Assert.Equal(200, await phone.PullAsync());
 
         // 7. Revoke with confirmation: the row says Revoked and the next sync request fails.
+        App.BringToFront();
         App.Require("RevokeButton").AsButton().Invoke();
         var dialog = Retry.WhileNull(
             () => App.Window.FindFirstDescendant(cf => cf.ByName("Keep")) ?? App.Window.Automation.GetDesktop().FindFirstDescendant(cf => cf.ByName("Keep")),

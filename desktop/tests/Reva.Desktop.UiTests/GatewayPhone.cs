@@ -18,6 +18,7 @@ internal sealed class GatewayPhone : IDisposable
     private HttpClient? _http;
     private string _gatewayHash = string.Empty;
     private Uri _base = null!;
+    private DateTime _lastResponseAt = DateTime.MinValue;
 
     public GatewayPhone(string kernelDeviceId = "ui-smoke-phone-0001", string name = "Smoke phone")
     {
@@ -89,7 +90,7 @@ internal sealed class GatewayPhone : IDisposable
             ["kernel_devices"] = new JsonObject { ["finance"] = KernelDeviceId },
             ["proof"] = Sign($"REVA-GW1\npair-start\n{code}\n{_gatewayHash}"),
         };
-        using var response = await _http.PostAsync("pair/start", Json(body));
+        using var response = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "pair/start") { Content = Json(body) });
         if (response.IsSuccessStatusCode)
         {
             SessionId = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["session_id"]!.GetValue<string>();
@@ -108,7 +109,7 @@ internal sealed class GatewayPhone : IDisposable
             ["nonce"] = nonce,
             ["proof"] = Sign($"REVA-GW1\npair-complete\n{SessionId}\n{nonce}\n{_gatewayHash}"),
         };
-        using var response = await _http!.PostAsync("pair/complete", Json(body));
+        using var response = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "pair/complete") { Content = Json(body) });
         if (response.StatusCode == System.Net.HttpStatusCode.OK)
         {
             DeviceId = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["device_id"]!.GetValue<string>();
@@ -131,8 +132,28 @@ internal sealed class GatewayPhone : IDisposable
         request.Headers.Add("X-Reva-Ts", timestamp.ToString());
         request.Headers.Add("X-Reva-Nonce", nonce);
         request.Headers.Add("X-Reva-Sig", Sign(message));
-        using var response = await _http!.SendAsync(request);
+        using var response = await SendAsync(request);
         return (int)response.StatusCode;
+    }
+
+    /// <summary>
+    /// Sends on the pooled connection and, when that fails, says how long the connection had been idle. A server that
+    /// closes idle connections early shows up as a failure right after a gap of about its keep-alive timeout.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)
+    {
+        var idle = _lastResponseAt == DateTime.MinValue ? TimeSpan.Zero : DateTime.UtcNow - _lastResponseAt;
+        try
+        {
+            var response = await _http!.SendAsync(request);
+            _lastResponseAt = DateTime.UtcNow;
+            return response;
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new HttpRequestException(
+                $"{request.Method} {request.RequestUri} failed {(int)idle.TotalMilliseconds} ms after this phone's previous response at {DateTime.UtcNow:HH:mm:ss.fff}Z: {ex.Message}", ex);
+        }
     }
 
     private static StringContent Json(JsonObject body) => new(body.ToJsonString(), Encoding.UTF8, "application/json");
