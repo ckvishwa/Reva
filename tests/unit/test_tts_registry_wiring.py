@@ -122,3 +122,18 @@ def test_lifecycle_has_no_tts_when_disabled(tmp_path):
         assert lifecycle.text_to_speech_provider is None
     finally:
         lifecycle.shutdown()
+
+
+async def test_an_existing_chatterbox_only_setup_keeps_speaking_without_kokoro(tmp_path):
+    """Settings compatibility: no Kokoro paths configured, only the earlier Chatterbox ones."""
+    settings = _settings(tmp_path, kokoro=False, chatterbox=True)
+    registry = _registry(tmp_path, settings)
+    assert registry.names(ProviderKind.TTS) == ("chatterbox",)
+
+    selection = await registry.acquire(
+        ProviderKind.TTS, preferred=settings.tts_provider, require=frozenset({"synthesize"})
+    )
+
+    assert settings.tts_provider == "kokoro"  # the new default does not strand old setups
+    assert selection.name == "chatterbox"
+    await selection.provider.shutdown()
