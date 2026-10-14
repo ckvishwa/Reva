@@ -93,7 +93,7 @@ fun DevicesScreen(vm: DevicesViewModel, onScan: () -> Unit, onBack: () -> Unit, 
                     CaptionText("Syncs Finance only. Key ${pc.tlsSha256.take(8)}…")
                     PrimaryButton("Sync now", vm::syncNow, Modifier.testTag("sync_now"), enabled = !state.isBusy)
                     SecondaryButton("Forget this PC", vm::forget, Modifier.testTag("forget_pc"), enabled = !state.isBusy)
-                    CaptionText("To remove this phone from the PC too, use Revoke in REVA on the PC.")
+                    CaptionText("Removes this PC from the phone. To fully cut access, also click Revoke on the PC.", Modifier.testTag("forget_note"))
                 }
             }
         } else if (state.phase == DevicesPhase.Idle) {
