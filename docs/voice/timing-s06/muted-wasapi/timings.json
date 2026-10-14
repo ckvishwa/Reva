@@ -1,0 +1,311 @@
+{
+  "meta": {
+    "date_utc": "2026-10-14T09:40:44+00:00",
+    "command": "speak",
+    "runs": 10,
+    "sink": "speaker",
+    "gain": 0.0,
+    "audio_api": "Windows WASAPI",
+    "device": 20,
+    "host": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.10",
+    "provider": "kokoro af_heart (Kokoro-82M v1.0) via build_tts_registry/RegistryTTS",
+    "orphan_check": "Kokoro worker processes alive after shutdown"
+  },
+  "speak_runs": [
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 483.99999999674037,
+      "first_audible_after_text_ms": 491.5000000037253,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 0.0,
+      "device_latency_ms": 7.500000006984919,
+      "synthesis_ms": 1875.0,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.3385953559765842,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 390.00000001396984,
+      "first_audible_after_text_ms": 413.9583333453629,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 16.00000000325963,
+      "device_latency_ms": 7.958333328133449,
+      "synthesis_ms": 1640.0000000139698,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.2961580713633751,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 422.0000000204891,
+      "first_audible_after_text_ms": 446.16666666115634,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 15.999999974155799,
+      "device_latency_ms": 8.166666666511446,
+      "synthesis_ms": 1657.0000000065193,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.2992280025895506,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 407.00000000651926,
+      "first_audible_after_text_ms": 430.3749999962747,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 14.999999984866008,
+      "device_latency_ms": 8.375000004889444,
+      "synthesis_ms": 1625.0,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.29344930851303963,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 407.00000000651926,
+      "first_audible_after_text_ms": 430.5000000167638,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 15.000000013969839,
+      "device_latency_ms": 8.49999999627471,
+      "synthesis_ms": 1657.0000000065193,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.2992280025895506,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 391.00000000325963,
+      "first_audible_after_text_ms": 399.66666666441597,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 0.0,
+      "device_latency_ms": 8.666666661156341,
+      "synthesis_ms": 1671.9999999913853,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.3019367654346303,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 687.9999999946449,
+      "first_audible_after_text_ms": 712.4583333206829,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 14.999999984866008,
+      "device_latency_ms": 9.458333341171965,
+      "synthesis_ms": 1905.9999999881256,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.3441934658599194,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 407.00000000651926,
+      "first_audible_after_text_ms": 416.5833333390765,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 0.0,
+      "device_latency_ms": 9.583333332557231,
+      "synthesis_ms": 1687.999999994645,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.3048261124728858,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 389.999999984866,
+      "first_audible_after_text_ms": 399.79166665580124,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 0.0,
+      "device_latency_ms": 9.791666670935228,
+      "synthesis_ms": 1608.9999999967404,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.29055996147478413,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 437.0000000053551,
+      "first_audible_after_text_ms": 463.00000001792796,
+      "generated_to_enqueued_ms": 0.0,
+      "enqueued_to_callback_ms": 16.00000000325963,
+      "device_latency_ms": 10.000000009313226,
+      "synthesis_ms": 1781.0000000172295,
+      "audio_seconds": 5.537583333333334,
+      "real_time_factor": 0.32162044213340285,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    }
+  ],
+  "interrupt_runs": [],
+  "summary": [
+    {
+      "metric": "first_audio_generated_ms",
+      "n": 10,
+      "p50": 407.00000000651926,
+      "p95": 596.199999995588,
+      "min": 389.999999984866,
+      "max": 687.9999999946449,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "first_audible_after_text_ms",
+      "n": 10,
+      "p50": 430.43750000651926,
+      "p95": 613.0270833280521,
+      "min": 399.66666666441597,
+      "max": 712.4583333206829,
+      "verdict": "PASS"
+    },
+    {
+      "metric": "generated_to_enqueued_ms",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "enqueued_to_callback_ms",
+      "n": 10,
+      "p50": 14.999999984866008,
+      "p95": 16.00000000325963,
+      "min": 0.0,
+      "max": 16.00000000325963,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "device_latency_ms",
+      "n": 10,
+      "p50": 8.583333328715526,
+      "p95": 9.906250007043127,
+      "min": 7.500000006984919,
+      "max": 10.000000009313226,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "synthesis_ms",
+      "n": 10,
+      "p50": 1664.4999999989523,
+      "p95": 1892.049999993469,
+      "min": 1608.9999999967404,
+      "max": 1905.9999999881256,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "audio_seconds",
+      "n": 10,
+      "p50": 5.537583333333334,
+      "p95": 5.537583333333334,
+      "min": 5.537583333333334,
+      "max": 5.537583333333334,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "real_time_factor",
+      "n": 10,
+      "p50": 0.3005823840120905,
+      "p95": 0.3416743164124186,
+      "min": 0.29055996147478413,
+      "max": 0.3441934658599194,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "overlap_events",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "stop_return_ms",
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "stop_to_silence_ms",
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "verdict": "NOT_MEASURED"
+    },
+    {
+      "metric": "chunks_after_stop",
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "resumed_frames_after_silence",
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "next_first_audible_ms",
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "overlap_events",
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "verdict": "INFO"
+    }
+  ],
+  "orphan_processes_max": 0,
+  "orphan_verdict": "PASS",
+  "not_measured": [
+    "STT round-trip CER (needs the microphone/recognition path, S07)",
+    "blind owner listening comparison"
+  ]
+}

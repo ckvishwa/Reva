@@ -12,6 +12,8 @@ secret ever reaches a client.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -38,7 +40,12 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        warming = _start_voice_warm_up(lifecycle)
         yield
+        if warming is not None:
+            warming.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await warming
         # Release every open voice session (and its mic/turn state) on shutdown.
         await voice_sessions.close_all()
 
@@ -91,3 +98,24 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
         return JSONResponse(status_code=500, content=body.model_dump(mode="json"))
 
     return app
+
+
+def _start_voice_warm_up(lifecycle: CoreLifecycle) -> asyncio.Task[None] | None:
+    """Load the voice in the background so the first sentence does not wait for the model.
+
+    Startup never waits for it, a failure is only logged, and it is cancelled on shutdown.
+    """
+    warm = getattr(lifecycle.text_to_speech_provider, "warm", None)
+    if warm is None or not lifecycle.settings.tts_warm_on_start:
+        return None
+
+    async def run() -> None:
+        try:
+            ready = await warm()
+            logger.info("voice warm-up finished", extra={"ready": bool(ready)})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("voice warm-up failed")
+
+    return asyncio.get_running_loop().create_task(run())

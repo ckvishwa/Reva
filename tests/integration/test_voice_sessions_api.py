@@ -232,25 +232,25 @@ def test_websocket_routes_are_not_hidden_from_the_route_audit(client):
 
 
 async def test_stop_speaking_hook_stops_the_selected_tts_provider():
-    stops: list[int] = []
+    stops: list[tuple[str, int]] = []
 
     class _Tts:
-        async def stop(self, *, turn_epoch: int) -> None:
-            stops.append(turn_epoch)
+        async def stop(self, *, turn_epoch: int, scope: str = "") -> None:
+            stops.append((scope, turn_epoch))
 
     class _Lifecycle:
         text_to_speech_provider = _Tts()
 
-    await make_stop_speaking(_Lifecycle())(7)
+    await make_stop_speaking(_Lifecycle())("session-x", 7)
 
-    assert stops == [7]
+    assert stops == [("session-x", 7)], "the session id is the provider's epoch scope"
 
 
 async def test_stop_speaking_hook_is_a_no_op_without_tts():
     class _Lifecycle:
         text_to_speech_provider = None
 
-    await make_stop_speaking(_Lifecycle())(1)
+    await make_stop_speaking(_Lifecycle())("session-x", 1)
 
 
 def test_coordinator_is_exposed_for_diagnostics(client):
