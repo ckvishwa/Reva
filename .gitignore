@@ -45,3 +45,41 @@ useful_sites/
 # Slice 6 semantic evaluation — generated/regenerable, never a private corpus
 scripts/semantic_eval/output/
 reva-semantic-eval-*/
+
+# S03: environments, model weights, local databases, exports
+/envs/
+tools/voice-lab/envs/
+*.venv/
+.conda/
+/models/
+/weights/
+/checkpoints/
+*.ckpt
+*.gguf
+*.pt
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite
+/exports/
+exports/
+
+# S03: generated voice-lab output (contains absolute F:\ paths and local run data)
+tools/voice-lab/**/reports/
+tools/voice-lab/**/evaluations/
+tools/voice-lab/**/analysis/
+tools/voice-lab/**/outputs/
+tools/revi-prototype/**/outputs/
+tests/voice-evals/outputs/
+
+# Domain Kernel build output and generated bindings (never hand-edited, rebuilt by tools/kernel/build_bindings.py)
+/target/
+/kernel/bindings/
+
+# Android
+/android/.gradle/
+/android/local.properties
+/android/app/build/
+/android/build/
+*.keystore
+!/android/gradle/wrapper/gradle-wrapper.jar

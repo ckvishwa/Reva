@@ -18,7 +18,7 @@ public sealed record VoiceDeviceAvailability(
         new(VoiceDeviceAvailabilityKind.Ready, "Voice Ready");
 
     public static VoiceDeviceAvailability PermissionDenied() =>
-        new(VoiceDeviceAvailabilityKind.PermissionDenied, "Microphone permission denied.");
+        new(VoiceDeviceAvailabilityKind.PermissionDenied, "Microphone permission is disabled. Enable it in Windows Settings.");
 
     public static VoiceDeviceAvailability NoMicrophoneFound() =>
         new(VoiceDeviceAvailabilityKind.NoMicrophoneFound, "No microphone found.");

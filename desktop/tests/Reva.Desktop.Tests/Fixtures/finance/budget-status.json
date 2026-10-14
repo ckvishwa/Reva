@@ -1,0 +1,40 @@
+{
+  "domain": "finance",
+  "report": "budget_status",
+  "rows": [
+    {
+      "budget_id": "bud-dining-01",
+      "budget_minor": 20000,
+      "category": "Food · Dining",
+      "category_id": "cat-dining",
+      "currency": "USD",
+      "daily_allowance_minor": 940,
+      "days_left": 20,
+      "month": "2026-10",
+      "over_budget": false,
+      "remaining_minor": 18800,
+      "spent_minor": 1200,
+      "used_basis_points": 600
+    },
+    {
+      "budget_id": "bud-grocer-01",
+      "budget_minor": 50000,
+      "category": "Groceries",
+      "category_id": "cat-groceries",
+      "currency": "USD",
+      "daily_allowance_minor": 2073,
+      "days_left": 20,
+      "month": "2026-10",
+      "over_budget": false,
+      "remaining_minor": 41460,
+      "spent_minor": 8540,
+      "used_basis_points": 1708
+    }
+  ],
+  "source_ids": [
+    "tx-lunch-0001",
+    "bud-dining-01",
+    "tx-market-001",
+    "bud-grocer-01"
+  ]
+}

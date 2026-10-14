@@ -1,0 +1,33 @@
+[package]
+name = "reva-kernel"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+description = "REVA Domain Kernel: encrypted per-domain stores, event log, Finance domain."
+
+[lib]
+name = "reva_kernel"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+# SQLCipher (vendored OpenSSL) so the same encrypted engine builds on Windows and Android.
+rusqlite = { version = "0.31", features = ["bundled-sqlcipher-vendored-openssl", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+uniffi = { version = "0.28" }
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+getrandom = "0.2"
+zeroize = "1"
+csv = "1"
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pkcs8", "std"] }
+
+[build-dependencies]
+
+[dev-dependencies]
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8", "std", "arithmetic"] }
+tempfile = "3"

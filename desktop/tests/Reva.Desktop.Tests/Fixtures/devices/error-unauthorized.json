@@ -1,0 +1,8 @@
+{
+  "body": {
+    "correlation_id": "CORRELATION",
+    "error": "Unauthorized",
+    "schema_version": 1
+  },
+  "status": 401
+}

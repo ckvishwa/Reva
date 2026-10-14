@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.Reva" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0E1013</item>
+        <item name="android:statusBarColor">#0E1013</item>
+        <item name="android:navigationBarColor">#121519</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

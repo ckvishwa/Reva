@@ -2,13 +2,24 @@
     x:Class="Reva.Desktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:state="using:Reva.Desktop.State">
+    xmlns:state="using:Reva.Desktop.State"
+    xmlns:views="using:Reva.Desktop.Views">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
+    <Grid ColumnDefinitions="232,*" Background="{StaticResource RevaGroundBrush}">
+
+    <views:NavPane x:Name="Nav" Grid.Column="0" />
+
+    <Grid Grid.Column="1">
+
+    <!-- Talk & Today: the existing assistant/voice/memory UI, unchanged, under the Today summary. -->
+    <Grid x:Name="TalkPage" RowDefinitions="Auto,*" Visibility="{x:Bind views:Vis.Show(Navigation.ShowsTalk), Mode=OneWay}">
+    <views:TodayCard x:Name="TodayPanel" Margin="24,24,24,0" ViewModel="{x:Bind Today}" />
+
+    <Grid Grid.Row="1" Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
@@ -76,12 +87,18 @@
                     AutomationProperties.AutomationId="VoiceButton"
                     Content="Hold to Talk"
                     IsEnabled="{x:Bind Assistant.CanUseVoiceButton, Mode=OneWay}" />
+                <!-- Hidden for the transcription-only voice slice: TTS playback is never
+                     invoked from the voice path, so CanStopSpeaking is permanently false.
+                     See .superpowers/sdd/2026-08-16-transcription-only-voice-slice/. Bindings
+                     and ViewModel members are intentionally kept so this can be revived when
+                     TTS returns as its own slice. -->
                 <Button
                     x:Name="StopSpeakingButton"
                     AutomationProperties.AutomationId="StopSpeakingButton"
                     Content="Stop Speaking"
                     Click="StopSpeakingButton_Click"
-                    IsEnabled="{x:Bind Assistant.CanStopSpeaking, Mode=OneWay}" />
+                    IsEnabled="{x:Bind Assistant.CanStopSpeaking, Mode=OneWay}"
+                    Visibility="Collapsed" />
                 <TextBlock
                     AutomationProperties.AutomationId="VoiceStatusText"
                     Text="{x:Bind Assistant.VoiceStatusText, Mode=OneWay}"
@@ -138,6 +155,24 @@
                 TextWrapping="Wrap" />
         </StackPanel>
 
+    </Grid>
+    </Grid>
+
+    <views:FinancePage
+        x:Name="FinancePanel"
+        ViewModel="{x:Bind Finance}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsFinance), Mode=OneWay}" />
+
+    <views:DevicesPage
+        x:Name="DevicesPanel"
+        ViewModel="{x:Bind Devices}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsDevices), Mode=OneWay}" />
+
+    <views:ComingSoonPage
+        x:Name="ComingSoonPanel"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsComingSoon), Mode=OneWay}" />
+
+    </Grid>
     </Grid>
 
 </Window>

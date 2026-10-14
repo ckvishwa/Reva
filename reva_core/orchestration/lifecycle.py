@@ -13,6 +13,10 @@ from pathlib import Path
 
 from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.config.settings import Settings
+from reva_core.domains.keys import DomainKeyProvider, default_key_provider
+from reva_core.domains.privacy import DomainPrivacyStore
+from reva_core.domains.service import DomainService
+from reva_core.gateway.manager import GatewayManager
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
 from reva_core.models.chatterbox_tts import ChatterboxWorkerTTSProvider
@@ -39,6 +43,8 @@ class CoreLifecycle:
         settings: Settings,
         text_to_speech_provider: TextToSpeechProvider | None = None,
         speech_to_text_provider: SpeechToTextProvider | None = None,
+        domain_key_provider: DomainKeyProvider | None = None,
+        gateway_key_provider: DomainKeyProvider | None = None,
     ) -> None:
         self._settings = settings
         self._conn: sqlite3.Connection | None = None
@@ -52,12 +58,32 @@ class CoreLifecycle:
         self._text_to_speech_provider = text_to_speech_provider
         self._speech_to_text_provider = speech_to_text_provider
         self._ranking_config: HybridRankingConfig = DEFAULT_HYBRID_RANKING_CONFIG
+        self._domain_key_provider = domain_key_provider
+        self._domain_service: DomainService | None = None
+        self._domain_privacy = DomainPrivacyStore(settings.data_dir)
+        self._gateway_key_provider = gateway_key_provider
+        self._gateway: GatewayManager | None = None
 
     def startup(self) -> HealthStatus:
         self._status = CoreStatus.STARTING
         self._conn, self._db_schema_version = initialize_database(self._settings.db_path)
         self._primary_device_id = DeviceRepository(self._conn).get_or_create_primary_device()
         self._local_token = ensure_local_token(self._settings.data_dir)
+        # Domain files open lazily on first use, so a locked vault never blocks Core startup.
+        self._domain_service = DomainService(
+            self._settings.data_dir,
+            self._domain_key_provider
+            or default_key_provider(self._settings.domain_keystore, self._settings.data_dir),
+            self._settings.kernel_bindings_dir,
+        )
+        # Off unless the user turned it on in Devices; a failure to listen never blocks Core.
+        self._gateway = GatewayManager(
+            self._settings,
+            lambda: self.domain_service,
+            self._domain_privacy,
+            self._gateway_key_provider,
+        )
+        self._gateway.startup()
         self._embedding_provider = OllamaEmbeddingProvider(
             model=self._settings.embedding_model,
             api_base=self._settings.embedding_model_api_base,
@@ -157,6 +183,12 @@ class CoreLifecycle:
     def shutdown(self) -> None:
         self._status = CoreStatus.SHUTTING_DOWN
         self._shutdown_text_to_speech_provider()
+        if self._gateway is not None:
+            self._gateway.shutdown()
+            self._gateway = None
+        if self._domain_service is not None:
+            self._domain_service.close()
+            self._domain_service = None
         if self._conn is not None:
             self._conn.close()
             self._conn = None
@@ -208,6 +240,22 @@ class CoreLifecycle:
         "deterministic" default is active, not that startup() hasn't run.
         """
         return self._assistant_orchestrator
+
+    @property
+    def domain_privacy(self) -> DomainPrivacyStore:
+        return self._domain_privacy
+
+    @property
+    def gateway(self) -> GatewayManager:
+        if self._gateway is None:
+            raise RuntimeError("Core has not started")
+        return self._gateway
+
+    @property
+    def domain_service(self) -> DomainService:
+        if self._domain_service is None:
+            raise RuntimeError("CoreLifecycle.startup() has not run")
+        return self._domain_service
 
     @property
     def embedding_provider(self) -> EmbeddingProvider | None:

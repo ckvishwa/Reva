@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/session-event/2.0",
+  "title": "REVA session event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "sequence",
+    "timestamp",
+    "device_id",
+    "session_id",
+    "turn_id",
+    "turn_epoch",
+    "kind",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "turn_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "turn_epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "kind": {
+      "enum": [
+        "session.state",
+        "speech.transcript.partial",
+        "speech.transcript.final",
+        "assistant.text.delta",
+        "assistant.text.final",
+        "tts.started",
+        "tts.stopped",
+        "action.proposed",
+        "action.approval_required",
+        "action.outcome",
+        "error"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

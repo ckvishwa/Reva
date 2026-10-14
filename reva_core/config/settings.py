@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from reva_core.shared.errors import ConfigurationError
@@ -29,6 +29,23 @@ class Settings(BaseSettings):
     api_port: int = 8756
     data_dir: Path = Path("./data")
     log_level: Literal["debug", "info", "warning", "error"] = "info"
+
+    # Where the generated Domain Kernel Python binding lives (`tools/kernel/build_bindings.py`).
+    # `REVA_KERNEL_BINDINGS` overrides it. None = `kernel/bindings/python` in the checkout.
+    kernel_bindings_dir: Path | None = None
+    # Where Domain Kernel keys live. "windows" = Windows Credential Manager (the only choice
+    # for real use). "memory" keeps keys in the Core process and loses them at exit: it exists
+    # only so UI and end-to-end tests never create entries in the user's real vault, and it is
+    # refused unless the data directory is inside the system temp directory.
+    domain_keystore: Literal["windows", "memory"] = "windows"
+
+    # The pairing gateway (a separate, opt-in LAN listener; off until the Devices setting turns it
+    # on). `gateway_host` None = the machine's LAN address; the Core API above stays on loopback.
+    gateway_host: str | None = None
+    gateway_port: int = Field(default=47821, ge=0, le=65535)
+    # A file the gateway appends one timing line per request to (ids, connection, status, phase
+    # times; never headers or bodies). For diagnosing stalls and dropped connections. None = off.
+    gateway_trace: Path | None = None
 
     # Placeholder for a future real provider credential. Never a real key in
     # Phase 0 — no provider integration exists yet. Documented future path:
@@ -103,4 +120,11 @@ def load_settings(**overrides: object) -> Settings:
             f"REVA_API_HOST must be a loopback address, got {settings.api_host!r}. "
             "REVA Core is never publicly exposed (security invariant #2)."
         )
+    if settings.domain_keystore == "memory":
+        from reva_core.domains.keys import KeyStoreError, ensure_memory_keystore_allowed
+
+        try:
+            ensure_memory_keystore_allowed(settings.data_dir)
+        except KeyStoreError as exc:
+            raise ConfigurationError(str(exc)) from exc
     return settings

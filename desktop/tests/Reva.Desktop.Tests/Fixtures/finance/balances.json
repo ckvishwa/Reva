@@ -1,0 +1,38 @@
+{
+  "domain": "finance",
+  "report": "account_balances",
+  "rows": [
+    {
+      "account_id": "acct-checking",
+      "archived": false,
+      "as_of": "2026-10-12",
+      "balance_minor": 800750,
+      "currency": "USD",
+      "kind": "checking",
+      "name": "Checking"
+    },
+    {
+      "account_id": "acct-card",
+      "archived": false,
+      "as_of": "2026-10-12",
+      "balance_minor": -32040,
+      "currency": "USD",
+      "kind": "credit",
+      "name": "Credit card"
+    },
+    {
+      "account_id": "acct-savings",
+      "archived": false,
+      "as_of": "2026-10-12",
+      "balance_minor": 1500000,
+      "currency": "USD",
+      "kind": "savings",
+      "name": "Savings"
+    }
+  ],
+  "source_ids": [
+    "acct-checking",
+    "acct-card",
+    "acct-savings"
+  ]
+}

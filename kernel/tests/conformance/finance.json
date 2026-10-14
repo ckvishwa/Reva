@@ -1,0 +1,1419 @@
+{
+ "suite": "finance-core",
+ "version": 1,
+ "domain": "finance",
+ "steps": [
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-checking",
+    "name": "Checking",
+    "kind": "checking",
+    "currency": "USD",
+    "opening_balance_minor": 500000
+   },
+   "expect": {
+    "aggregate_id": "acct-checking",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-card",
+    "name": "Credit Card",
+    "kind": "credit",
+    "currency": "USD"
+   },
+   "expect": {
+    "aggregate_id": "acct-card",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-euro",
+    "name": "Euro Savings",
+    "kind": "savings",
+    "currency": "EUR",
+    "opening_balance_minor": 50000
+   },
+   "expect": {
+    "aggregate_id": "acct-euro",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-groceries",
+    "name": "Groceries",
+    "aliases": [
+     "Food",
+     "Supermarket"
+    ]
+   },
+   "expect": {
+    "aggregate_id": "cat-groceries",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-dining",
+    "name": "Dining",
+    "aliases": [
+     "restaurants",
+     "eating out"
+    ]
+   },
+   "expect": {
+    "aggregate_id": "cat-dining",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-rent",
+    "name": "Rent"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-salary",
+    "name": "Salary",
+    "kind": "income"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-transfer",
+    "name": "Transfer",
+    "kind": "transfer"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-dupe-1",
+    "name": "Supermarket"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "category.create",
+   "payload": {
+    "id": "cat-dupe-2",
+    "name": "Snacks",
+    "aliases": [
+     "food"
+    ]
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-bad-cur",
+    "name": "Bad",
+    "currency": "usd"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-checking",
+    "name": "Again",
+    "currency": "USD"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-extra-1",
+    "name": "X",
+    "currency": "USD",
+    "password": "hunter2"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "account_id": "acct-missing",
+    "date": "2026-10-01",
+    "amount_minor": -100,
+    "description": "x"
+   },
+   "expect_error": "not_found"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "account_id": "acct-checking",
+    "date": "2026-02-30",
+    "amount_minor": -100,
+    "description": "x"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "account_id": "acct-checking",
+    "date": "2026-10-01",
+    "amount_minor": 0,
+    "description": "x"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "account_id": "acct-euro",
+    "date": "2026-10-01",
+    "amount_minor": -100,
+    "currency": "USD",
+    "description": "x"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "account_id": "acct-checking",
+    "date": "2026-10-01",
+    "amount_minor": -100,
+    "description": "x",
+    "category": "nonexistent"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "kernel.pay_bill_at_bank",
+   "payload": {
+    "id": "bill-1234"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transfer.send_money",
+   "payload": {
+    "to": "acct-card",
+    "amount_minor": 100
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "query",
+   "name": "resolve_category",
+   "params": {
+    "text": "supermarket"
+   },
+   "expect_rows": [
+    {
+     "category_id": "cat-groceries"
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "resolve_category",
+   "params": {
+    "text": "EATING   OUT"
+   },
+   "expect_rows": [
+    {
+     "category_id": "cat-dining"
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000001",
+    "account_id": "acct-checking",
+    "date": "2026-10-01",
+    "amount_minor": -120000,
+    "description": "October rent",
+    "category": "cat-rent"
+   },
+   "expect": {
+    "aggregate_id": "tx-000001",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000002",
+    "account_id": "acct-checking",
+    "date": "2026-10-02",
+    "amount_minor": 300000,
+    "description": "Salary October",
+    "category": "cat-salary"
+   },
+   "expect": {
+    "aggregate_id": "tx-000002",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000003",
+    "account_id": "acct-card",
+    "date": "2026-10-03",
+    "amount_minor": -4550,
+    "description": "Whole Foods",
+    "category": "supermarket"
+   },
+   "expect": {
+    "aggregate_id": "tx-000003",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000004",
+    "account_id": "acct-card",
+    "date": "2026-10-05",
+    "amount_minor": -2300,
+    "description": "Pizza Place",
+    "category": "eating out"
+   },
+   "expect": {
+    "aggregate_id": "tx-000004",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000005",
+    "account_id": "acct-checking",
+    "date": "2026-10-07",
+    "amount_minor": -3500,
+    "description": "Corner Cafe",
+    "category": "dining"
+   },
+   "expect": {
+    "aggregate_id": "tx-000005",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000006",
+    "account_id": "acct-card",
+    "date": "2026-10-09",
+    "amount_minor": -6000,
+    "description": "Trader Joes",
+    "category": "cat-groceries"
+   },
+   "expect": {
+    "aggregate_id": "tx-000006",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000007",
+    "account_id": "acct-checking",
+    "date": "2026-10-10",
+    "amount_minor": -15000,
+    "description": "Card payment",
+    "category": "cat-transfer"
+   },
+   "expect": {
+    "aggregate_id": "tx-000007",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000008",
+    "account_id": "acct-checking",
+    "date": "2026-10-11",
+    "amount_minor": -1000,
+    "description": "Mystery charge"
+   },
+   "expect": {
+    "aggregate_id": "tx-000008",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000009",
+    "account_id": "acct-card",
+    "date": "2026-09-28",
+    "amount_minor": -9999,
+    "description": "September groceries",
+    "category": "cat-groceries"
+   },
+   "expect": {
+    "aggregate_id": "tx-000009",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000010",
+    "account_id": "acct-euro",
+    "date": "2026-10-08",
+    "amount_minor": -2500,
+    "description": "Paris bakery",
+    "category": "cat-dining"
+   },
+   "expect": {
+    "aggregate_id": "tx-000010",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000001",
+    "account_id": "acct-checking",
+    "date": "2026-10-01",
+    "amount_minor": -1,
+    "description": "dup id"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "query",
+   "name": "spend_by_category",
+   "params": {
+    "period": "2026-10"
+   },
+   "expect_rows": [
+    {
+     "category": "Dining",
+     "currency": "EUR",
+     "spent_minor": 2500,
+     "transactions": 1
+    },
+    {
+     "category": "Rent",
+     "currency": "USD",
+     "spent_minor": 120000,
+     "transactions": 1
+    },
+    {
+     "category": "Groceries",
+     "currency": "USD",
+     "spent_minor": 10550,
+     "transactions": 2
+    },
+    {
+     "category": "Dining",
+     "currency": "USD",
+     "spent_minor": 5800,
+     "transactions": 2
+    },
+    {
+     "category": "Uncategorized",
+     "currency": "USD",
+     "spent_minor": 1000,
+     "transactions": 1
+    }
+   ],
+   "expect_source_ids_sorted": [
+    "tx-000001",
+    "tx-000003",
+    "tx-000004",
+    "tx-000005",
+    "tx-000006",
+    "tx-000008",
+    "tx-000010"
+   ]
+  },
+  {
+   "op": "query",
+   "name": "spend_by_category",
+   "params": {
+    "period": "this_month",
+    "as_of": "2026-10-15",
+    "currency": "USD"
+   },
+   "expect_rows": [
+    {
+     "category": "Rent",
+     "spent_minor": 120000
+    },
+    {
+     "category": "Groceries",
+     "spent_minor": 10550
+    },
+    {
+     "category": "Dining",
+     "spent_minor": 5800
+    },
+    {
+     "category": "Uncategorized",
+     "spent_minor": 1000
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "spend_by_category",
+   "params": {
+    "period": "2026-09"
+   },
+   "expect_rows": [
+    {
+     "category": "Groceries",
+     "currency": "USD",
+     "spent_minor": 9999,
+     "transactions": 1
+    }
+   ],
+   "expect_source_ids_sorted": [
+    "tx-000009"
+   ]
+  },
+  {
+   "op": "query",
+   "name": "spend_by_category",
+   "params": {
+    "period": "2026-13"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "query",
+   "name": "cashflow",
+   "params": {
+    "period": "2026-10"
+   },
+   "expect_rows": [
+    {
+     "currency": "EUR",
+     "income_minor": 0,
+     "expense_minor": 2500,
+     "net_minor": -2500
+    },
+    {
+     "currency": "USD",
+     "income_minor": 300000,
+     "expense_minor": 137350,
+     "net_minor": 162650
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "account_balances",
+   "params": {
+    "as_of": "2026-10-31"
+   },
+   "expect_rows": [
+    {
+     "account_id": "acct-checking",
+     "balance_minor": 660500,
+     "currency": "USD"
+    },
+    {
+     "account_id": "acct-card",
+     "balance_minor": -22849
+    },
+    {
+     "account_id": "acct-euro",
+     "balance_minor": 47500,
+     "currency": "EUR"
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "account_balances",
+   "params": {
+    "as_of": "2026-10-06"
+   },
+   "expect_rows": [
+    {
+     "account_id": "acct-checking",
+     "balance_minor": 680000
+    },
+    {
+     "account_id": "acct-card",
+     "balance_minor": -16849
+    },
+    {
+     "account_id": "acct-euro",
+     "balance_minor": 50000
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "q": "cafe"
+   },
+   "expect_rows": [
+    {
+     "id": "tx-000005",
+     "amount_minor": -3500
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "account_id": "acct-euro"
+   },
+   "expect_rows": [
+    {
+     "id": "tx-000010",
+     "currency": "EUR"
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "from": "2026-10-01",
+    "to": "2026-10-31",
+    "limit": 2
+   },
+   "expect_rows": [
+    {
+     "id": "tx-000008"
+    },
+    {
+     "id": "tx-000007"
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "q": "100%"
+   },
+   "expect_rows": []
+  },
+  {
+   "op": "command",
+   "kind": "networth_snapshot.create",
+   "payload": {
+    "id": "nw-20261012",
+    "as_of": "2026-10-12"
+   },
+   "expect": {
+    "aggregate_id": "nw-20261012",
+    "version": 1
+   }
+  },
+  {
+   "op": "query",
+   "name": "list_networth_snapshots",
+   "params": {},
+   "expect_rows": [
+    {
+     "id": "nw-20261012",
+     "as_of": "2026-10-12",
+     "by_currency": {
+      "EUR": {
+       "assets_minor": 47500,
+       "liabilities_minor": 0,
+       "net_minor": 47500
+      },
+      "USD": {
+       "assets_minor": 660500,
+       "liabilities_minor": 22849,
+       "net_minor": 637651
+      }
+     }
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "budget.set",
+   "payload": {
+    "id": "bud-groceries",
+    "category": "groceries",
+    "amount_minor": 50000,
+    "currency": "USD",
+    "start_month": "2026-01"
+   },
+   "expect": {
+    "aggregate_id": "bud-groceries",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "budget.set",
+   "payload": {
+    "id": "bud-dining",
+    "category_id": "cat-dining",
+    "amount_minor": 20000,
+    "currency": "USD",
+    "start_month": "2026-01"
+   },
+   "expect": {
+    "aggregate_id": "bud-dining",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "budget.set",
+   "payload": {
+    "category_id": "cat-dining",
+    "amount_minor": 25000,
+    "currency": "USD",
+    "start_month": "2026-01"
+   },
+   "expect": {
+    "aggregate_id": "bud-dining",
+    "version": 2
+   }
+  },
+  {
+   "op": "command",
+   "kind": "budget.set",
+   "payload": {
+    "category_id": "cat-dining",
+    "amount_minor": 20000,
+    "currency": "USD",
+    "start_month": "2026-01"
+   },
+   "expect": {
+    "aggregate_id": "bud-dining",
+    "version": 3
+   }
+  },
+  {
+   "op": "command",
+   "kind": "budget.set",
+   "payload": {
+    "category_id": "cat-dining",
+    "amount_minor": 0,
+    "currency": "USD"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "query",
+   "name": "budget_status",
+   "params": {
+    "as_of": "2026-10-20"
+   },
+   "expect_rows": [
+    {
+     "category": "Dining",
+     "budget_minor": 20000,
+     "spent_minor": 5800,
+     "remaining_minor": 14200,
+     "used_basis_points": 2900,
+     "over_budget": false,
+     "days_left": 12,
+     "daily_allowance_minor": 1183
+    },
+    {
+     "category": "Groceries",
+     "budget_minor": 50000,
+     "spent_minor": 10550,
+     "remaining_minor": 39450,
+     "used_basis_points": 2110,
+     "over_budget": false,
+     "days_left": 12,
+     "daily_allowance_minor": 3287
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "bill.create",
+   "payload": {
+    "id": "bill-rent",
+    "name": "Rent",
+    "amount_minor": 120000,
+    "currency": "USD",
+    "recurrence": "monthly",
+    "due_date": "2026-11-01",
+    "account_id": "acct-checking",
+    "category": "rent"
+   },
+   "expect": {
+    "aggregate_id": "bill-rent",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "bill.create",
+   "payload": {
+    "id": "bill-internet",
+    "name": "Internet",
+    "amount_minor": 6000,
+    "currency": "USD",
+    "recurrence": "monthly",
+    "due_date": "2026-10-14",
+    "account_id": "acct-checking",
+    "category_id": "cat-rent"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "bill.create",
+   "payload": {
+    "id": "bill-insurance",
+    "name": "Insurance",
+    "amount_minor": 90000,
+    "currency": "USD",
+    "recurrence": "yearly",
+    "due_date": "2026-12-20"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "bill.create",
+   "payload": {
+    "id": "bill-gym",
+    "name": "Gym",
+    "amount_minor": 1500,
+    "currency": "USD",
+    "recurrence": "weekly",
+    "due_date": "2026-10-10"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "bill.create",
+   "payload": {
+    "id": "bill-bad-cur",
+    "name": "Euro bill on USD acct",
+    "amount_minor": 100,
+    "currency": "EUR",
+    "due_date": "2026-10-20",
+    "account_id": "acct-checking"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "query",
+   "name": "upcoming_bills",
+   "params": {
+    "as_of": "2026-10-12",
+    "days": 7
+   },
+   "expect_rows": [
+    {
+     "name": "Gym",
+     "days_until": -2,
+     "overdue": true
+    },
+    {
+     "name": "Internet",
+     "days_until": 2,
+     "overdue": false
+    }
+   ],
+   "expect_source_ids_sorted": [
+    "bill-gym",
+    "bill-internet"
+   ]
+  },
+  {
+   "op": "today",
+   "as_of": "2026-10-12",
+   "expect": {
+    "as_of": "2026-10-12",
+    "domains": {
+     "finance": {
+      "budget_left_this_month": [
+       {
+        "currency": "USD",
+        "budget_minor": 70000,
+        "spent_minor": 16350,
+        "remaining_minor": 53650
+       }
+      ],
+      "over_budget": [],
+      "bills_due_7_days": [
+       {
+        "name": "Gym"
+       },
+       {
+        "name": "Internet"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-000011",
+    "account_id": "acct-card",
+    "date": "2026-10-12",
+    "amount_minor": -16000,
+    "description": "Fancy dinner",
+    "category_id": "cat-dining"
+   }
+  },
+  {
+   "op": "query",
+   "name": "budget_status",
+   "params": {
+    "as_of": "2026-10-20"
+   },
+   "expect_rows": [
+    {
+     "category": "Dining",
+     "spent_minor": 21800,
+     "remaining_minor": -1800,
+     "used_basis_points": 10900,
+     "over_budget": true,
+     "daily_allowance_minor": 0
+    },
+    {
+     "category": "Groceries",
+     "spent_minor": 10550
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "transaction.update",
+   "payload": {
+    "id": "tx-000011",
+    "amount_minor": -12000
+   },
+   "expect": {
+    "aggregate_id": "tx-000011",
+    "version": 2
+   }
+  },
+  {
+   "op": "query",
+   "name": "budget_status",
+   "params": {
+    "as_of": "2026-10-20"
+   },
+   "expect_rows": [
+    {
+     "category": "Dining",
+     "spent_minor": 17800,
+     "over_budget": false
+    },
+    {
+     "category": "Groceries"
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "bill.mark_paid",
+   "payload": {
+    "id": "bill-internet",
+    "paid_date": "2026-10-13",
+    "record_transaction": true
+   },
+   "expect": {
+    "aggregate_id": "bill-internet",
+    "version": 2
+   }
+  },
+  {
+   "op": "command",
+   "kind": "bill.mark_paid",
+   "payload": {
+    "id": "bill-gym",
+    "paid_date": "2026-10-12"
+   },
+   "expect": {
+    "aggregate_id": "bill-gym",
+    "version": 2
+   }
+  },
+  {
+   "op": "query",
+   "name": "list_bills",
+   "params": {},
+   "expect_rows": [
+    {
+     "id": "bill-gym",
+     "due_date": "2026-10-17",
+     "last_paid_date": "2026-10-12"
+    },
+    {
+     "id": "bill-rent",
+     "due_date": "2026-11-01"
+    },
+    {
+     "id": "bill-internet",
+     "due_date": "2026-11-14",
+     "last_paid_date": "2026-10-13"
+    },
+    {
+     "id": "bill-insurance",
+     "due_date": "2026-12-20"
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "q": "internet"
+   },
+   "expect_rows": [
+    {
+     "description": "Internet",
+     "amount_minor": -6000,
+     "account_id": "acct-checking",
+     "date": "2026-10-13"
+    }
+   ]
+  },
+  {
+   "op": "import",
+   "format": "csv",
+   "data": "Date,Description,Debit,Credit,Category\n05/10/2026,COFFEE SHOP #12,4.50,,Dining\n06/10/2026,GROCERY MART,23.10,,food\n07/10/2026,PAYCHECK,,1500.00,Salary\n31/02/2026,BAD DATE ROW,1.00,,\n08/10/2026,UNKNOWN CAT,9.99,,Gadgets\n08/10/2026,UNKNOWN CAT,9.99,,Gadgets\n09/10/2026,,5.00,,\n",
+   "options": {
+    "account_id": "acct-checking",
+    "mapping": {
+     "date": "Date",
+     "date_format": "%d/%m/%Y",
+     "description": "Description",
+     "debit": "Debit",
+     "credit": "Credit",
+     "category": "Category"
+    },
+    "dry_run": true
+   },
+   "expect": {
+    "accepted": 5,
+    "duplicates": 0,
+    "dry_run": true,
+    "rejected": [
+     {
+      "row": 5,
+      "reason": "date does not match %d/%m/%Y"
+     },
+     {
+      "row": 8,
+      "reason": "missing description"
+     }
+    ]
+   },
+   "check_unchanged": true
+  },
+  {
+   "op": "import",
+   "format": "csv",
+   "data": "Date,Description,Debit,Credit,Category\n05/10/2026,COFFEE SHOP #12,4.50,,Dining\n06/10/2026,GROCERY MART,23.10,,food\n07/10/2026,PAYCHECK,,1500.00,Salary\n31/02/2026,BAD DATE ROW,1.00,,\n08/10/2026,UNKNOWN CAT,9.99,,Gadgets\n08/10/2026,UNKNOWN CAT,9.99,,Gadgets\n09/10/2026,,5.00,,\n",
+   "options": {
+    "account_id": "acct-checking",
+    "mapping": {
+     "date": "Date",
+     "date_format": "%d/%m/%Y",
+     "description": "Description",
+     "debit": "Debit",
+     "credit": "Credit",
+     "category": "Category"
+    }
+   },
+   "expect": {
+    "accepted": 5,
+    "duplicates": 0,
+    "dry_run": false,
+    "rejected": [
+     {
+      "row": 5,
+      "reason": "date does not match %d/%m/%Y"
+     },
+     {
+      "row": 8,
+      "reason": "missing description"
+     }
+    ]
+   }
+  },
+  {
+   "op": "import",
+   "format": "csv",
+   "data": "Date,Description,Debit,Credit,Category\n05/10/2026,COFFEE SHOP #12,4.50,,Dining\n06/10/2026,GROCERY MART,23.10,,food\n07/10/2026,PAYCHECK,,1500.00,Salary\n31/02/2026,BAD DATE ROW,1.00,,\n08/10/2026,UNKNOWN CAT,9.99,,Gadgets\n08/10/2026,UNKNOWN CAT,9.99,,Gadgets\n09/10/2026,,5.00,,\n",
+   "options": {
+    "account_id": "acct-checking",
+    "mapping": {
+     "date": "Date",
+     "date_format": "%d/%m/%Y",
+     "description": "Description",
+     "debit": "Debit",
+     "credit": "Credit",
+     "category": "Category"
+    }
+   },
+   "expect": {
+    "accepted": 0,
+    "duplicates": 5,
+    "rejected": [
+     {
+      "row": 5,
+      "reason": "date does not match %d/%m/%Y"
+     },
+     {
+      "row": 8,
+      "reason": "missing description"
+     }
+    ]
+   }
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "q": "unknown cat"
+   },
+   "expect_rows": [
+    {
+     "description": "UNKNOWN CAT",
+     "amount_minor": -999,
+     "category_id": null
+    },
+    {
+     "description": "UNKNOWN CAT",
+     "amount_minor": -999
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "q": "grocery mart"
+   },
+   "expect_rows": [
+    {
+     "amount_minor": -2310,
+     "category_id": "cat-groceries"
+    }
+   ]
+  },
+  {
+   "op": "import",
+   "format": "csv",
+   "data": "Date;Description;Amount\n2026-10-01;X;1,5\n",
+   "options": {
+    "account_id": "acct-checking",
+    "mapping": {
+     "date": "Date",
+     "description": "Description",
+     "amount": "Amount",
+     "delimiter": ";",
+     "decimal_separator": ","
+    }
+   },
+   "expect": {
+    "accepted": 1,
+    "duplicates": 0,
+    "rejected": []
+   }
+  },
+  {
+   "op": "import",
+   "format": "csv",
+   "data": "Date,Description,Amount\n2026-10-01,Lossy,1.005\n",
+   "options": {
+    "account_id": "acct-checking",
+    "mapping": {
+     "date": "Date",
+     "description": "Description",
+     "amount": "Amount"
+    }
+   },
+   "expect": {
+    "accepted": 0,
+    "duplicates": 0,
+    "rejected": [
+     {
+      "row": 2,
+      "reason": "more than 2 decimal places for USD"
+     }
+    ]
+   }
+  },
+  {
+   "op": "import_error",
+   "format": "csv",
+   "data": "A,B\n1,2\n",
+   "options": {
+    "account_id": "acct-checking",
+    "mapping": {
+     "date": "Date",
+     "description": "Description",
+     "amount": "Amount"
+    }
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "import_error",
+   "format": "csv",
+   "data": "Date,Description,Amount\n",
+   "options": {
+    "account_id": "acct-missing",
+    "mapping": {
+     "date": "Date",
+     "description": "Description",
+     "amount": "Amount"
+    }
+   },
+   "expect_error": "not_found"
+  },
+  {
+   "op": "import",
+   "format": "ofx",
+   "data": "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>USD\n<BANKTRANLIST>\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261003120000<TRNAMT>-12.34<FITID>F1001<NAME>NETFLIX<MEMO>subscription\n<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261004<TRNAMT>50.00<FITID>F1002<NAME>REFUND\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>2026-bad<TRNAMT>-1.00<FITID>F1003<NAME>BADDATE\n</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n",
+   "options": {
+    "account_id": "acct-card",
+    "dry_run": true
+   },
+   "expect": {
+    "accepted": 2,
+    "duplicates": 0,
+    "rejected": [
+     {
+      "row": 3,
+      "reason": "missing or invalid DTPOSTED"
+     }
+    ]
+   },
+   "check_unchanged": true
+  },
+  {
+   "op": "import",
+   "format": "ofx",
+   "data": "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>USD\n<BANKTRANLIST>\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261003120000<TRNAMT>-12.34<FITID>F1001<NAME>NETFLIX<MEMO>subscription\n<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261004<TRNAMT>50.00<FITID>F1002<NAME>REFUND\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>2026-bad<TRNAMT>-1.00<FITID>F1003<NAME>BADDATE\n</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n",
+   "options": {
+    "account_id": "acct-card"
+   },
+   "expect": {
+    "accepted": 2,
+    "duplicates": 0,
+    "rejected": [
+     {
+      "row": 3,
+      "reason": "missing or invalid DTPOSTED"
+     }
+    ]
+   }
+  },
+  {
+   "op": "import",
+   "format": "ofx",
+   "data": "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>USD\n<BANKTRANLIST>\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261003120000<TRNAMT>-12.34<FITID>F1001<NAME>NETFLIX<MEMO>subscription\n<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261004<TRNAMT>50.00<FITID>F1002<NAME>REFUND\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>2026-bad<TRNAMT>-1.00<FITID>F1003<NAME>BADDATE\n</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n",
+   "options": {
+    "account_id": "acct-card"
+   },
+   "expect": {
+    "accepted": 0,
+    "duplicates": 2,
+    "rejected": [
+     {
+      "row": 3,
+      "reason": "missing or invalid DTPOSTED"
+     }
+    ]
+   }
+  },
+  {
+   "op": "import_error",
+   "format": "ofx",
+   "data": "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>USD\n<BANKTRANLIST>\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261003120000<TRNAMT>-12.34<FITID>F1001<NAME>NETFLIX<MEMO>subscription\n<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261004<TRNAMT>50.00<FITID>F1002<NAME>REFUND\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>2026-bad<TRNAMT>-1.00<FITID>F1003<NAME>BADDATE\n</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n",
+   "options": {
+    "account_id": "acct-euro"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "query",
+   "name": "list_transactions",
+   "params": {
+    "q": "netflix"
+   },
+   "expect_rows": [
+    {
+     "amount_minor": -1234,
+     "account_id": "acct-card",
+     "notes": "subscription"
+    }
+   ]
+  },
+  {
+   "op": "reopen"
+  },
+  {
+   "op": "rebuild_equals_live"
+  },
+  {
+   "op": "export_roundtrip"
+  },
+  {
+   "op": "export_csv_check",
+   "expect_header": "id,date,account,account_id,amount,amount_minor,currency,description,merchant,category,notes",
+   "expect_contains": [
+    "Fancy dinner",
+    "-120.00"
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "transaction.delete",
+   "payload": {
+    "id": "tx-000009"
+   },
+   "expect": {
+    "aggregate_id": "tx-000009",
+    "version": 2
+   }
+  },
+  {
+   "op": "query",
+   "name": "get",
+   "params": {
+    "aggregate_type": "transaction",
+    "id": "tx-000009"
+   },
+   "expect_error": "deleted"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.update",
+   "payload": {
+    "id": "tx-000009",
+    "amount_minor": -1
+   },
+   "expect_error": "deleted"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.update",
+   "payload": {
+    "id": "tx-999999",
+    "amount_minor": -1
+   },
+   "expect_error": "not_found"
+  },
+  {
+   "op": "command",
+   "kind": "account.delete",
+   "payload": {
+    "id": "acct-checking"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "category.delete",
+   "payload": {
+    "id": "cat-rent"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "account.archive",
+   "payload": {
+    "id": "acct-euro"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "account_id": "acct-euro",
+    "date": "2026-10-12",
+    "amount_minor": -1,
+    "description": "after archive"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "query",
+   "name": "account_balances",
+   "params": {
+    "as_of": "2026-10-31"
+   },
+   "expect_rows": [
+    {
+     "account_id": "acct-checking"
+    },
+    {
+     "account_id": "acct-card"
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "account.unarchive",
+   "payload": {
+    "id": "acct-euro"
+   }
+  },
+  {
+   "op": "rebuild_equals_live"
+  },
+  {
+   "op": "no_money_movement"
+  }
+ ]
+}

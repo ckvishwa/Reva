@@ -1,0 +1,101 @@
+<ContentDialog
+    x:Class="Reva.Desktop.Views.AddTransactionDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views"
+    Title="Add transaction"
+    PrimaryButtonText="Save"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    Background="{StaticResource RevaSurfaceBrush}"
+    BorderBrush="{StaticResource RevaBorderBrush}"
+    CornerRadius="16"
+    PrimaryButtonStyle="{StaticResource RevaPrimaryButton}"
+    CloseButtonStyle="{StaticResource RevaSecondaryButton}"
+    PrimaryButtonClick="Save_Click"
+    AutomationProperties.AutomationId="AddTransactionDialog">
+
+    <ScrollViewer MinWidth="460" MaxHeight="560">
+        <StackPanel Spacing="12" Padding="0,0,12,0">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <RadioButton
+                    Content="Money out"
+                    GroupName="TxKind"
+                    MinHeight="44"
+                    IsChecked="{x:Bind Vm.IsExpense, Mode=TwoWay}"
+                    AutomationProperties.AutomationId="TxExpense" />
+                <RadioButton
+                    Content="Money in"
+                    GroupName="TxKind"
+                    MinHeight="44"
+                    IsChecked="{x:Bind Vm.IsIncome, Mode=TwoWay}"
+                    AutomationProperties.AutomationId="TxIncome" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBox
+                    x:Name="AmountBox"
+                    Header="Amount"
+                    PlaceholderText="12.50"
+                    Style="{StaticResource RevaTextBox}"
+                    InputScope="Number"
+                    Text="{x:Bind Vm.AmountText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    AutomationProperties.AutomationId="TxAmount" />
+                <TextBlock Text="{x:Bind Vm.AmountError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.AmountError), Mode=OneWay}" AutomationProperties.LiveSetting="Assertive" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBox
+                    Header="Description"
+                    PlaceholderText="Lunch with Sam"
+                    Style="{StaticResource RevaTextBox}"
+                    Text="{x:Bind Vm.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    AutomationProperties.AutomationId="TxDescription" />
+                <TextBlock Text="{x:Bind Vm.DescriptionError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.DescriptionError), Mode=OneWay}" AutomationProperties.LiveSetting="Assertive" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <ComboBox
+                    Header="Account"
+                    HorizontalAlignment="Stretch"
+                    MinHeight="44"
+                    ItemsSource="{x:Bind Vm.Accounts}"
+                    DisplayMemberPath="Display"
+                    SelectedItem="{x:Bind Vm.SelectedAccount, Mode=TwoWay}"
+                    AutomationProperties.AutomationId="TxAccount" />
+                <TextBlock Text="{x:Bind Vm.AccountError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.AccountError), Mode=OneWay}" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <CalendarDatePicker
+                    x:Name="DatePicker"
+                    Header="Date"
+                    MinHeight="44"
+                    DateChanged="DatePicker_DateChanged"
+                    AutomationProperties.AutomationId="TxDate" />
+                <TextBlock Text="{x:Bind Vm.DateError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.DateError), Mode=OneWay}" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <ComboBox
+                    Header="Category (optional)"
+                    IsEditable="True"
+                    HorizontalAlignment="Stretch"
+                    MinHeight="44"
+                    ItemsSource="{x:Bind Vm.CategoryNames}"
+                    Text="{x:Bind Vm.Category, Mode=TwoWay}"
+                    AutomationProperties.AutomationId="TxCategory" />
+                <TextBlock Text="{x:Bind Vm.CategoryError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.CategoryError), Mode=OneWay}" AutomationProperties.LiveSetting="Assertive" />
+            </StackPanel>
+
+            <TextBox
+                Header="Notes (optional)"
+                Style="{StaticResource RevaTextBox}"
+                Text="{x:Bind Vm.Notes, Mode=TwoWay}"
+                AutomationProperties.AutomationId="TxNotes" />
+
+            <TextBlock Text="{x:Bind Vm.PreviewText, Mode=OneWay}" Style="{StaticResource RevaMutedText}" AutomationProperties.AutomationId="TxPreview" />
+            <TextBlock Text="{x:Bind Vm.GeneralError, Mode=OneWay}" Style="{StaticResource RevaErrorText}" Visibility="{x:Bind local:Vis.ShowText(Vm.GeneralError), Mode=OneWay}" AutomationProperties.LiveSetting="Assertive" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

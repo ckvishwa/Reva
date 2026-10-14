@@ -81,7 +81,23 @@ public sealed class WindowsVoiceDevice : IVoiceDevice, IDisposable
 
             var file = await StorageFile.GetFileFromPathAsync(_recordingPath);
             var profile = MediaEncodingProfile.CreateWav(AudioEncodingQuality.High);
-            _recording = await _capture.PrepareLowLagRecordToStorageFileAsync(profile, file);
+            // Positional args deliberately — the projected WinRT parameter names
+            // are not guaranteed to match the C# names you'd expect.
+            profile.Audio = AudioEncodingProperties.CreatePcm(16000, 1, 16);
+            try
+            {
+                _recording = await _capture.PrepareLowLagRecordToStorageFileAsync(profile, file);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException || ex.HResult == unchecked((int)0xC00D5212))
+            {
+                // Some capture hardware refuses 16kHz mono. Falling back to the
+                // default WAV profile is better than surfacing a generic
+                // recording failure — reva_core's _validate_wav_upload accepts
+                // other rates, it just prefers this one.
+                DesktopLogger.Info("voice.capture.format_fallback");
+                _recording = await _capture.PrepareLowLagRecordToStorageFileAsync(
+                    MediaEncodingProfile.CreateWav(AudioEncodingQuality.High), file);
+            }
             await _recording.StartAsync();
         }
         catch (OperationCanceledException)
@@ -102,6 +118,11 @@ public sealed class WindowsVoiceDevice : IVoiceDevice, IDisposable
         }
         catch (Exception ex)
         {
+            // Numeric HResult only — never audio/transcript content — so the
+            // physical acceptance run leaves diagnostic evidence behind when
+            // real hardware throws something outside the format-fallback
+            // filter above.
+            DesktopLogger.Info($"voice.capture.failed hresult=0x{ex.HResult:X8}");
             CancelRecording();
             _microphoneReady = false;
             throw new VoiceCaptureException(VoiceDeviceAvailability.RecordingFailed(), ex);
@@ -120,13 +141,19 @@ public sealed class WindowsVoiceDevice : IVoiceDevice, IDisposable
 
             await _recording.StopAsync();
             await _recording.FinishAsync();
-            _recording = null;
-            _capture?.Dispose();
-            _capture = null;
             return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            // Unconditional teardown: if StopAsync/FinishAsync throws (e.g.
+            // device unplugged mid-recording), _recording must still be
+            // cleared here. Otherwise StartRecordingAsync's "already
+            // recording" guard wedges permanently, and every future
+            // StopRecordingAsync sees a null _recordingPath and silently
+            // returns empty audio forever.
+            _recording = null;
+            _capture?.Dispose();
+            _capture = null;
             _recordingPath = null;
             DeleteIfExists(path);
         }

@@ -20,20 +20,70 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        DesktopLogger.EnsureFileLoggingInitialized();
         var configuration = DesktopConfiguration.CreateDefault();
         var tokenProvider = new LocalTokenProvider(configuration);
         var httpClient = new System.Net.Http.HttpClient
         {
             BaseAddress = configuration.CoreBaseUrl,
-            Timeout = configuration.RequestTimeout,
+            // Backstop only. Every call path enforces its own shorter, per-call
+            // timeout; this exists so a future method added without a CTS
+            // cannot hang forever. Must stay comfortably above the STT timeout
+            // (30s default, env-overridable) so it never pre-empts it. If
+            // REVA_DESKTOP_STT_TIMEOUT_SECONDS is ever set above 300, this
+            // backstop wins.
+            Timeout = TimeSpan.FromSeconds(300),
         };
-        var coreClient = new RevaCoreClient(httpClient, tokenProvider);
+        var coreClient = new RevaCoreClient(
+            httpClient, tokenProvider, configuration.RequestTimeout, configuration.SttRequestTimeout);
         var lifecycle = new RevaCoreLifecycle(
             coreClient, tokenProvider, new DeveloperModeCoreExecutableLocator(), new CoreProcessLauncher(), configuration);
         _lifecycle = lifecycle;
 
-        _window = new MainWindow(coreClient, lifecycle, new WindowsVoiceDevice());
+        var commandRouter = new CommandRouter(new WindowsAppExecutor());
+        var microphoneArbiter = new MicrophoneArbiter();
+        var wakeWordOptions = WakeWordRuntimeOptions.FromEnvironment();
+        WakeWordProviderDiagnostics.Create(wakeWordOptions).Log();
+        var assistant = new ViewModels.AssistantViewModel(
+            coreClient,
+            new ArbiterVoiceDevice(new WindowsVoiceDevice(), microphoneArbiter),
+            lifecycle,
+            commandRouter);
+        IWakeWordDetector detector = wakeWordOptions.IsEnabled
+            ? new PorcupineWakeWordDetector(
+                wakeWordOptions.AccessKey,
+                wakeWordOptions.KeywordDirectory,
+                new RealFileSystemProbe(),
+                wakeWordOptions.ModelManifest)
+            : new NullWakeWordDetector();
+        var wakeWord = new ViewModels.WakeWordCoordinator(
+            detector,
+            microphoneArbiter,
+            new PvRecorderWakeSpeechCapture(),
+            coreClient,
+            assistant,
+            new SystemChimePlayer(),
+            lifecycle,
+            new WindowsWakeWordRecoveryEvents());
+
+        var financeApi = new Finance.FinanceApiClient(
+            httpClient, tokenProvider, configuration.RequestTimeout);
+        var today = new ViewModels.TodayViewModel(financeApi);
+        var devicesApi = new Devices.DevicesApiClient(httpClient, tokenProvider, configuration.RequestTimeout);
+        _window = new MainWindow(
+            new ViewModels.ShellViewModel(lifecycle),
+            assistant,
+            new ViewModels.MemoryViewModel(coreClient),
+            new ViewModels.NavigationViewModel(),
+            new ViewModels.FinanceViewModel(financeApi),
+            today,
+            new ViewModels.DevicesViewModel(devicesApi, new Devices.QrCoderEncoder()),
+            wakeWord);
         _window.Activate();
+        if (wakeWordOptions.IsEnabled)
+        {
+            await wakeWord.EnableAsync(wakeWordOptions.Configuration);
+        }
 
         // Deliberately started after Activate(), not awaited before it: the
         // window (and its "Starting Core…" initial state) must appear
@@ -41,5 +91,6 @@ public partial class App : Application
         // Core boots — confirmed necessary during manual smoke testing of
         // the equivalent one-shot health check in Slice 3.
         await lifecycle.StartAsync();
+        await today.RefreshAsync();
     }
 }

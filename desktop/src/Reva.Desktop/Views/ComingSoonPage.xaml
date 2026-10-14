@@ -1,0 +1,15 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.ComingSoonPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Padding="32,28,32,40" Spacing="12" MaxWidth="720" HorizontalAlignment="Left">
+        <TextBlock x:Name="TitleText" Style="{StaticResource RevaTitleText}" />
+        <Border x:Name="Card" Style="{StaticResource RevaCard}" AutomationProperties.AutomationId="ComingSoon">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Coming soon" Style="{StaticResource RevaSectionTitleText}" Foreground="{StaticResource RevaAccentBrush}" />
+                <TextBlock x:Name="BodyText" Style="{StaticResource RevaMutedText}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

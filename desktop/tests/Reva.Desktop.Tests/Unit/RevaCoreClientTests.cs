@@ -35,6 +35,18 @@ public class RevaCoreClientTests
         return (client, (FakeHttpMessageHandler)handler);
     }
 
+    private static RevaCoreClient ClientWith(
+        HttpMessageHandler handler, TimeSpan requestTimeout, TimeSpan sttRequestTimeout) =>
+        new(
+            new HttpClient(handler)
+            {
+                BaseAddress = new Uri("http://127.0.0.1:8756/"),
+                Timeout = Timeout.InfiniteTimeSpan,
+            },
+            new FakeTokenProvider("t"),
+            requestTimeout,
+            sttRequestTimeout);
+
     [Fact]
     public async Task GetHealthAsync_ParsesSuccessResponse()
     {
@@ -356,5 +368,70 @@ public class RevaCoreClientTests
         Assert.False(result.IsSuccess);
         Assert.Equal(CoreErrorKind.CoreUnavailable, result.Error!.Kind);
         Assert.Equal("REVA voice is unavailable.", result.Error.SafeMessage);
+    }
+
+    private const string TranscriptionJson =
+        """{"schema_version":1,"text":"hello","language":"en","duration_ms":900}""";
+
+    [Fact]
+    public async Task TranscribeSpeechAsync_Timeout_MapsToVoiceTimeoutMessage_NotGenericCoreMessage()
+    {
+        var client = ClientWith(
+            FakeHttpMessageHandler.Delayed(TimeSpan.FromSeconds(5), HttpStatusCode.OK, TranscriptionJson),
+            requestTimeout: TimeSpan.FromSeconds(10),
+            sttRequestTimeout: TimeSpan.FromMilliseconds(100));
+
+        var result = await client.TranscribeSpeechAsync(new byte[] { 1, 2, 3 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreTimeout, result.Error!.Kind);
+        Assert.Equal("REVA voice did not respond in time.", result.Error.SafeMessage);
+    }
+
+    [Fact]
+    public async Task TranscribeSpeechAsync_SlowerThanRequestTimeoutButFasterThanSttTimeout_Succeeds()
+    {
+        // The test v1 was missing: proves the STT call actually selects the
+        // longer STT timeout rather than the short general one. Fails if
+        // TranscribeSpeechAsync forgets to pass timeout: _sttRequestTimeout.
+        var client = ClientWith(
+            FakeHttpMessageHandler.Delayed(TimeSpan.FromMilliseconds(400), HttpStatusCode.OK, TranscriptionJson),
+            requestTimeout: TimeSpan.FromMilliseconds(50),
+            sttRequestTimeout: TimeSpan.FromSeconds(5));
+
+        var result = await client.TranscribeSpeechAsync(new byte[] { 1, 2, 3 });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("hello", result.Value!.Text);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_ExceedingRequestTimeout_StillReturnsGenericCoreTimeoutMessage()
+    {
+        var client = ClientWith(
+            FakeHttpMessageHandler.Delayed(TimeSpan.FromSeconds(5), HttpStatusCode.OK, "{}"),
+            requestTimeout: TimeSpan.FromMilliseconds(100),
+            sttRequestTimeout: TimeSpan.FromSeconds(30));
+
+        var result = await client.SendMessageAsync("hi");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(CoreErrorKind.CoreTimeout, result.Error!.Kind);
+        Assert.Equal("REVA Core did not respond in time.", result.Error.SafeMessage);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_CallerCancellation_PropagatesOperationCanceled()
+    {
+        // Documents the deliberate semantic change: caller cancellation is no
+        // longer laundered into a CoreTimeout failure result.
+        var client = ClientWith(
+            FakeHttpMessageHandler.Delayed(TimeSpan.FromSeconds(5), HttpStatusCode.OK, "{}"),
+            requestTimeout: TimeSpan.FromSeconds(30),
+            sttRequestTimeout: TimeSpan.FromSeconds(30));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.SendMessageAsync("hi", cts.Token));
     }
 }

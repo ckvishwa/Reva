@@ -8,10 +8,17 @@ public class ShellViewModelTests
     private sealed class FakeLifecycle : IRevaCoreLifecycle
     {
         public CoreLifecycleState State { get; set; } = CoreLifecycleState.Starting;
+        public CoreOwnership Ownership { get; set; } = CoreOwnership.Owned;
         public string StatusText { get; set; } = "Starting Core…";
         public event EventHandler? StateChanged;
         public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void StopMonitoring() { }
+        public int ShutdownCallCount { get; private set; }
+        public Task ShutdownAsync()
+        {
+            ShutdownCallCount++;
+            return Task.CompletedTask;
+        }
 
         public void Raise(CoreLifecycleState state, string statusText)
         {
@@ -80,5 +87,16 @@ public class ShellViewModelTests
         Assert.Contains(nameof(ShellViewModel.IsCoreConnected), raised);
         Assert.Contains(nameof(ShellViewModel.CoreStatusText), raised);
         Assert.Contains(nameof(ShellViewModel.LifecycleState), raised);
+    }
+
+    [Fact]
+    public async Task ShutdownAsync_ForwardsToLifecycle()
+    {
+        var lifecycle = new FakeLifecycle();
+        var viewModel = new ShellViewModel(lifecycle);
+
+        await viewModel.ShutdownAsync();
+
+        Assert.Equal(1, lifecycle.ShutdownCallCount);
     }
 }

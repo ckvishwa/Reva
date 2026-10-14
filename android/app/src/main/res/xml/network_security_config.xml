@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No cleartext, anywhere. The only traffic is HTTPS to the user's paired PC, where the PC's own TLS key is
+     pinned in code (PinnedHttpsTransport) because the gateway uses a self-signed certificate. System and user
+     certificate authorities are not used for it. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
