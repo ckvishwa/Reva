@@ -56,6 +56,11 @@ def build_auth_dependency(lifecycle: CoreLifecycle) -> Callable[..., Awaitable[s
     return require_local_token
 
 
+def record_auth_failure(lifecycle: CoreLifecycle, correlation_id: str, *, path: str) -> None:
+    """Public hook for transports that cannot use the HTTP dependency (WebSocket)."""
+    _record_auth_failure(lifecycle, correlation_id, path=path)
+
+
 def _record_auth_failure(lifecycle: CoreLifecycle, correlation_id: str, *, path: str) -> None:
     try:
         AuditRepository(lifecycle.connection).insert(

@@ -16,6 +16,8 @@ import pytest
         ("post", "/v1/devices/pairing/approve", {"json": {"fingerprint": "123456"}}),
         ("post", "/v1/devices/pairing/deny", {}),
         ("post", "/v1/devices/some-device/revoke", {}),
+        ("post", "/v1/voice/sessions", {"json": {}}),
+        ("delete", "/v1/voice/sessions/some-session-id", {}),
         ("post", "/v1/voice/speech", {"json": {"text": "hi", "language": "en"}}),
         (
             "post",
