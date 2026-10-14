@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,12 +32,13 @@ from reva_core.providers.asset_manifest import verify_assets
 from reva_core.shared.errors import ProviderError, ProviderErrorKind, ValidationError
 from reva_core.shared.ids import new_id
 from reva_core.shared.logging import get_logger
-from reva_core.voice.supervised_worker import ProcessJob, SupervisedWorker
+from reva_core.voice.supervised_worker import ProcessJob, SupervisedWorker, worker_environment
 from reva_core.voice.wav import join_wavs, validate_under_directory, validate_wav
 
 logger = get_logger("voice.kokoro")
 
 PROVIDER_NAME = "kokoro_af_heart"
+_PACKAGE_PARENT = Path(__file__).resolve().parents[2]
 SAMPLE_RATE = 24_000
 _MAX_TEXT_CHARS = 800
 _TERMINAL = frozenset({"completed", "stopped", "error", "worker_exit"})
@@ -352,6 +354,9 @@ class KokoroSpeechProvider:
                     self._device,
                 ],
                 job=self._job,
+                env=worker_environment(os.environ),
+                # `-m <worker_module>` resolves from here, whatever Core's own cwd is.
+                cwd=_PACKAGE_PARENT,
             )
             try:
                 await self._handshake(worker)

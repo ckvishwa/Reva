@@ -15,9 +15,9 @@ from reva_core.session.coordinator import SessionCoordinator
 from reva_core.session.state import SessionState
 
 _SCHEMA = json.loads(
-    (
-        Path(__file__).resolve().parents[2] / "contracts" / "session-event.schema.json"
-    ).read_text(encoding="utf-8")
+    (Path(__file__).resolve().parents[2] / "contracts" / "session-event.schema.json").read_text(
+        encoding="utf-8"
+    )
 )
 
 

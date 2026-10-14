@@ -22,10 +22,10 @@ from fastapi.responses import JSONResponse
 from reva_core import __version__
 from reva_core.api.routes import build_router
 from reva_core.api.schemas import ErrorResponse
+from reva_core.api.voice_sessions import build_voice_session_router
 from reva_core.domains.routes import build_domains_router
 from reva_core.domains.service import DomainRequestError
 from reva_core.gateway.routes import build_devices_router
-from reva_core.api.voice_sessions import build_voice_session_router
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.shared.errors import StorageError
 from reva_core.shared.logging import get_logger
