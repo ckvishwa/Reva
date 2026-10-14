@@ -66,6 +66,9 @@ class AutoSyncController(
     private var tickLoop: Job? = null
     private var failed = false
 
+    /** The grant the PC refused. Retrying a revoked phone every minute only adds noise on the PC. */
+    private var refusedDeviceId: String? = null
+
     val status: StateFlow<SyncStatus> = statusFlow.asStateFlow()
     val enabled: StateFlow<Boolean> = enabledFlow.asStateFlow()
 
@@ -99,24 +102,43 @@ class AutoSyncController(
         tickLoop = null
     }
 
+    /** A manual sync worked, so whatever stopped or failed the automatic ones is over. */
+    suspend fun manualSyncSucceeded() {
+        failed = false
+        refusedDeviceId = null
+        refreshStatus()
+    }
+
     /** Re-read when the PC was last synced with (after a manual sync, for example). */
     suspend fun refreshStatus() {
         val pc = service.paired()
-        statusFlow.value = SyncStatus(SyncStatusText.format(pc, nowSeconds()), pc?.lastSyncAtSeconds, failed)
+        val base = SyncStatusText.format(pc, nowSeconds())
+        val text = when {
+            pc == null -> null
+            pc.deviceId == refusedDeviceId -> "Sync stopped: the PC no longer trusts this phone. Open Devices."
+            failed && base != null -> "$base · PC not reachable"
+            else -> base
+        }
+        statusFlow.value = SyncStatus(text, pc?.lastSyncAtSeconds, failed)
     }
 
     private suspend fun syncOnce() {
-        if (!settings.enabled || service.paired() == null) {
+        val pc = service.paired()
+        if (!settings.enabled || pc == null || pc.deviceId == refusedDeviceId) {
             refreshStatus()
             return
         }
         try {
             service.syncNow()
             failed = false
+            refusedDeviceId = null
         } catch (e: CancellationException) {
             throw e
+        } catch (e: SyncException) {
+            failed = true // quiet: the next interval tries again, unless the PC refused this phone
+            if (e.failure == SyncFailure.Unauthorized) refusedDeviceId = pc.deviceId
         } catch (e: Exception) {
-            failed = true // quiet: the next interval tries again
+            failed = true
         }
         refreshStatus()
     }
