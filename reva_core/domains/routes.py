@@ -63,6 +63,10 @@ def _query_params(request: Request) -> dict[str, Any]:
     return params
 
 
+# The longest a single /domains/changes request may wait; clients simply ask again.
+MAX_CHANGE_WAIT_SECONDS = 30.0
+
+
 def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
     router = APIRouter(prefix="/v1")
     require_token = build_auth_dependency(lifecycle)
@@ -79,6 +83,12 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
             return fn(handle)
         except module.DomainError as exc:
             raise translate(module, exc) from exc
+
+    def _write(domain: str, fn: Any) -> Any:
+        """Run a Kernel command; once it has committed, tell the screens waiting on `domain`."""
+        result = _call(domain, fn)
+        _service().note_change(domain)
+        return result
 
     def _finance_collection(collection: str) -> tuple[str, str, str]:
         try:
@@ -106,6 +116,26 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
                 for name in service.enabled_domains
             ]
         }
+
+    @router.get("/domains/changes")
+    async def domain_changes(
+        header_correlation_id: Annotated[str, Depends(require_token)],
+        domain: Annotated[str, Query(pattern=r"^[a-z_]{1,32}$")] = "finance",
+        since: Annotated[int | None, Query(ge=0)] = None,
+        timeout: Annotated[float, Query(ge=0, le=MAX_CHANGE_WAIT_SECONDS)] = 25.0,
+    ) -> Response:
+        """Wait until `domain` changes after counter `since` (or `timeout` passes), then say so.
+
+        The reply is the counter only; the caller reloads what it shows through the normal
+        routes. No data crosses this route.
+        """
+        counter = await _service().wait_for_change(domain, since, timeout)
+        body = {"domain": domain, "counter": counter, "changed": since is None or counter != since}
+        return Response(
+            content=json.dumps(body),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
 
     @router.get("/domains/{domain}/privacy")
     def get_privacy(
@@ -144,7 +174,7 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
     ) -> dict[str, Any]:
         fields = {**body, "conflict_id": conflict_id}
         return _commit(
-            _call("finance", lambda h: h.command("conflict.resolve", json.dumps(fields)))
+            _write("finance", lambda h: h.command("conflict.resolve", json.dumps(fields)))
         )
 
     @router.get("/domains/{domain}/export")
@@ -181,6 +211,8 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
         report = _call(
             domain, lambda h: h.import_data(payload.format, raw, json.dumps(payload.options))
         )
+        if report.accepted and not report.dry_run:
+            _service().note_change(domain)
         return {
             "accepted": report.accepted,
             "duplicates": report.duplicates,
@@ -237,7 +269,7 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
         _, _, command = (
             _finance_collection(collection) if domain == "finance" else _unknown_domain(domain)
         )
-        return _commit(_call(domain, lambda h: h.command(command, json.dumps(body))))
+        return _commit(_write(domain, lambda h: h.command(command, json.dumps(body))))
 
     @router.get("/domains/{domain}/{collection}/{item_id}")
     def get_item(
@@ -275,7 +307,7 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
             fields = {"id": item_id}
         if aggregate == "budget":
             command = "budget.set"
-        return _commit(_call(domain, lambda h: h.command(command, json.dumps(fields))))
+        return _commit(_write(domain, lambda h: h.command(command, json.dumps(fields))))
 
     @router.delete("/domains/{domain}/{collection}/{item_id}")
     def delete_item(
@@ -288,7 +320,7 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
             _finance_collection(collection) if domain == "finance" else _unknown_domain(domain)
         )
         return _commit(
-            _call(domain, lambda h: h.command(f"{aggregate}.delete", json.dumps({"id": item_id})))
+            _write(domain, lambda h: h.command(f"{aggregate}.delete", json.dumps({"id": item_id})))
         )
 
     @router.post("/domains/finance/bills/{item_id}/mark-paid")
@@ -298,7 +330,7 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
         header_correlation_id: Annotated[str, Depends(require_token)],
     ) -> dict[str, Any]:
         fields = {**body, "id": item_id}
-        return _commit(_call("finance", lambda h: h.command("bill.mark_paid", json.dumps(fields))))
+        return _commit(_write("finance", lambda h: h.command("bill.mark_paid", json.dumps(fields))))
 
     @router.get("/today")
     def today_summary(

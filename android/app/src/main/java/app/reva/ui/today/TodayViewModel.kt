@@ -7,9 +7,12 @@ import app.reva.core.Money
 import app.reva.data.FinanceRepository
 import app.reva.data.Outcome
 import java.time.LocalDate
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -34,22 +37,36 @@ data class TodayUiState(
 /** Today: budget left this month and bills due in the next 7 days, both from the Kernel's read-only summary. */
 class TodayViewModel(
     private val repository: FinanceRepository,
+    private val changeDebounceMillis: Long = 300,
     private val today: () -> LocalDate = { LocalDate.now() },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TodayUiState())
     val state: StateFlow<TodayUiState> = _state.asStateFlow()
     private var generation = 0
+    private var loadedOnce = false
+
+    init {
+        // A local commit or a sync batch moved the counter: reload the numbers on screen (SYNC-1e).
+        val seen = repository.changes.value // a change after this point must not be missed, even before collecting starts
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class)
+            repository.changes.dropWhile { it == seen }.debounce(changeDebounceMillis).collect {
+                if (loadedOnce) refreshNow(showLoading = false)
+            }
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch { refreshNow() }
     }
 
-    suspend fun refreshNow() {
+    suspend fun refreshNow(showLoading: Boolean = true) {
         val mine = ++generation
-        _state.update { it.copy(isLoading = true) }
+        _state.update { it.copy(isLoading = showLoading) }
         val result = repository.today()
         if (mine != generation) return
+        loadedOnce = true
         when (result) {
             is Outcome.Failed -> _state.value = TodayUiState(error = result.error.message, budgetLeftText = "—")
             is Outcome.Ok -> apply(result.value)

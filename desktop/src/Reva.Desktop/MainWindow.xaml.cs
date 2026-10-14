@@ -2,6 +2,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Reva.Desktop.Finance;
 using Reva.Desktop.Services;
 using Reva.Desktop.ViewModels;
 using Windows.System;
@@ -102,6 +103,30 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private DomainChangeWatcher? _changes;
+
+    /// <summary>Starts reloading the open Finance or Today screen whenever Core reports that Finance
+    /// changed (a phone synced, or anything else committed). Call once Core is up (SYNC-1e).</summary>
+    public void StartRefreshOnChanges(IDomainChangesApi api)
+    {
+        _changes?.Dispose();
+        _changes = new DomainChangeWatcher(api, new DispatcherQueueDispatcher(DispatcherQueue), OnDomainChangedAsync);
+        _changes.Start();
+    }
+
+    private async Task OnDomainChangedAsync(string domain)
+    {
+        // Same two screens that reload when opened; only the one that is showing needs it now.
+        if (Navigation.ShowsFinance)
+        {
+            await FinancePanel.RefreshQuietlyAsync();
+        }
+        else if (Navigation.ShowsTalk)
+        {
+            await Today.RefreshAsync(showLoading: false);
+        }
+    }
+
     private bool _shutdownComplete;
 
     private async void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -125,6 +150,7 @@ public sealed partial class MainWindow : Window
 
         args.Handled = true;
 
+        _changes?.Dispose();
         Assistant.DetachLifecycle();
         await RunShutdownSequenceAsync(
             () => Shell.ShutdownAsync(),
