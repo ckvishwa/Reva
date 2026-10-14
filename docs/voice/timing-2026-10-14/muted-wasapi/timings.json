@@ -1,0 +1,365 @@
+{
+  "meta": {
+    "date_utc": "2026-10-14T05:13:42+00:00",
+    "command": "all",
+    "runs": 10,
+    "sink": "speaker",
+    "gain": 0.0,
+    "audio_api": "Windows WASAPI",
+    "device": 20,
+    "host": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.10",
+    "provider": "kokoro af_heart (Kokoro-82M v1.0) via build_tts_registry/RegistryTTS",
+    "orphan_check": "Kokoro worker processes alive after shutdown"
+  },
+  "speak_runs": [
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 546.9999999913853,
+      "first_audible_after_text_ms": 793.8750000030268,
+      "synthesis_ms": 2359.99999998603,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.3999999999976322,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 453.00000000861473,
+      "first_audible_after_text_ms": 685.9166666690726,
+      "synthesis_ms": 2000.0,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.3389830508474576,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 453.00000000861473,
+      "first_audible_after_text_ms": 677.3750000284053,
+      "synthesis_ms": 1812.999999994645,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.30728813559231266,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 593.9999999827705,
+      "first_audible_after_text_ms": 819.8333333421033,
+      "synthesis_ms": 2250.0,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.3813559322033898,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 594.0000000118744,
+      "first_audible_after_text_ms": 836.8750000081491,
+      "synthesis_ms": 2062.999999994645,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.34966101694824486,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 483.99999999674037,
+      "first_audible_after_text_ms": 729.2916666483507,
+      "synthesis_ms": 2218.9999999827705,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.376101694912334,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 516.0000000032596,
+      "first_audible_after_text_ms": 746.2916666700039,
+      "synthesis_ms": 2141.0000000032596,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.36288135593275583,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 469.00000001187436,
+      "first_audible_after_text_ms": 716.4166666625533,
+      "synthesis_ms": 1969.0000000118744,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.3337288135613346,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 469.00000001187436,
+      "first_audible_after_text_ms": 723.8750000251457,
+      "synthesis_ms": 2046.9999999913853,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.34694915254091274,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    },
+    {
+      "text_ready_to_dispatch_ms": 0.0,
+      "first_audio_generated_ms": 405.99999998812564,
+      "first_audible_after_text_ms": 637.3333333467599,
+      "synthesis_ms": 1766.0000000032596,
+      "audio_seconds": 5.9,
+      "real_time_factor": 0.29932203389885753,
+      "natural_completion_after_text_ms": null,
+      "chunks": 3,
+      "overlap_events": 0,
+      "orphan_processes": 0
+    }
+  ],
+  "interrupt_runs": [
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 6.291666679317132,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 1011.0416666720994,
+      "next_first_audio_generated_ms": 797.0000000204891,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 22.250000009080395,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 963.8750000158325,
+      "next_first_audio_generated_ms": 735.000000015134,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 5.750000011175871,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 1135.7499999867287,
+      "next_first_audio_generated_ms": 921.9999999913853,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 6.2083333323244005,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 1010.9583333251067,
+      "next_first_audio_generated_ms": 797.0000000204891,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 15.000000013969839,
+      "stop_to_silence_ms": 20.75000002514571,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 870.2499999781139,
+      "next_first_audio_generated_ms": 655.9999999881256,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 5.0833333225455135,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 1087.9999999888241,
+      "next_first_audio_generated_ms": 875.0,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 4.74999999278225,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 853.208333341172,
+      "next_first_audio_generated_ms": 641.0000000032596,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 4.74999999278225,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 1009.458333341172,
+      "next_first_audio_generated_ms": 796.9999999913853,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 0.0,
+      "stop_to_silence_ms": 14.62500001071021,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 916.1666666623205,
+      "next_first_audio_generated_ms": 687.9999999946449,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    },
+    {
+      "stop_return_ms": 15.000000013969839,
+      "stop_to_silence_ms": 29.375000012805685,
+      "chunks_after_stop": 0,
+      "resumed_frames_after_silence": 0,
+      "next_first_audible_ms": 1072.2083333239425,
+      "next_first_audio_generated_ms": 843.9999999827705,
+      "overlap_events": 0,
+      "worker_processes_during_run": 2,
+      "orphan_processes": 0
+    }
+  ],
+  "summary": [
+    {
+      "metric": "first_audio_generated_ms",
+      "n": 10,
+      "p50": 476.50000000430737,
+      "p95": 593.9999999987776,
+      "min": 405.99999998812564,
+      "max": 594.0000000118744,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "first_audible_after_text_ms",
+      "n": 10,
+      "p50": 726.5833333367482,
+      "p95": 829.2062500084285,
+      "min": 637.3333333467599,
+      "max": 836.8750000081491,
+      "verdict": "FAIL"
+    },
+    {
+      "metric": "synthesis_ms",
+      "n": 10,
+      "p50": 2054.999999993015,
+      "p95": 2310.4999999923166,
+      "min": 1766.0000000032596,
+      "max": 2359.99999998603,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "audio_seconds",
+      "n": 10,
+      "p50": 5.9,
+      "p95": 5.9,
+      "min": 5.9,
+      "max": 5.9,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "real_time_factor",
+      "n": 10,
+      "p50": 0.3483050847445788,
+      "p95": 0.39161016949022315,
+      "min": 0.29932203389885753,
+      "max": 0.3999999999976322,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "overlap_events",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "stop_return_ms",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 15.000000013969839,
+      "min": 0.0,
+      "max": 15.000000013969839,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "stop_to_silence_ms",
+      "n": 10,
+      "p50": 6.250000005820766,
+      "p95": 26.16875001112931,
+      "min": 4.74999999278225,
+      "max": 29.375000012805685,
+      "verdict": "PASS"
+    },
+    {
+      "metric": "chunks_after_stop",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "resumed_frames_after_silence",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "next_first_audible_ms",
+      "n": 10,
+      "p50": 1010.2083333331393,
+      "p95": 1114.2624999876716,
+      "min": 853.208333341172,
+      "max": 1135.7499999867287,
+      "verdict": "INFO"
+    },
+    {
+      "metric": "overlap_events",
+      "n": 10,
+      "p50": 0.0,
+      "p95": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "verdict": "INFO"
+    }
+  ],
+  "orphan_processes_max": 0,
+  "orphan_verdict": "PASS",
+  "not_measured": [
+    "STT round-trip CER (needs the microphone/recognition path, S07)",
+    "blind owner listening comparison"
+  ]
+}

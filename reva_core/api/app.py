@@ -12,6 +12,8 @@ secret ever reaches a client.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -20,6 +22,7 @@ from fastapi.responses import JSONResponse
 from reva_core import __version__
 from reva_core.api.routes import build_router
 from reva_core.api.schemas import ErrorResponse
+from reva_core.api.voice_sessions import build_voice_session_router
 from reva_core.domains.routes import build_domains_router
 from reva_core.domains.service import DomainRequestError
 from reva_core.gateway.routes import build_devices_router
@@ -31,10 +34,20 @@ logger = get_logger("api")
 
 
 def create_app(lifecycle: CoreLifecycle) -> FastAPI:
-    app = FastAPI(title="REVA Core", version=__version__)
+    voice_router, voice_sessions = build_voice_session_router(lifecycle)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        # Release every open voice session (and its mic/turn state) on shutdown.
+        await voice_sessions.close_all()
+
+    app = FastAPI(title="REVA Core", version=__version__, lifespan=lifespan)
     app.include_router(build_router(lifecycle))
     app.include_router(build_domains_router(lifecycle))
     app.include_router(build_devices_router(lifecycle))
+    app.include_router(voice_router)
+    app.state.voice_sessions = voice_sessions
 
     @app.get("/health")
     def health() -> dict[str, Any]:

@@ -19,12 +19,13 @@ from reva_core.domains.service import DomainService
 from reva_core.gateway.manager import GatewayManager
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
-from reva_core.models.chatterbox_tts import ChatterboxWorkerTTSProvider
 from reva_core.models.embedding import EmbeddingProvider
 from reva_core.models.embedding_providers import OllamaEmbeddingProvider
 from reva_core.models.faster_whisper_stt import FasterWhisperSTTProvider
 from reva_core.models.stt import SpeechToTextProvider
 from reva_core.models.tts import TextToSpeechProvider
+from reva_core.providers.registry import ProviderKind
+from reva_core.providers.tts import RegistryTTS, build_tts_registry
 from reva_core.security.local_token import ensure_local_token
 from reva_core.shared.contracts.health import CoreStatus, HealthStatus
 from reva_core.shared.errors import StorageError
@@ -155,20 +156,14 @@ class CoreLifecycle:
     def _build_text_to_speech_provider(self) -> None:
         if self._text_to_speech_provider is not None or not self._settings.tts_enabled:
             return
-        if self._settings.tts_python is None or self._settings.tts_reference_wav is None:
-            logger.warning("tts is enabled but python/reference configuration is incomplete")
-            return
         output_dir = Path(tempfile.gettempdir()) / f"reva-tts-{new_id()}"
-        self._text_to_speech_provider = ChatterboxWorkerTTSProvider(
-            python_exe=self._settings.tts_python,
-            reference_wav=self._settings.tts_reference_wav,
-            model_id=self._settings.tts_model_id,
-            device=self._settings.tts_device,
-            output_dir=output_dir,
-            default_language=self._settings.tts_default_language,
-            ready_timeout_seconds=self._settings.tts_ready_timeout_seconds,
-            synthesis_timeout_seconds=self._settings.tts_synthesis_timeout_seconds,
-        )
+        registry = build_tts_registry(self._settings, output_dir)
+        if not registry.names(ProviderKind.TTS):
+            logger.warning("tts is enabled but no TTS provider is fully configured")
+            return
+        # Voice selection and manifest verification happen on first use, so a
+        # large model never delays Core becoming healthy.
+        self._text_to_speech_provider = RegistryTTS(registry, preferred=self._settings.tts_provider)
 
     def _build_speech_to_text_provider(self) -> None:
         if self._speech_to_text_provider is not None:
