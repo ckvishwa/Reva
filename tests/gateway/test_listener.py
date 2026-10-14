@@ -6,9 +6,12 @@ allowlist, never the Core API), AR-DATA-002 (TLS).
 
 from __future__ import annotations
 
+import http.client
 import socket
+import ssl
 import sys
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -247,3 +250,24 @@ def test_gateway_keys_round_trip_through_the_real_credential_manager_with_a_thro
         provider.delete_key("tls")
         provider.delete_key("device")
     assert provider.load_key("tls") is None and provider.load_key("device") is None
+
+
+def test_an_idle_connection_survives_past_the_servers_old_five_second_timeout(env: Env) -> None:
+    """uvicorn closes idle keep-alive connections after 5 s by default. A client that reuses its
+    pooled connection right then sends into a closing socket and sees "response ended
+    prematurely". The gateway keeps idle connections longer than any pause between a phone's
+    requests in one pairing."""
+    env.enable()
+    port = env.manager.status()["port"]
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE  # the pin is tested elsewhere; this is about the socket
+    connection = http.client.HTTPSConnection("127.0.0.1", port, timeout=10, context=context)
+    try:
+        connection.request("POST", "/nothing-here", body=b"{}")
+        assert connection.getresponse().read() is not None
+        time.sleep(5.6)
+        connection.request("POST", "/nothing-here", body=b"{}")  # same connection, reused
+        assert connection.getresponse().status == 404
+    finally:
+        connection.close()

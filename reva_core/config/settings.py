@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # on). `gateway_host` None = the machine's LAN address; the Core API above stays on loopback.
     gateway_host: str | None = None
     gateway_port: int = Field(default=47821, ge=0, le=65535)
+    # A file the gateway appends one timing line per request to (ids, connection, status, phase
+    # times; never headers or bodies). For diagnosing stalls and dropped connections. None = off.
+    gateway_trace: Path | None = None
 
     # Placeholder for a future real provider credential. Never a real key in
     # Phase 0 — no provider integration exists yet. Documented future path:
