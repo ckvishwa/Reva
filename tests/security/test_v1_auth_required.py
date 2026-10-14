@@ -11,6 +11,7 @@ import pytest
         ("get", "/v1/memories", {"params": {"q": "hi"}}),
         ("get", "/v1/audit-events", {}),
         ("get", "/v1/devices", {}),
+        ("get", "/v1/domains/changes", {}),
         ("patch", "/v1/devices/gateway", {"json": {"enabled": True}}),
         ("post", "/v1/devices/pairing", {}),
         ("post", "/v1/devices/pairing/approve", {"json": {"fingerprint": "123456"}}),

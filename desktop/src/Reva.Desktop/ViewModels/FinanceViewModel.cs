@@ -197,11 +197,13 @@ public sealed class FinanceViewModel : ObservableObject
         }
     }
 
-    /// <summary>Loads everything on the page. Safe to call again; the newest call wins.</summary>
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    /// <summary>Loads everything on the page. Safe to call again; the newest call wins.
+    /// <paramref name="showLoading"/> is false for a background reload (a sync changed the data), so
+    /// the page does not flash its progress ring.</summary>
+    public async Task RefreshAsync(CancellationToken cancellationToken = default, bool showLoading = true)
     {
         var generation = Interlocked.Increment(ref _refreshGeneration);
-        IsLoading = true;
+        IsLoading = showLoading;
         try
         {
             var balances = _api.GetBalancesAsync(cancellationToken);

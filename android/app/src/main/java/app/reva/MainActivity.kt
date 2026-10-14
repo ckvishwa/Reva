@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
                     versionName = BuildConfig.VERSION_NAME,
                     onShare = { format, bytes -> ExportShare.share(this, format, bytes) },
                     sync = container.syncService,
+                    autoSync = container.autoSync,
                 )
             }
         }

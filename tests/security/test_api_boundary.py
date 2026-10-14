@@ -23,6 +23,7 @@ _ALLOWED_PATHS = {
     "/v1/voice/speech",
     "/v1/voice/transcriptions",
     "/v1/domains",
+    "/v1/domains/changes",
     "/v1/domains/{domain}/export",
     "/v1/domains/{domain}/privacy",
     "/v1/domains/finance/conflicts",

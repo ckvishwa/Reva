@@ -476,13 +476,13 @@ public class DevicesViewModelTests
         var first = vm.Devices[0];
         Assert.Equal("Active", first.StatusText);
         Assert.Equal("Finance only", first.ScopesText);
-        Assert.Equal("Last seen 5 min ago", first.LastSeenText);
+        Assert.Equal("Synced 5 min ago", first.LastSeenText);
         Assert.Equal("cccc cccc cccc cccc", first.FingerprintText);
         Assert.Equal("Paired 1 h ago", first.PairedText);
         Assert.Equal("Never synced", vm.Devices[1].LastSeenText);
         Assert.Equal("Revoked", vm.Devices[2].StatusText);
         Assert.StartsWith("Revoked 30 min ago", vm.Devices[2].LastSeenText);
-        Assert.Equal("Pixel 8, Active, Finance only, Last seen 5 min ago", first.AccessibleName);
+        Assert.Equal("Pixel 8, Active, Finance only, Synced 5 min ago", first.AccessibleName);
     }
 
     [Fact]
