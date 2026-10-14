@@ -37,6 +37,12 @@ dev = [
     "pre-commit>=3.7,<4",
     "jsonschema>=4.22,<5",
 ]
+# Optional Silero VAD backend for turn endpointing (reva_core/voice/endpointing.py). It pulls in torch, so it
+# is not a base dependency; without it the dependency-free EnergyVad is used.
+vad = [
+    "silero-vad==6.2.3",
+    "numpy",
+]
 
 [tool.setuptools.packages.find]
 include = ["reva_core*"]
@@ -85,4 +91,9 @@ exclude = "useful_sites"
 
 [[tool.mypy.overrides]]
 module = "uvicorn.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional VAD backend (the "vad" extra); imported lazily in reva_core/voice/endpointing.py.
+module = "silero_vad.*"
 ignore_missing_imports = true

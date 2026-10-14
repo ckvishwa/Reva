@@ -1,0 +1,92 @@
+{
+  "two_turns.wav": {
+    "duration_ms": 5080,
+    "layout": [
+      {
+        "label": "silence",
+        "start_ms": 0,
+        "end_ms": 500
+      },
+      {
+        "label": "add",
+        "start_ms": 500,
+        "end_ms": 1940
+      },
+      {
+        "label": "pause",
+        "start_ms": 1940,
+        "end_ms": 2740
+      },
+      {
+        "label": "actually",
+        "start_ms": 2740,
+        "end_ms": 4080
+      },
+      {
+        "label": "silence",
+        "start_ms": 4080,
+        "end_ms": 5080
+      }
+    ]
+  },
+  "short_pause_inside.wav": {
+    "duration_ms": 3230,
+    "layout": [
+      {
+        "label": "silence",
+        "start_ms": 0,
+        "end_ms": 400
+      },
+      {
+        "label": "first_half",
+        "start_ms": 400,
+        "end_ms": 1460
+      },
+      {
+        "label": "pause",
+        "start_ms": 1460,
+        "end_ms": 1610
+      },
+      {
+        "label": "second_half",
+        "start_ms": 1610,
+        "end_ms": 2230
+      },
+      {
+        "label": "silence",
+        "start_ms": 2230,
+        "end_ms": 3230
+      }
+    ]
+  },
+  "single_with_margins.wav": {
+    "duration_ms": 3060,
+    "layout": [
+      {
+        "label": "silence",
+        "start_ms": 0,
+        "end_ms": 600
+      },
+      {
+        "label": "budget",
+        "start_ms": 600,
+        "end_ms": 1860
+      },
+      {
+        "label": "silence",
+        "start_ms": 1860,
+        "end_ms": 3060
+      }
+    ]
+  },
+  "quiet_room.wav": {
+    "duration_ms": 2000,
+    "layout": [
+      {
+        "label": "hiss_-60dBFS",
+        "start_ms": 0,
+        "end_ms": 2000
+      }
+    ]
+  }
+}

@@ -7,7 +7,9 @@ Three guarantees this module owns:
   config, model and voice files match `assets.manifest.json`. A mismatch
   raises `AssetVerificationError`; the registry then falls back.
 * **Epoch-gated audio** (AR-VA-004). Chunks carry the `turn_epoch` they were
-  requested under. After `stop(turn_epoch=n)` returns, nothing older than `n`
+  requested under. Epochs are kept per *scope* (a voice session's id), because each session
+  numbers its own turns from 0; calls without a scope share the scope "". After
+  `stop(turn_epoch=n, scope=s)` returns, nothing older than `n` in scope `s`
   is delivered, and the worker has either acknowledged the stop or been killed,
   so a new request never overlaps the old one.
 * **No orphans.** Workers are covered by a kill-on-close job object and are
@@ -61,6 +63,7 @@ class _Stream:
     epoch: int
     request_id: str
     worker: SupervisedWorker
+    scope: str = ""
     queue: asyncio.Queue[dict[str, Any]] = field(default_factory=asyncio.Queue)
     cancelled: bool = False
     worker_done: asyncio.Event = field(default_factory=asyncio.Event)
@@ -100,7 +103,7 @@ class KokoroSpeechProvider:
         self._worker: SupervisedWorker | None = None
         self._pump_task: asyncio.Task[None] | None = None
         self._active: _Stream | None = None
-        self._epoch = 0
+        self._epochs: dict[str, int] = {}
         self._ready_lock = asyncio.Lock()
         self._begin_lock = asyncio.Lock()
         self._legacy_lock = asyncio.Lock()
@@ -119,22 +122,22 @@ class KokoroSpeechProvider:
     # ------------------------------------------------------------------- speak
 
     async def speak(
-        self, text: str, *, language: str, turn_epoch: int
+        self, text: str, *, language: str, turn_epoch: int, scope: str = ""
     ) -> AsyncIterator[SpeechChunk]:
         clean = _validate_text(text)
         lang = _validate_language(language)
-        stream = await self._begin(clean, lang, turn_epoch)
+        stream = await self._begin(clean, lang, turn_epoch, scope)
         if stream is None:
             return
         index_seen = False
         try:
             while True:
-                if stream.cancelled or stream.epoch != self._epoch:
+                if stream.cancelled or stream.epoch != self._epoch_of(stream.scope):
                     return
                 message = await self._next(stream)
                 status = message.get("status")
                 if status == "chunk":
-                    if stream.cancelled or stream.epoch != self._epoch:
+                    if stream.cancelled or stream.epoch != self._epoch_of(stream.scope):
                         _delete_quietly(message.get("output_path"))
                         return
                     chunk = self._to_chunk(message, stream.epoch, lang)
@@ -153,10 +156,13 @@ class KokoroSpeechProvider:
         finally:
             self._finish(stream, had_audio=index_seen)
 
-    async def stop(self, *, turn_epoch: int) -> None:
-        """Invalidate everything older than `turn_epoch` and silence the worker."""
-        self._epoch = max(self._epoch, turn_epoch)
-        await self._cancel_active()
+    async def stop(self, *, turn_epoch: int, scope: str = "") -> None:
+        """Invalidate everything in `scope` older than `turn_epoch` and silence that scope's speech.
+
+        Another scope's speech is not touched: one session cannot interrupt another.
+        """
+        self._epochs[scope] = max(self._epoch_of(scope), turn_epoch)
+        await self._cancel_active(scope)
 
     async def synthesize(self, text: str, language: str) -> SynthesizedAudio:
         """Legacy `/v1/voice/speech` shape: join every chunk into one WAV."""
@@ -164,7 +170,9 @@ class KokoroSpeechProvider:
             paths: list[Path] = []
             saw_final = False
             try:
-                async for chunk in self.speak(text, language=language, turn_epoch=self._epoch):
+                async for chunk in self.speak(
+                    text, language=language, turn_epoch=self._epoch_of("")
+                ):
                     paths.append(chunk.path)
                     saw_final = chunk.final
                 if not saw_final:
@@ -200,22 +208,28 @@ class KokoroSpeechProvider:
 
     # ---------------------------------------------------------------- internals
 
-    async def _begin(self, text: str, language: str, turn_epoch: int) -> _Stream | None:
-        if turn_epoch < self._epoch:
+    def _epoch_of(self, scope: str) -> int:
+        return self._epochs.get(scope, 0)
+
+    async def _begin(
+        self, text: str, language: str, turn_epoch: int, scope: str = ""
+    ) -> _Stream | None:
+        if turn_epoch < self._epoch_of(scope):
             logger.info("stale speak ignored")
             return None
         async with self._begin_lock:
-            if turn_epoch < self._epoch:
+            if turn_epoch < self._epoch_of(scope):
                 return None
-            if turn_epoch > self._epoch:
-                self._epoch = turn_epoch
-                await self._cancel_active()
-            else:
-                await self._wait_for_previous()
+            if turn_epoch > self._epoch_of(scope):
+                self._epochs[scope] = turn_epoch
+                # A newer turn cancels this scope's older speech; another scope's is left to finish.
+                await self._cancel_active(scope)
+            # One audio producer: whatever is still speaking (any scope) finishes first.
+            await self._wait_for_previous()
             worker = await self._ensure_ready()
-            if turn_epoch != self._epoch:
+            if turn_epoch != self._epoch_of(scope):
                 return None
-            stream = _Stream(epoch=turn_epoch, request_id=new_id(), worker=worker)
+            stream = _Stream(epoch=turn_epoch, request_id=new_id(), worker=worker, scope=scope)
             self._active = stream
             try:
                 await worker.send(
@@ -242,9 +256,9 @@ class KokoroSpeechProvider:
         except TimeoutError:
             self._kill(previous.worker)
 
-    async def _cancel_active(self) -> None:
+    async def _cancel_active(self, scope: str) -> None:
         stream = self._active
-        if stream is None or stream.worker_done.is_set():
+        if stream is None or stream.worker_done.is_set() or stream.scope != scope:
             return
         stream.cancelled = True
         try:
@@ -272,7 +286,7 @@ class KokoroSpeechProvider:
 
     async def _cancel_stream(self, stream: _Stream) -> None:
         if self._active is stream:
-            await self._cancel_active()
+            await self._cancel_active(stream.scope)
 
     async def _next(self, stream: _Stream) -> dict[str, Any]:
         try:
@@ -399,7 +413,7 @@ class KokoroSpeechProvider:
             if status == "chunk":
                 _delete_quietly(message.get("output_path"))
             return
-        if status == "chunk" and (stream.cancelled or stream.epoch != self._epoch):
+        if status == "chunk" and (stream.cancelled or stream.epoch != self._epoch_of(stream.scope)):
             _delete_quietly(message.get("output_path"))
             return
         stream.queue.put_nowait(message)
