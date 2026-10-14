@@ -95,6 +95,23 @@ class Settings(BaseSettings):
     tts_ready_timeout_seconds: float = 60.0
     tts_synthesis_timeout_seconds: float = 120.0
 
+    # Voice assets live outside git under one root, described by
+    # `assets.manifest.json` (AR-VA-020). A voice loads only if its files
+    # match that manifest. No hard-coded drive path anywhere in code.
+    asset_root: Path | None = None
+    asset_manifest: Path | None = None
+    # Kokoro `af_heart` is the default TTS voice until Revi passes the voice
+    # gate (ARD-400 §2). It runs under its own interpreter, like Chatterbox.
+    tts_provider: Literal["kokoro", "chatterbox"] = "kokoro"
+    kokoro_python: Path | None = None
+    kokoro_voice: str = "af_heart"
+    kokoro_device: str = "cpu"
+    kokoro_config_asset_id: str = "models.tts.kokoro-82m.config"
+    kokoro_model_asset_id: str = "models.tts.kokoro-82m.model"
+    kokoro_voice_asset_id: str = "models.tts.kokoro-82m.voice.af_heart"
+    # How long a worker gets to acknowledge a stop before it is killed.
+    tts_stop_ack_timeout_seconds: float = 0.2
+
     # Speech-to-text defaults are intentionally CPU-first for Slice 7 so
     # STT does not contend with Ollama/Chatterbox on a 4 GB GPU.
     stt_model: str = "Systran/faster-whisper-small"
@@ -107,6 +124,15 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return self.data_dir / "reva.db"
+
+    @property
+    def asset_manifest_path(self) -> Path | None:
+        """The manifest file: explicit setting, else `<asset_root>/assets.manifest.json`."""
+        if self.asset_manifest is not None:
+            return self.asset_manifest
+        if self.asset_root is not None:
+            return self.asset_root / "assets.manifest.json"
+        return None
 
 
 def load_settings(**overrides: object) -> Settings:

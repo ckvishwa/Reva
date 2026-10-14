@@ -40,6 +40,9 @@ _ALLOWED_PATHS = {
     "/v1/devices/pairing/approve",
     "/v1/devices/pairing/deny",
     "/v1/devices/{device_id}/revoke",
+    "/v1/voice/sessions",
+    "/v1/voice/sessions/{session_id}",
+    "/v1/voice/sessions/{session_id}/events",
 }
 
 
