@@ -129,21 +129,34 @@ class SpeakerSink:
         self._after_silence = False
         self._armed = True
         self._stream: Any = None
+        self.host_api: str | None = None
         self.overlap_events = 0
         self.first_audible_at: float | None = None
         self.silence_at: float | None = None
         self.completed_at: float | None = None
         self.resumed_frames = 0
 
+    def _host_api(self) -> str:
+        sd = self._sd
+        index = self._device if self._device is not None else sd.default.device[1]
+        return str(sd.query_hostapis(sd.query_devices(index)["hostapi"])["name"])
+
     def start(self) -> None:
-        self._stream = self._sd.RawOutputStream(
+        sd = self._sd
+        # WASAPI shared mode runs at the device's mix rate; let PortAudio convert from 24 kHz.
+        extra = (
+            sd.WasapiSettings(auto_convert=True) if self._host_api() == "Windows WASAPI" else None
+        )
+        self._stream = sd.RawOutputStream(
             samplerate=SAMPLE_RATE,
             channels=1,
             dtype="int16",
             device=self._device,
             latency="low",
+            extra_settings=extra,
             callback=self._callback,
         )
+        self.host_api = self._host_api()
         self._stream.start()
 
     def close(self) -> None:
@@ -418,6 +431,8 @@ async def main_async(args: argparse.Namespace) -> int:
         "runs": args.runs,
         "sink": sink.name,
         "gain": args.gain if sink.name == "speaker" else None,
+        "audio_api": getattr(sink, "host_api", None),
+        "device": args.device,
         "host": platform.platform(),
         "python": sys.version.split()[0],
         "provider": "kokoro af_heart (Kokoro-82M v1.0) via build_tts_registry/RegistryTTS",
