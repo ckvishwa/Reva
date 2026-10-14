@@ -27,13 +27,17 @@ from reva_core.gateway.identity import GatewayIdentity
 from reva_core.gateway.pairing import PairingError, PairingManager
 from reva_core.gateway.service import GatewayError, GatewayService
 from reva_core.gateway.store import Grant
+from reva_core.gateway.trace import TraceMiddleware
 
 MAX_BODY_BYTES = 9 * 1024 * 1024
 MAX_PAIRING_BODY_BYTES = 16 * 1024  # unauthenticated callers get a small buffer
 
 
 def build_gateway_app(
-    service: GatewayService, pairing: PairingManager, identity: GatewayIdentity
+    service: GatewayService,
+    pairing: PairingManager,
+    identity: GatewayIdentity,
+    trace_sink: Callable[[str], None] | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="REVA pairing gateway",
@@ -42,6 +46,8 @@ def build_gateway_app(
         openapi_url=None,
         redirect_slashes=False,  # /sync/push/ is not /sync/push: no redirects, no near-misses
     )
+    if trace_sink is not None:  # diagnostics only: ids and timings, never headers or bodies
+        app.add_middleware(TraceMiddleware, sink=trace_sink)
 
     def remote_of(request: Request) -> str:
         return request.client.host if request.client else "unknown"
@@ -170,6 +176,7 @@ def build_gateway_app(
 
     @app.exception_handler(GatewayError)
     async def gateway_error(request: Request, exc: GatewayError) -> JSONResponse:
+        request.state.reason = exc.code  # read by the optional trace; the client gets the same code
         return plain(exc.status, {"error": exc.code})
 
     @app.exception_handler(StarletteHTTPException)

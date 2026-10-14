@@ -18,6 +18,11 @@ from reva_core.gateway.identity import GatewayIdentity
 
 _START_ATTEMPTS = 3
 _START_WAIT_SECONDS = 6.0
+# uvicorn closes an idle keep-alive connection after 5 s. A client that reuses its pooled
+# connection at about that moment sends into a closing socket and fails with "response ended
+# prematurely". Phones pause longer than 5 s between the requests of one pairing, so keep idle
+# connections well past that, but not so long that idle sockets pile up.
+_KEEP_ALIVE_SECONDS = 30
 
 
 class GatewayListenError(RuntimeError):
@@ -94,6 +99,7 @@ class GatewayServer:
             date_header=False,
             access_log=False,
             lifespan="off",
+            timeout_keep_alive=_KEEP_ALIVE_SECONDS,
         )
         server = uvicorn.Server(config)
         errors: list[BaseException] = []

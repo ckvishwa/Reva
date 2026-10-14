@@ -28,6 +28,7 @@ from reva_core.gateway.pairing import DEFAULT_TTL_SECONDS, PairingError, Pairing
 from reva_core.gateway.server import GatewayListenError, GatewayServer, detect_lan_address
 from reva_core.gateway.service import GatewayService
 from reva_core.gateway.store import Grant, GrantStore
+from reva_core.gateway.trace import FileTraceSink
 from reva_core.shared.logging import get_logger
 
 logger = get_logger("gateway")
@@ -205,7 +206,10 @@ class GatewayManager:
                 ttl_seconds=self._pairing_ttl,
                 now=lambda: self._now(),
             )
-            app = build_gateway_app(self._service, pairing, identity)
+            trace = self._settings.gateway_trace
+            app = build_gateway_app(
+                self._service, pairing, identity, FileTraceSink(trace) if trace else None
+            )
             server = GatewayServer(app, identity, self._dir / "tls")
             server.start(host, self._settings.gateway_port)
             self._pairing, self._server = pairing, server
