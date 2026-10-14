@@ -92,5 +92,6 @@ public partial class App : Application
         // the equivalent one-shot health check in Slice 3.
         await lifecycle.StartAsync();
         await today.RefreshAsync();
+        ((MainWindow)_window).StartRefreshOnChanges(financeApi);
     }
 }

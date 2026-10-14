@@ -12,7 +12,7 @@ namespace Reva.Desktop.Finance;
 /// shared <see cref="HttpClient"/> and local-token provider as <see cref="RevaCoreClient"/>. Every
 /// failure is normalised to a <see cref="FinanceError"/>; nothing else reaches the view models.
 /// </summary>
-public sealed class FinanceApiClient : IFinanceApi
+public sealed class FinanceApiClient : IFinanceApi, IDomainChangesApi
 {
     private const string Base = "v1/domains/finance";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -219,6 +219,24 @@ public sealed class FinanceApiClient : IFinanceApi
 
     private static FinanceResult<IReadOnlyList<T>> Rows<T>(FinanceResult<FinanceReportResponse<T>> result) =>
         Unwrap(result, r => r.Rows);
+
+    public async Task<FinanceResult<DomainChange>> WaitForChangeAsync(
+        string domain, long? since, TimeSpan wait, CancellationToken ct = default)
+    {
+        // Core never waits longer than 30 s; the client timeout leaves room for the answer to arrive.
+        var seconds = (int)Math.Clamp(Math.Ceiling(wait.TotalSeconds), 0, 30);
+        var path = $"v1/domains/changes?domain={Uri.EscapeDataString(domain)}&timeout={seconds}";
+        if (since is { } baseline)
+        {
+            path += $"&since={baseline}";
+        }
+
+        var result = await SendAsync<ChangesResponse>(
+            HttpMethod.Get, path, null, TimeSpan.FromSeconds(seconds + 10), ct).ConfigureAwait(false);
+        return Unwrap(result, r => new DomainChange(r.Domain, r.Counter, r.Changed));
+    }
+
+    private sealed record ChangesResponse(string Domain, long Counter, bool Changed);
 
     private static FinanceResult<TOut> Unwrap<TIn, TOut>(FinanceResult<TIn> result, Func<TIn, TOut> select) =>
         result.IsSuccess ? FinanceResult<TOut>.Success(select(result.Value!)) : FinanceResult<TOut>.Failure(result.Error!);
