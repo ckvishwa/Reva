@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from reva_core.session.ack import ACK_AFTER_SECONDS, ack_text
 from reva_core.session.events import (
     EventSubscription,
     SessionErrorCode,
@@ -37,6 +38,8 @@ logger = get_logger("session")
 
 # (session id, turn_epoch): epochs are per session, so the hook says whose speech to stop.
 StopSpeaking = Callable[[str, int], Awaitable[None]]
+# (session id, turn_epoch, text): play a short acknowledgement. S07 plays it through TTS.
+SpeakAck = Callable[[str, int, str], Awaitable[None]]
 
 _HISTORY_SIZE = 64
 _NEW_TURN_FROM = frozenset(
@@ -107,6 +110,8 @@ class VoiceSession:
         deadlines: DeadlineConfig,
         stop_speaking: StopSpeaking | None,
         clock: Callable[[], float],
+        speak_ack: SpeakAck | None = None,
+        ack_delay: float = ACK_AFTER_SECONDS,
     ) -> None:
         self.id = session_id
         self.device_id = device_id
@@ -124,6 +129,11 @@ class VoiceSession:
         self._subscribers: list[EventSubscription] = []
         self._epoch_changed: asyncio.Future[None] | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._speak_ack = speak_ack
+        self._ack_delay = ack_delay
+        self._ack_task: asyncio.Task[None] | None = None
+        self._ack_active = False
+        self.turn_number = 0
         self._emit_state(previous=None, reason=None)
 
     # ------------------------------------------------------------ subscriptions
@@ -173,6 +183,7 @@ class VoiceSession:
         was_speaking = self.state == SessionState.SPEAKING
         self._bump_epoch()
         await self._silence()
+        self._end_ack("interrupt")
         if was_speaking:
             self._emit(SessionEventKind.TTS_STOPPED, {"reason": "interrupt"})
         self._enter(SessionState.LISTENING, "interrupt", new_turn=True)
@@ -183,6 +194,7 @@ class VoiceSession:
         self._bump_epoch()
         self._enter(SessionState.CANCELLING, "cancel")
         await self._silence()
+        self._end_ack("cancel")
         self._enter(SessionState.IDLE, "cancel")
 
     async def close(self) -> None:
@@ -220,6 +232,46 @@ class VoiceSession:
         task.cancel()
         await self._fail(SessionErrorCode(f"{stage.value.upper()}_TIMEOUT"))
         return StageResult(applied=False, reason="timeout")
+
+    async def run_stage_with_ack[T](
+        self, fn: Callable[[], Awaitable[T]], *, fast_path: bool = False
+    ) -> StageResult[T]:
+        """Run the model stage; if it takes longer than the budget, play a neutral acknowledgement.
+
+        Skipped for fast-path turns. The acknowledgement is dropped if the answer arrives first or
+        the turn is superseded before the budget runs out, and stopped by a barge-in while it plays.
+        """
+        ack = None
+        if not fast_path:
+            ack = asyncio.get_running_loop().create_task(self._ack_after(self.turn_epoch))
+            self._ack_task = ack
+        try:
+            return await self.run_stage(Stage.MODEL, fn)
+        finally:
+            if ack is not None and not ack.done():
+                ack.cancel()  # the answer (or a failure) came inside the budget
+            self._ack_active = False
+
+    async def _ack_after(self, epoch: int) -> None:
+        await asyncio.sleep(self._ack_delay)
+        if self.turn_epoch != epoch or self.state != SessionState.REASONING:
+            return
+        text = ack_text(self.turn_number)
+        self._timings.mark("ack_ms")
+        self._ack_active = True
+        self._emit(SessionEventKind.TTS_STARTED, {"purpose": "ack", "text": text})
+        if self._speak_ack is not None:
+            try:
+                await self._speak_ack(self.id, epoch, text)
+            except Exception:
+                logger.warning("acknowledgement could not be played", exc_info=True)
+
+    def _end_ack(self, reason: str) -> None:
+        if self._ack_task is not None and not self._ack_task.done():
+            self._ack_task.cancel()
+        if self._ack_active:
+            self._ack_active = False
+            self._emit(SessionEventKind.TTS_STOPPED, {"purpose": "ack", "reason": reason})
 
     async def emit_partial_transcript(self, text: str) -> None:
         """Display-only. A partial never reaches NLU or triggers an action."""
@@ -276,6 +328,7 @@ class VoiceSession:
             {"code": code.value, "recoverable": recoverable, "stage": stage},
         )
         await self._silence()
+        self._end_ack("error")
         if recoverable:
             self._enter(SessionState.IDLE, code.value)
 
@@ -284,6 +337,7 @@ class VoiceSession:
         self.state = target
         if target == SessionState.LISTENING and (new_turn or previous in _NEW_TURN_FROM):
             self.turn_id = new_id()
+            self.turn_number += 1
             self._timings = _TurnTimings(self._clock)
         self._emit_state(previous=previous, reason=reason)
 
@@ -330,11 +384,15 @@ class SessionCoordinator:
         deadlines: DeadlineConfig | None = None,
         stop_speaking: StopSpeaking | None = None,
         clock: Callable[[], float] = time.monotonic,
+        speak_ack: SpeakAck | None = None,
+        ack_delay_seconds: float = ACK_AFTER_SECONDS,
     ) -> None:
         self._max_sessions = max_sessions
         self._deadlines = deadlines or DeadlineConfig()
         self._stop_speaking = stop_speaking
         self._clock = clock
+        self._speak_ack = speak_ack
+        self._ack_delay = ack_delay_seconds
         self._sessions: dict[str, VoiceSession] = {}
 
     @property
@@ -350,6 +408,8 @@ class SessionCoordinator:
             deadlines=self._deadlines,
             stop_speaking=self._stop_speaking,
             clock=self._clock,
+            speak_ack=self._speak_ack,
+            ack_delay=self._ack_delay,
         )
         self._sessions[session.id] = session
         return session
