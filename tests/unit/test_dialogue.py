@@ -308,3 +308,15 @@ def test_no_temp_files_are_left_behind(tmp_path: Path) -> None:
         dialogue.accept_proposal(f"act-{index}")
 
     assert [p.suffix for p in (tmp_path / "dialogue").iterdir()] == [".json"]
+
+
+def test_what_expired_is_removed_from_disk_when_the_state_is_resumed(tmp_path: Path) -> None:
+    store = FileDialogueStore(tmp_path / "dialogue")
+    clock = Clock()
+    tracker(store, clock).accept_proposal("act-1", [tx("tx-1", "Dentist 240.00")])
+
+    clock.advance(minutes=45)
+    tracker(store, clock)  # resuming drops the stale reference and rewrites the file
+
+    (path,) = list((tmp_path / "dialogue").glob("*.json"))
+    assert "Dentist" not in path.read_text(encoding="utf-8")

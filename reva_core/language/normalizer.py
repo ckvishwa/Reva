@@ -35,6 +35,11 @@ from reva_core.language.numbers import (
 
 UNROUTED_INTENT = "unrouted.pending"
 MAX_CANDIDATES = 5
+# A spoken turn is a few sentences. Past this much text nothing more is read, so a hostile or
+# runaway transcript costs only a bounded scan; the transcript itself is never altered.
+MAX_SCAN_CHARS = 2000
+# Larger sums are not something said aloud; they would also overflow the Kernel's minor units.
+MAX_MONEY = Decimal(10) ** 12
 
 WEEKDAYS = {
     "monday": 0,
@@ -405,6 +410,8 @@ class _Scanner:
         return tok.value / 100, end
 
     def _money_tv(self, toks: list[Tok], amount: Decimal, currency: str) -> TypedValue:
+        if amount >= MAX_MONEY:
+            raise ValueError("amount out of range")
         return TypedValue(
             "money",
             _phrase(self.text, toks),
@@ -905,7 +912,7 @@ def normalize(transcript: str, *, now: datetime, language: str = "en") -> Normal
     """Typed values found in `transcript`, relative to the aware datetime `now`."""
     if now.tzinfo is None:
         raise ValueError("normalize needs a timezone-aware 'now' (the device clock and zone)")
-    text = _prepare(transcript)
+    text = _prepare(transcript[:MAX_SCAN_CHARS])
     cleaned, removed = clean_fillers(text)
     toks = tokenize(cleaned)
     scanner = _Scanner(cleaned, toks, now)
@@ -922,7 +929,10 @@ def normalize(transcript: str, *, now: datetime, language: str = "en") -> Normal
     )
     while i < len(toks):
         for recognize in recognizers:
-            hit = recognize(i)
+            try:
+                hit = recognize(i)
+            except (ValueError, ArithmeticError):
+                hit = None  # an out-of-range value is not a value
             if hit is not None:
                 typed, after = hit
                 found.append(typed)

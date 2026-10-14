@@ -81,6 +81,9 @@ class NullSink:
         self._last_epoch: int | None = None
         self._queued = False
         self.first_audible_at: float | None = None
+        self.first_enqueued_at: float | None = None
+        self.first_callback_at: float | None = None
+        self.first_dac_offset: float | None = None
         self.silence_at: float | None = None
         self.completed_at: float | None = None
         self.resumed_frames = 0
@@ -93,9 +96,12 @@ class NullSink:
 
     def arm(self) -> None:
         self.first_audible_at = self.silence_at = self.completed_at = None
+        self.first_enqueued_at = self.first_callback_at = self.first_dac_offset = None
         self.resumed_frames = 0
 
     def enqueue(self, pcm: bytes, epoch: int, *, final: bool) -> None:
+        if self.first_enqueued_at is None:
+            self.first_enqueued_at = mono()
         if self._queued and self._last_epoch not in (None, epoch):
             self.overlap_events += 1
         self._last_epoch, self._queued = epoch, not final
@@ -132,6 +138,9 @@ class SpeakerSink:
         self.host_api: str | None = None
         self.overlap_events = 0
         self.first_audible_at: float | None = None
+        self.first_enqueued_at: float | None = None
+        self.first_callback_at: float | None = None
+        self.first_dac_offset: float | None = None
         self.silence_at: float | None = None
         self.completed_at: float | None = None
         self.resumed_frames = 0
@@ -172,10 +181,13 @@ class SpeakerSink:
             self._flush_pending = False
             self._final_queued = False
             self.first_audible_at = self.silence_at = self.completed_at = None
+            self.first_enqueued_at = self.first_callback_at = self.first_dac_offset = None
             self.resumed_frames = 0
 
     def enqueue(self, pcm: bytes, epoch: int, *, final: bool) -> None:
         with self._lock:
+            if self.first_enqueued_at is None:
+                self.first_enqueued_at = mono()
             if self._buffer and self._last_epoch not in (None, epoch):
                 self.overlap_events += 1
             self._last_epoch = epoch
@@ -203,6 +215,8 @@ class SpeakerSink:
                 if self._armed:
                     self._armed = False
                     self.first_audible_at = now + dac_offset
+                    self.first_callback_at = now
+                    self.first_dac_offset = dac_offset
                 if self._after_silence:
                     self.resumed_frames += len(data) // 2
                 if not self._buffer and self._final_queued and self.completed_at is None:
@@ -287,6 +301,11 @@ async def utter(
         "text_ready_to_dispatch_ms": ms(text_ready, dispatched),
         "first_audio_generated_ms": ms(text_ready, first_generated),
         "first_audible_after_text_ms": ms(text_ready, sink.first_audible_at),
+        "generated_to_enqueued_ms": ms(first_generated, sink.first_enqueued_at),
+        "enqueued_to_callback_ms": ms(sink.first_enqueued_at, sink.first_callback_at),
+        "device_latency_ms": (
+            None if sink.first_dac_offset is None else sink.first_dac_offset * 1000.0
+        ),
         "synthesis_ms": synthesis_ms,
         "audio_seconds": audio_seconds,
         "real_time_factor": (synthesis_ms / 1000.0) / audio_seconds if audio_seconds else None,

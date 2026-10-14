@@ -69,6 +69,9 @@ def write_artifacts(
     speak_metrics = [
         "first_audio_generated_ms",
         "first_audible_after_text_ms",
+        "generated_to_enqueued_ms",
+        "enqueued_to_callback_ms",
+        "device_latency_ms",
         "synthesis_ms",
         "audio_seconds",
         "real_time_factor",
