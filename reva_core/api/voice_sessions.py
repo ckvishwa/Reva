@@ -41,6 +41,8 @@ logger = get_logger("api.voice_sessions")
 
 _BEARER_PREFIX = "Bearer "
 _WS_POLICY_VIOLATION = 1008
+# Control messages are tiny JSON objects; anything bigger is refused before it is parsed.
+_MAX_CONTROL_CHARS = 4096
 
 
 class VoiceSessionRequest(BaseModel):
@@ -149,7 +151,11 @@ def _authenticated(lifecycle: CoreLifecycle, websocket: WebSocket) -> bool:
     if not header or not header.startswith(_BEARER_PREFIX):
         return False
     provided = header[len(_BEARER_PREFIX) :].strip()
-    return bool(provided) and hmac.compare_digest(provided, lifecycle.local_token)
+    # Compare bytes: `hmac.compare_digest` raises TypeError for a str with non-ASCII characters,
+    # which a client controls through the header, and that would skip the audit record.
+    return bool(provided) and hmac.compare_digest(
+        provided.encode("utf-8"), lifecycle.local_token.encode("utf-8")
+    )
 
 
 async def _forward_events(websocket: WebSocket, subscription: Any) -> None:
@@ -175,6 +181,9 @@ async def _handle_control(session: VoiceSession, raw: str) -> None:
         "cancel": session.cancel,
         "ping": _noop,
     }
+    if len(raw) > _MAX_CONTROL_CHARS:
+        _bad_control(session)
+        return
     try:
         message = json.loads(raw)
     except json.JSONDecodeError:
