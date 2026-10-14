@@ -1,6 +1,7 @@
 package app.reva
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -77,6 +78,9 @@ class SyncComposeTest {
         rule.setContent { RevaTheme { DevicesScreen(vm, onScan = {}, onBack = {}) } }
         vm.load()
         waitFor("paired_pc")
+        // Forgetting only removes the PC from the phone; the copy must say so and point at Revoke on the PC.
+        rule.onNodeWithTag("forget_note")
+            .assertTextEquals("Removes this PC from the phone. To fully cut access, also click Revoke on the PC.")
         rule.onNodeWithTag("forget_pc").performClick()
         waitFor("not_paired")
         assertEquals(1, service.forgotten)
