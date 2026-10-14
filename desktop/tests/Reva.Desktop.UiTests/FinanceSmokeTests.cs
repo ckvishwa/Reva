@@ -103,6 +103,45 @@ public class FinanceSmokeTests : IClassFixture<FinanceFixture>
         Assert.Contains("source manual", row);
     }
 
+    /// <summary>SYNC-1e on the real window: a commit that did not come from this window (a phone
+    /// sync commits through the same Core counter) shows on the open page without a tab switch.</summary>
+    [UiFact]
+    public async Task A_commit_made_elsewhere_shows_on_the_open_finance_page_without_switching_tabs()
+    {
+        _finance.Open();
+        _finance.EnsureAccount();
+
+        using var http = new HttpClient { BaseAddress = new Uri(App.CoreUrl) };
+        var token = File.ReadAllText(Path.Combine(App.DataDirectory, "local_auth_token")).Trim();
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var balances = await http.GetStringAsync("v1/domains/finance/reports/account_balances");
+        var accountId = System.Text.Json.Nodes.JsonNode.Parse(balances)!["rows"]![0]!["account_id"]!.GetValue<string>();
+
+        // Give the watcher time to take its baseline, then commit from outside the window.
+        await Task.Delay(1500);
+        var body = new System.Text.Json.Nodes.JsonObject
+        {
+            ["id"] = "tx-ui-elsewhere-01",
+            ["account_id"] = accountId,
+            ["date"] = DateTime.Today.ToString("yyyy-MM-dd"),
+            ["amount_minor"] = -777,
+            ["description"] = "Committed elsewhere",
+        };
+        var reply = await http.PostAsync(
+            "v1/domains/finance/transactions",
+            new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json"));
+        Assert.True(reply.IsSuccessStatusCode, "Core refused the test commit: " + (int)reply.StatusCode);
+
+        var shown = Retry.WhileFalse(
+            () => _finance.TransactionRowNames().Any(n => n.Contains("Committed elsewhere", StringComparison.Ordinal)),
+            TimeSpan.FromSeconds(20),
+            TimeSpan.FromMilliseconds(250));
+        Assert.True(
+            shown.Success,
+            "The open page never showed the commit made elsewhere. Screenshot: " + App.Screenshot("commit-elsewhere"));
+    }
+
     [UiFact]
     public void Finance_can_be_used_with_the_keyboard_alone()
     {
