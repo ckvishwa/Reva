@@ -26,31 +26,111 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
 import queue
 import re
 import sys
 import threading
+import time
 import wave
 from array import array
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
-
-# The protocol channel. Library output goes to stderr (see the module docstring).
-_PROTOCOL = sys.stdout
-sys.stdout = sys.stderr
+from typing import Any, TextIO
 
 SAMPLE_RATE = 24_000
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_ERROR_BROKEN_PIPE = 109
+_ERROR_NO_DATA = 232
+_POLL_SECONDS = 0.01
+
+# The protocol channel. `main()` points sys.stdout at stderr so library output cannot reach it.
+_protocol: TextIO = sys.stdout
+
+
+def _claim_protocol_channel() -> None:
+    global _protocol
+    _protocol = sys.stdout
+    sys.stdout = sys.stderr
 
 
 def _emit(payload: dict[str, Any]) -> None:
-    _PROTOCOL.write(json.dumps(payload) + "\n")
-    _PROTOCOL.flush()
+    _protocol.write(json.dumps(payload) + "\n")
+    _protocol.flush()
+
+
+def _blocking_lines(fd: int, pending: bytes = b"") -> Iterator[str]:
+    with open(fd, "rb", closefd=False) as stream:
+        data = pending + stream.read() if pending else None
+        if data is not None:
+            for raw in data.splitlines(keepends=True):
+                yield raw.decode("utf-8")
+            return
+        for raw in stream:
+            yield raw.decode("utf-8")
+
+
+def stdin_lines(fd: int | None = None) -> Iterator[str]:
+    """Yield input lines. On a Windows pipe, poll instead of blocking in `ReadFile`.
+
+    A thread parked in a blocking read on an anonymous pipe makes `import numpy` hang in the
+    main thread (so `import torch` and `import kokoro` hang too). Peeking for data first means
+    no read is ever outstanding. Files and consoles cannot be peeked and are read normally.
+    """
+    if fd is None:
+        fd = sys.stdin.fileno()
+    if sys.platform != "win32":
+        yield from _blocking_lines(fd)
+        return
+
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.PeekNamedPipe.argtypes = [
+        wintypes.HANDLE,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.LPDWORD,
+        wintypes.LPDWORD,
+        wintypes.LPDWORD,
+    ]
+    kernel32.PeekNamedPipe.restype = wintypes.BOOL
+    handle = msvcrt.get_osfhandle(fd)
+    pending = b""
+    while True:
+        available = wintypes.DWORD(0)
+        if not kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(available), None):
+            if ctypes.get_last_error() in (_ERROR_BROKEN_PIPE, _ERROR_NO_DATA):
+                break  # the writer closed its end: end of input
+            yield from _blocking_lines(fd, pending)
+            return
+        if available.value == 0:
+            time.sleep(_POLL_SECONDS)
+            continue
+        data = os.read(fd, available.value)
+        if not data:
+            break
+        pending += data
+        while (newline := pending.find(b"\n")) >= 0:
+            line, pending = pending[: newline + 1], pending[newline + 1 :]
+            yield line.decode("utf-8")
+    if pending:
+        yield pending.decode("utf-8")
 
 
 def _reader(commands: queue.Queue[dict[str, Any] | None]) -> None:
-    for line in sys.stdin:
-        commands.put(json.loads(line))
+    for line in stdin_lines():
+        if not line.strip():
+            continue
+        try:
+            command = json.loads(line)
+        except json.JSONDecodeError:
+            _emit({"id": None, "status": "error", "kind": "protocol"})
+            continue
+        if isinstance(command, dict):
+            commands.put(command)
     commands.put(None)
 
 
@@ -126,6 +206,7 @@ def _speak(
 
 
 def main() -> int:
+    _claim_protocol_channel()
     parser = argparse.ArgumentParser()
     parser.add_argument("--config-path", required=True)
     parser.add_argument("--model-path", required=True)
