@@ -24,7 +24,7 @@ import app.reva.ui.theme.RevaText
 
 /** Today: budget left this month and the bills due in the next 7 days. */
 @Composable
-fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
+fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier, syncStatus: String? = null) {
     val state by vm.state.collectAsState()
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -34,6 +34,7 @@ fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         item {
             Text("Today", style = MaterialTheme.typography.headlineMedium, color = RevaColors.Text, modifier = Modifier.semantics { heading() })
         }
+        syncStatus?.let { text -> item { CaptionText(text, Modifier.testTag("sync_status")) } }
         item {
             RevaCard(radius = 14.dp, modifier = Modifier.testTag("today_card").semantics(mergeDescendants = true) { contentDescription = state.accessibleSummary }) {
                 CaptionText("Today · Finance")

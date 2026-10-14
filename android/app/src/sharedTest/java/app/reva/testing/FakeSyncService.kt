@@ -22,6 +22,9 @@ class FakeSyncService : SyncService {
     var forgotten = 0
     var lastQr: String? = null
 
+    /** What "now" is when a sync succeeds; the paired PC's last-sync time is set to it. */
+    var nowSeconds: () -> Long = { 1_000_000 }
+
     override suspend fun paired() = pc
 
     override suspend fun startPairing(qrText: String): PairingStart {
@@ -46,6 +49,7 @@ class FakeSyncService : SyncService {
         syncs++
         val result = syncResult
         if (result is SyncException) throw result
+        pc = pc?.copy(lastSyncAtSeconds = nowSeconds())
         return result as SyncReport
     }
 

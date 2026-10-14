@@ -3,6 +3,10 @@ package app.reva.data
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import uniffi.reva_kernel.DomainException
@@ -23,6 +27,11 @@ class KernelFinanceRepository(
 
     private val handleLock = Any()
     private var handle: DomainHandle? = null
+    private val counter = MutableStateFlow(0L)
+
+    override val changes: StateFlow<Long> = counter.asStateFlow()
+
+    override fun markChanged() = counter.update { it + 1 }
 
     private fun handle(): DomainHandle = synchronized(handleLock) { handle ?: openHandle().also { handle = it } }
 
@@ -35,6 +44,10 @@ class KernelFinanceRepository(
             Outcome.Failed(FinanceError(ErrorKind.KeyLost, ErrorText.KEY_LOST, detail = e.message))
         }
     }
+
+    /** A command that committed: tell open screens. A failed or refused command changes nothing. */
+    private suspend fun <T> write(block: (DomainHandle) -> T): Outcome<T> =
+        run(block).also { if (it is Outcome.Ok) markChanged() }
 
     private fun asOf(): String = clock().toString()
 
@@ -65,7 +78,7 @@ class KernelFinanceRepository(
 
     override suspend fun conflicts() = run { Json.conflicts(query(it, "conflicts")) }
 
-    override suspend fun resolveConflict(id: Long, keepMine: Boolean) = run {
+    override suspend fun resolveConflict(id: Long, keepMine: Boolean) = write {
         it.command("conflict.resolve", JSONObject().put("conflict_id", id).put("keep", if (keepMine) "local" else "remote").toString())
         Unit
     }
@@ -73,7 +86,7 @@ class KernelFinanceRepository(
     /** The open Finance handle, for the sync engine (same file, same lock). Call off the main thread. */
     fun kernelHandle(): DomainHandle = handle()
 
-    override suspend fun addTransaction(request: NewTransaction) = run {
+    override suspend fun addTransaction(request: NewTransaction) = write {
         val body = JSONObject()
             .put("account_id", request.accountId)
             .put("date", request.date)
@@ -86,7 +99,7 @@ class KernelFinanceRepository(
         Unit
     }
 
-    override suspend fun addAccount(request: NewAccount) = run {
+    override suspend fun addAccount(request: NewAccount) = write {
         val body = JSONObject()
             .put("name", request.name)
             .put("kind", request.kind)
@@ -96,7 +109,7 @@ class KernelFinanceRepository(
         Unit
     }
 
-    override suspend fun takeSnapshot() = run {
+    override suspend fun takeSnapshot() = write {
         it.command("networth_snapshot.create", JSONObject().put("as_of", asOf()).toString())
         Unit
     }
@@ -132,7 +145,7 @@ class KernelFinanceRepository(
             rows = Json.importRows(report.rowsJson),
             dryRun = report.dryRun,
         )
-    }
+    }.also { if (!dryRun && it is Outcome.Ok && it.value.accepted > 0) markChanged() }
 
     override suspend fun export(format: String) = run { it.export(format) }
 

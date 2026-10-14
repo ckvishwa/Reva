@@ -22,7 +22,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,8 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.reva.data.FinanceRepository
 import app.reva.data.Outcome
@@ -48,6 +53,7 @@ import app.reva.ui.finance.FinanceViewModel
 import app.reva.ui.finance.FormSheet
 import app.reva.ui.finance.ImportForm
 import app.reva.ui.finance.ImportViewModel
+import app.reva.sync.AutoSyncController
 import app.reva.sync.SyncService
 import app.reva.ui.devices.MoreHost
 import app.reva.ui.more.TalkScreen
@@ -84,6 +90,7 @@ fun RevaRoot(
     versionName: String,
     onShare: (format: String, bytes: ByteArray) -> Unit,
     sync: SyncService? = null,
+    autoSync: AutoSyncController? = null,
 ) {
     val factory = remember(repository) { RootViewModels(repository) }
     val today: TodayViewModel = viewModel(factory = factory)
@@ -94,6 +101,24 @@ fun RevaRoot(
     var exportError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val syncStatus = autoSync?.status?.collectAsState()?.value?.text
+
+    // Sync with the paired PC on its own while the app is in front (the setting is on the Devices screen).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, autoSync) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> autoSync?.onForeground()
+                Lifecycle.Event.ON_STOP -> autoSync?.onBackground()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            autoSync?.onBackground()
+        }
+    }
 
     // Opening a tab reloads it from the Kernel (off the main thread), so it never shows stale numbers.
     LaunchedEffect(tab) {
@@ -136,16 +161,22 @@ fun RevaRoot(
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (Tab.entries[tab]) {
-                Tab.Today -> TodayScreen(today)
+                Tab.Today -> TodayScreen(today, syncStatus = syncStatus)
                 Tab.Finance -> FinanceScreen(
                     vm = finance,
                     onAddTransaction = { sheet = Sheet.AddTransaction },
                     onAddAccount = { sheet = Sheet.AddAccount },
                     onImport = { sheet = Sheet.Import },
                     onExport = { pendingExport = it },
+                    syncStatus = syncStatus,
                 )
                 Tab.Talk -> TalkScreen()
-                Tab.More -> MoreHost(sync, versionName, onSynced = { finance.refresh(); today.refresh() })
+                Tab.More -> MoreHost(
+                    sync,
+                    versionName,
+                    onSynced = { finance.refresh(); today.refresh(); scope.launch { autoSync?.refreshStatus() } },
+                    autoSync = autoSync,
+                )
             }
         }
     }
