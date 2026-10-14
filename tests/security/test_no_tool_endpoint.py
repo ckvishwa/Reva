@@ -11,6 +11,7 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/voice/speech"),
     ("POST", "/v1/voice/transcriptions"),
     ("GET", "/v1/domains"),
+    ("GET", "/v1/domains/changes"),
     ("GET", "/v1/domains/{domain}/export"),
     ("GET", "/v1/domains/{domain}/privacy"),
     ("PATCH", "/v1/domains/{domain}/privacy"),
