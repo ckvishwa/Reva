@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     tts_device: str = "cuda"
     tts_default_language: Literal["en", "te"] = "en"
     tts_ready_timeout_seconds: float = 60.0
+    # Load the voice in the background once Core is up, so the first sentence does not wait for
+    # the model (about nine seconds for Kokoro). Never blocks startup; a failure is only logged.
+    tts_warm_on_start: bool = True
     tts_synthesis_timeout_seconds: float = 120.0
 
     # Voice assets live outside git under one root, described by

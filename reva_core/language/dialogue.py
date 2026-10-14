@@ -235,6 +235,7 @@ class DialogueTracker:
         if saved is None:
             return DialogueState()
         now = self._clock()
+        before = _encode(saved)
         age = _age(saved.saved_at, now)
         if age is None or age > REFERENCE_TTL:
             saved.last_referenced = []
@@ -251,6 +252,9 @@ class DialogueTracker:
             for c in saved.committed
             if (a := _age(c.committed_at, now)) is not None and a <= UNDO_TTL
         ]
+        if _encode(saved) != before:
+            self.state = saved
+            self._save()  # what expired is gone from disk too, not just from memory
         return saved
 
     # ---- building the state during a turn

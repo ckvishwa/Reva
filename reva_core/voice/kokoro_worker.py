@@ -40,6 +40,41 @@ from typing import Any, TextIO
 
 SAMPLE_RATE = 24_000
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_CLAUSE_END = re.compile(r"[,;:]\s+")
+
+# First-audio budget (S06). Kokoro starts a phrase with a stretch of near-silence; on the first
+# chunk of an utterance it is trimmed so nobody waits for silence. A long first sentence is cut at
+# its first real clause, so audio starts after one clause is synthesized, not the whole sentence.
+LEADING_SILENCE_FLOOR = 0.003  # about -50 dBFS
+LEADING_KEEP_MS = 20
+FIRST_SENTENCE_MIN_CHARS = 60
+CLAUSE_MIN_CHARS = 12
+CLAUSE_MAX_CHARS = 80
+
+
+def trim_leading_silence(samples: list[float]) -> list[float]:
+    """Drop the near-silence before the first sound, keeping 20 ms. All-silent audio stays."""
+    keep = SAMPLE_RATE * LEADING_KEEP_MS // 1000
+    for index, sample in enumerate(samples):
+        if abs(sample) >= LEADING_SILENCE_FLOOR:
+            return samples[max(0, index - keep) :]
+    return samples
+
+
+def split_for_synthesis(text: str) -> list[str]:
+    """Sentences, with a long first sentence cut at its first clause that can stand on its own."""
+    sentences = [s for s in _SENTENCE_SPLIT.split(text.strip()) if s]
+    if not sentences or len(sentences[0]) < FIRST_SENTENCE_MIN_CHARS:
+        return sentences
+    first = sentences[0]
+    for match in _CLAUSE_END.finditer(first):
+        clause = first[: match.start() + 1]
+        rest = first[match.end() :]
+        if CLAUSE_MIN_CHARS <= len(clause) <= CLAUSE_MAX_CHARS and rest.strip():
+            return [clause, rest, *sentences[1:]]
+    return sentences
+
+
 _ERROR_BROKEN_PIPE = 109
 _ERROR_NO_DATA = 232
 _POLL_SECONDS = 0.01
@@ -200,7 +235,7 @@ def _synthesize(
 ) -> None:
     request_id = request["id"]
     output_dir = Path(request["output_dir"])
-    sentences = [s for s in _SENTENCE_SPLIT.split(str(request["text"]).strip()) if s]
+    sentences = split_for_synthesis(str(request["text"]))
     try:
         for index, sentence in enumerate(sentences):
             if utterance.cancelled.is_set():
@@ -210,6 +245,8 @@ def _synthesize(
                 samples.extend(_segment_audio(result).detach().cpu().flatten().tolist())
             if not samples or utterance.cancelled.is_set():
                 continue
+            if index == 0:
+                samples = trim_leading_silence(samples)
             path = output_dir / f"chunk-{request_id}-{index}.wav"
             _write_wav(path, samples)
             sent = utterance.emit_chunk(

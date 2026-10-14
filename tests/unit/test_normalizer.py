@@ -421,3 +421,48 @@ def test_a_length_after_for_in_about_is_a_duration(text: str, iso: str) -> None:
 )
 def test_the_word_one_is_a_number_only_when_it_is_one(text: str, kinds: list[str]) -> None:
     assert [kind for kind, _ in values(text)] == kinds
+
+
+# ------------------------------------------------------------------- hostile input (S06 review)
+
+
+def test_a_transcript_of_absurd_numbers_does_not_crash_the_normalizer():
+    for text in (
+        "$" + "1," * 5000,
+        "1" * 100000,
+        "$" + "9" * 60 + " please",
+        "9" * 400 + " percent",
+    ):
+        normalize(text, now=NOW)  # must return, never raise
+
+
+def test_the_amounts_it_reports_stay_within_a_sane_range():
+    result = normalize("$" + "9" * 60, now=NOW)
+
+    assert all(
+        r.value["amount_minor"] < 10**15
+        for v in result.values
+        if v.kind == "money"
+        for r in v.readings
+    )
+
+
+def test_a_very_long_transcript_is_bounded_in_time():
+    import time as _time
+
+    for text in (
+        "two " * 50000,
+        "at 7 " * 40000,
+        "one thousand " * 20000,
+        "a" + " " * 200000 + "b",
+    ):
+        started = _time.perf_counter()
+        normalize(text, now=NOW)
+        assert _time.perf_counter() - started < 2.0, text[:12]
+
+
+def test_text_beyond_the_limit_is_not_read_but_the_start_still_is():
+    result = normalize("pay $12.50 now " + "blah " * 5000, now=NOW)
+
+    money = [v for v in result.values if v.kind == "money"]
+    assert [v.readings[0].value["amount_minor"] for v in money] == [1250]

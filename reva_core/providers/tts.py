@@ -20,6 +20,7 @@ from reva_core.providers.registry import (
     ProviderSelection,
     ProviderSpec,
 )
+from reva_core.shared.errors import ProviderError
 from reva_core.shared.logging import get_logger
 from reva_core.voice.kokoro_provider import KokoroAssetIds, KokoroSpeechProvider
 
@@ -129,6 +130,21 @@ class RegistryTTS:
     async def require_interruptible(self) -> Any:
         """A provider that supports speak + stop, or `ProviderError`."""
         return (await self._select(_INTERRUPTIBLE)).provider
+
+    async def warm(self) -> bool:
+        """Load the preferred voice now (manifest check, worker start, model load).
+
+        True when a voice is ready. A voice that cannot load (missing or tampered assets, no
+        interpreter) is logged by reason and reported as False, never raised: speaking later
+        will try again and fall back as usual.
+        """
+        try:
+            provider = await self.require_interruptible()
+            await provider.health()
+        except ProviderError as exc:
+            logger.warning("tts warm-up skipped: %s", exc.kind.value)
+            return False
+        return True
 
     async def stop(self, *, turn_epoch: int, scope: str = "") -> None:
         """Silence every provider already in use. Never loads one just to stop it."""
