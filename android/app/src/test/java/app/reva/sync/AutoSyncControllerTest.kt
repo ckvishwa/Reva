@@ -135,6 +135,49 @@ class AutoSyncControllerTest {
         w.controller.onBackground()
     }
 
+    @Test fun an_unreachable_pc_is_said_quietly_in_the_status() = runTest {
+        val w = World(this)
+        w.service.syncResult = SyncException(SyncFailure.Unreachable, "Could not reach the PC.")
+        w.controller.onForeground()
+        runCurrent()
+
+        assertEquals("Not synced yet · PC not reachable", w.controller.status.value.text)
+        w.controller.onBackground()
+    }
+
+    @Test fun a_pc_that_removed_this_phone_stops_the_retries_and_the_status_says_so() = runTest {
+        val w = World(this)
+        w.service.syncResult = SyncException(SyncFailure.Unauthorized, "The PC does not know this phone.")
+        w.controller.onForeground()
+        runCurrent()
+        assertEquals(1, w.service.syncs)
+        assertEquals("Sync stopped: the PC no longer trusts this phone. Open Devices.", w.controller.status.value.text)
+
+        advanceTimeBy(300_000)
+        runCurrent()
+
+        assertEquals("no retry against a PC that refused this phone", 1, w.service.syncs)
+        w.controller.onBackground()
+    }
+
+    @Test fun pairing_again_lifts_the_stop() = runTest {
+        val w = World(this)
+        w.service.syncResult = SyncException(SyncFailure.Unauthorized, "The PC does not know this phone.")
+        w.controller.onForeground()
+        runCurrent()
+        assertEquals(1, w.service.syncs)
+
+        // A new pairing gives the phone a new device id on the PC.
+        w.service.pc = w.service.pc!!.copy(deviceId = "device-2")
+        w.service.syncResult = SyncReport(0, 0, 0, 0, 0, 0)
+        advanceTimeBy(60_001)
+        runCurrent()
+
+        assertEquals(2, w.service.syncs)
+        assertEquals("Synced just now", w.controller.status.value.text)
+        w.controller.onBackground()
+    }
+
     @Test fun the_status_text_ticks_forward_without_another_sync() = runTest {
         val w = World(this)
         w.controller.onForeground()

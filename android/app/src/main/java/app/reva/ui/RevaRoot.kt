@@ -174,7 +174,7 @@ fun RevaRoot(
                 Tab.More -> MoreHost(
                     sync,
                     versionName,
-                    onSynced = { finance.refresh(); today.refresh(); scope.launch { autoSync?.refreshStatus() } },
+                    onSynced = { finance.refresh(); today.refresh(); scope.launch { autoSync?.manualSyncSucceeded() } },
                     autoSync = autoSync,
                 )
             }
