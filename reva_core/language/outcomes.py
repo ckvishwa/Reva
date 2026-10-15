@@ -30,6 +30,7 @@ SUCCESS_WORDS = (
     "created",
     "logged",
     "recorded",
+    "undone",
 )
 
 UNKNOWN = "I couldn't confirm that it worked. Check Activity."
@@ -47,6 +48,8 @@ REFUSED_MEDICAL = "I can't give medical advice or doses. A doctor or pharmacist 
 UNKNOWN_APP = "I can't do that with that app yet. Open Apps to see what I can use."
 NOT_UNDERSTOOD = "I didn't catch all of that. Say it again, or use the screen."
 ASK_ON_SCREEN = "Tap Save on the screen to confirm."
+NOTHING_TO_UNDO = "There's nothing I can undo."
+NOTHING_TO_REPEAT = "I haven't said anything yet."
 
 
 def requested_text(
@@ -65,6 +68,8 @@ def approval_prompt(
         return f"Close {_app(args, names)}? Approve it on screen."
     if capability == "memory.remember":
         return "Save that note? Approve it on screen."
+    if capability == "assistant.undo":
+        return "Undo the last expense? Confirm on screen."
     if capability == "finance.add_transaction":
         amount = args.get("amount")
         category = str(args.get("category", ""))
@@ -100,6 +105,8 @@ def verified_text(
         return f"Closed {_app(args, names)}."
     if capability == "finance.add_transaction":
         return "Saved."
+    if capability == "assistant.undo":
+        return "Undone."
     return "Done."
 
 

@@ -2,7 +2,7 @@
 
 Audit date 2026-10-15 (updated after B0, B1a-d, B2a-c; main at 0c39678). Source: `07_TRACEABILITY/v2_requirements.csv` (207 rows) and `tests/evidence/ledger.csv`. DONE = a ledger PASS row exists (open hardware rows noted). Nothing is DONE from code presence alone.
 
-Totals: DONE 65, PARTIAL 44, NOT STARTED 97, DEFERRED 1
+Totals (200 of the 207 rows matched by pattern): DONE 76, PARTIAL 48, NOT STARTED 75, DEFERRED 1
 
 Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = nothing left.
 
@@ -31,8 +31,8 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-WIN-005 | R1 | S08 | PARTIAL | B2 | local flush on PTT press + epoch cut tested; 300 ms p95 on speakers open (hardware) |
 | AR-WIN-006 | R1 | S08 | DONE | - | B2b browser tests + B2c host policy; real launch ready |
 | AR-WIN-007 | R1 | S08 | PARTIAL | B2 | 60 fps cap + pause when hidden tested; <15% GPU on reference laptop open (hardware) |
-| AR-WIN-008 | R1 | S09 | NOT STARTED | B3 | executor + grants |
-| AR-WIN-009 | R1 | S09 | NOT STARTED | B3 | executor + grants |
+| AR-WIN-008 | R1 | S09 | DONE | - | B3c-executor-refuses-bad-grants; B3c-grant-verify-cross-language (same 14 vectors in Python and C#) |
+| AR-WIN-009 | R1 | S09 | DONE | - | B3c-false-success-0-of-100; B3c-reply-from-executor; hardware rows B3c-hw-* still NEEDS_HARDWARE |
 | AR-WIN-010 | R1 | S07 | DONE | - | Ctrl+Space hook ignores injected keys; hardware row open |
 | AR-WIN-011 | R2 | S23 | NOT STARTED | E3 | UIA |
 | AR-WIN-012 | R1 | S10 | PARTIAL | D1-D5 | Finance page via Core API only; other domain pages in D |
@@ -95,13 +95,13 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-VA-022 | R1 | S06 | DONE | - | S06-per-session-epoch, VOICE-1 kokoro-real/e2e, manifest refusals, S06-stage-timings |
 | AR-LANG-001 | R1 | S07 | DONE | - | final transcripts only |
 | AR-LANG-002 | R1 | S06 | DONE | - | S06-normalizer (114 tests), S06-ack-first |
-| AR-LANG-003 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
-| AR-LANG-004 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
+| AR-LANG-003 | R1 | S09 | DONE | - | B3b-rule-fast-path; B3d adds assistant.stop/repeat/undo rules |
+| AR-LANG-004 | R1 | S09 | DONE | - | B3b-entity-ladder (vector rung shadow-only) |
 | AR-LANG-005 | R1 | S06 | DONE | - | reference() and accept_proposal() wired through the router; at-rest DPAPI (B0) |
-| AR-LANG-006 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
-| AR-LANG-007 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
-| AR-LANG-008 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
-| AR-LANG-009 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): templates + number check folded into B3 |
+| AR-LANG-006 | R1 | S09 | NOT STARTED | planner | planner is not on main |
+| AR-LANG-007 | R1 | S09 | DONE | - | B3a-authorize-pure |
+| AR-LANG-008 | R1 | S09 | DONE | - | tests/unit/test_policy_authorize.py::test_leftover_content_words_block_the_action; test_normalizer filler fixtures |
+| AR-LANG-009 | R1 | S10 | PARTIAL | D1 | action outcome templates by status done (B3c-reply-from-executor); per-intent x status coverage test for the other domains with each domain |
 | AR-LANG-010 | R1 | S06 | DONE | - | S06-normalizer (114 tests), S06-ack-first |
 | AR-LANG-011 | R1 | S10 | NOT STARTED | D1 | gap (spec S10): grounded answers folded into D1 Memory |
 | AR-LANG-012 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): templates + number check folded into B3 |
@@ -110,7 +110,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-LANG-015 | R2 | S12 | NOT STARTED | C1/C3 | shared artifacts on Android |
 | AR-LANG-016 | R3 | S24 | NOT STARTED | E2 |  |
 | AR-LANG-017 | R3 | S24 | NOT STARTED | E4 |  |
-| AR-LANG-018 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
+| AR-LANG-018 | R1 | S09 | DONE | - | B3b-forbidden-refusals |
 | AR-DATA-001 | R2 | S13 | DONE | - | tests/gateway, sync_peers.rs (ledger); scopes extend in C2/D6 |
 | AR-DATA-002 | R2 | S13 | DONE | - | tests/gateway, sync_peers.rs (ledger); scopes extend in C2/D6 |
 | AR-DATA-003 | R2 | S13 | DONE | - | tests/gateway, sync_peers.rs (ledger); scopes extend in C2/D6 |
@@ -131,24 +131,24 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-DATA-018 | R1 | S07 | DONE | - | temp audio deleted after use; scratch swept at start |
 | AR-DATA-019 | R1 | S07 | DONE | - | no raw audio in logs |
 | AR-DATA-020 | R4 | S27 | NOT STARTED | F3 |  |
-| AR-AGT-001 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-002 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-003 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-004 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-005 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-006 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
+| AR-AGT-001 | R1 | S09 | DONE | - | B3a-registry-absence; unknown and forbidden capabilities refused by authorize() |
+| AR-AGT-002 | R1 | S09 | DONE | - | B3a-authorize-pure (4000 random proposals never crash) |
+| AR-AGT-003 | R1 | S09 | DONE | - | tier read only from the registry; a Proposal carries no tier (B3a-authorize-pure) |
+| AR-AGT-004 | R1 | S09 | DONE | - | B3a-signed-grants, B3a-t2-click-only: replay and substitution refused |
+| AR-AGT-005 | R1 | S09 | DONE | - | B3c-open-needs-window, B3c-close-verified-when-gone, B3c-expense-confirm-card (kernel_event) |
+| AR-AGT-006 | R1 | S09 | DONE | - | B3a-t2-click-only: speech-only, stale and substituted approvals refused |
 | AR-AGT-007 | R2 | S15 | NOT STARTED | C2 |  |
 | AR-AGT-008 | R2 | S21 | NOT STARTED | C2 |  |
-| AR-AGT-009 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-010 | R4 | S27 | NOT STARTED | B3 | gap: action ledger built with the Activity page in B3; hardened in F3 |
-| AR-AGT-011 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-012 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
+| AR-AGT-009 | R1 | S09 | NOT STARTED | planner | planner loop exists only on wip/planner-reasoning, not on main |
+| AR-AGT-010 | R4 | S27 | PARTIAL | F3 | B3a-ledger-append-only + B3c-activity-page; reconciliation hardening in F3 |
+| AR-AGT-011 | R1 | S09 | NOT STARTED | planner | planner is not on main |
+| AR-AGT-012 | R1 | S09 | DONE | - | B3b-rule-fast-path |
 | AR-AGT-013 | R1 | S07 | DONE | - | 20-prompt eval on 3 local models; qwen2.5:3b chosen |
-| AR-AGT-014 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-015 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-016 | R2 | S15 | NOT STARTED | B3 | executor grant binding (Windows) in B3; remote in C2 |
+| AR-AGT-014 | R1 | S09 | DONE | - | B3a-false-success; B3c-reply-from-executor: model text never reaches an outcome |
+| AR-AGT-015 | R1 | S09 | NOT STARTED | planner | untrusted-text delimiting and injection corpus arrive with the planner |
+| AR-AGT-016 | R2 | S15 | PARTIAL | C2 | Windows executor validates grants (B3c); Android executor in C2 |
 | AR-AGT-017 | R2 | S15 | NOT STARTED | B3 | executor grant binding (Windows) in B3; remote in C2 |
-| AR-AGT-018 | R2 | S15 | PARTIAL | B3 | unchanged: registry absence test lands in B3 |
+| AR-AGT-018 | R2 | S15 | PARTIAL | C3 | B3a-registry-absence covers both Python copies; Android registry copy in C3 |
 | AR-AGT-019 | R3 | S21 | NOT STARTED | D1 |  |
 | AR-AGT-020 | R4 | S27 | NOT STARTED | F3 | benchmarks; fixtures separated |
 | AR-AGT-021 | R4 | S27 | NOT STARTED | F3 | benchmarks; fixtures separated |
@@ -189,7 +189,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | FR-DOM-001 | R1 (Win) / R2 (Android) | S10 | PARTIAL | D1-D6 | Finance PASS on both devices; other 7 domains pending |
 | FR-DOM-002 | R1/R2 | S10 | PARTIAL | D1-D6 | Finance PASS on both devices; other 7 domains pending |
 | FR-DOM-003 | R1 | S10 | PARTIAL | D1-D6 | Finance PASS on both devices; other 7 domains pending |
-| FR-DOM-004 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): voice entry + confirmation + answers with numbers (Finance first) |
+| FR-DOM-004 | R1 | S10 | PARTIAL | D1 | Finance voice expense with confirm card (B3c); other domains later; hardware row B3c-hw-voice-expense-both-devices open |
 | FR-DOM-005 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): voice entry + confirmation + answers with numbers (Finance first) |
 | FR-DOM-006 | R3 | S20 | NOT STARTED | B4/D6 |  |
 | FR-DOM-007 | R3 | S20 | PARTIAL | D6 | Finance export/import PASS; other domains pending |
@@ -212,8 +212,8 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | FR-TDY-001 | R3 | S16 | PARTIAL | B4/D2 | Finance-only Today PASS; all enabled domains in B4/D2 |
 | FR-SYN-001 | R2 | S14 | PARTIAL | D1-D5 | Finance LAN sync PASS (SYNC-1, phone PASS); other domains as added |
 | FR-SYN-002 | R3 | S22 | NOT STARTED | E1 |  |
-| FR-LNG-001 | R1 | S09 | NOT STARTED | B3 |  |
-| FR-LNG-002 | R1 | S09 | NOT STARTED | B3 |  |
+| FR-LNG-001 | R1 | S09 | PARTIAL | D1 | open/close app, add expense, remember, recall, today, stop/repeat/undo; workout and reminder phrases arrive with D3/D4 |
+| FR-LNG-002 | R1 | S09 | PARTIAL | D1 | apps ask (Did you mean...); category/person/item asks arrive with their domains |
 | FR-LNG-003 | R1 | S10 | PARTIAL | B1/B3 | dialogue state PASS (S06); wiring in B1.3 |
 | FR-LNG-004 | R1 | S10 | NOT STARTED | B3 |  |
 | FR-LNG-005 | R1 | S05 | DEFERRED | - | Revi voice blocked (CLAUDE.md); Kokoro af_heart is the voice; no second voice to switch to |

@@ -45,7 +45,21 @@ _RECALL = re.compile(
     r"\s+(?P<what>.{2,})$",
     re.IGNORECASE,
 )
+_STOP = re.compile(
+    r"^(?:please\s+)?(?:stop|stop (?:talking|speaking|it|that)|be quiet|quiet|hush|enough)$",
+    re.IGNORECASE,
+)
+_REPEAT = re.compile(
+    r"^(?:please\s+)?(?:repeat(?: that| it)?|say (?:that|it) again|what did you say|come again)$",
+    re.IGNORECASE,
+)
+_UNDO = re.compile(
+    r"^(?:please\s+)?(?:undo(?: that| it| the last (?:one|expense|thing)| my last (?:one|expense))?"
+    r"|take that back|revert that|reverse that)$",
+    re.IGNORECASE,
+)
 MAX_TEXT = 500
+CONTROLS = ("assistant.stop", "assistant.repeat", "assistant.undo")
 
 # ---- things that must be refused. Matched on the whole utterance, before any other rule.
 _FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = tuple(
@@ -87,6 +101,20 @@ class RuleHit:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def control_capability(cleaned: str) -> str | None:
+    """`assistant.stop`, `assistant.repeat` or `assistant.undo` when the whole utterance is exactly
+    that command. These are matched on their own so "stop" works even in the middle of a question
+    the router asked, and never as part of a longer sentence."""
+    for pattern, capability in (
+        (_STOP, "assistant.stop"),
+        (_REPEAT, "assistant.repeat"),
+        (_UNDO, "assistant.undo"),
+    ):
+        if pattern.match(cleaned):
+            return capability
+    return None
+
+
 def parse(text: str, resolver: AppResolver) -> RuleHit | None:
     """The first rule that matches, or None (the turn then goes to the assistant)."""
     cleaned = re.sub(r"\s+", " ", text.strip().strip(".!?,")).strip()
@@ -95,6 +123,10 @@ def parse(text: str, resolver: AppResolver) -> RuleHit | None:
     for pattern, capability in _FORBIDDEN:
         if pattern.search(cleaned):
             return RuleHit(capability, {"request": cleaned[:MAX_TEXT]})
+
+    control = control_capability(cleaned)
+    if control is not None:
+        return RuleHit(control, {})
 
     for pattern, capability in ((_OPEN, "windows.app.open"), (_CLOSE, "windows.app.close")):
         match = pattern.match(cleaned)

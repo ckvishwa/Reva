@@ -17,7 +17,11 @@ from reva_core.domains.keys import DomainKeyProvider, KeyStoreError, default_key
 from reva_core.domains.privacy import DomainPrivacyStore
 from reva_core.domains.privacy_settings import PrivacySettings
 from reva_core.domains.service import DomainService
-from reva_core.domains.voice_expense import FinanceExpenseExecutor
+from reva_core.domains.voice_expense import (
+    ExpenseLog,
+    ExpenseUndoExecutor,
+    FinanceExpenseExecutor,
+)
 from reva_core.gateway.manager import GatewayManager
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
@@ -81,6 +85,7 @@ class CoreLifecycle:
         self._grant_key_provider = grant_key_provider
         self._broker: Broker | None = None
         self._apps = AppCatalog(None)
+        self._expense_log = ExpenseLog()
         self._cloud_settings_store = CloudSettingsStore(settings.data_dir / "cloud_settings.json")
 
     def startup(self) -> HealthStatus:
@@ -158,7 +163,12 @@ class CoreLifecycle:
                 app_keys=self._apps.allowed_keys,
                 app_names=self._apps.display_names,
                 core_executors={
-                    "finance.add_transaction": FinanceExpenseExecutor(lambda: self.domain_service)
+                    "finance.add_transaction": FinanceExpenseExecutor(
+                        lambda: self.domain_service, log=self._expense_log
+                    ),
+                    "assistant.undo": ExpenseUndoExecutor(
+                        lambda: self.domain_service, self._expense_log
+                    ),
                 },
             )
         except (KeyStoreError, OSError):
@@ -168,6 +178,10 @@ class CoreLifecycle:
     @property
     def broker(self) -> Broker | None:
         return self._broker
+
+    @property
+    def expense_log(self) -> ExpenseLog:
+        return self._expense_log
 
     @property
     def apps(self) -> AppCatalog:
