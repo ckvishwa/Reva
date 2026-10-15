@@ -25,6 +25,8 @@ import app.reva.mood.MoodEngine
 import app.reva.voice.AndroidTtsSpeaker
 import app.reva.voice.NeutralMood
 import app.reva.language.PolicyReplies
+import app.reva.pcrequests.PcRequestTracker
+import app.reva.pcrequests.SignedPcGateway
 import app.reva.policy.Registry
 import app.reva.voice.VoiceController
 import java.io.File
@@ -53,12 +55,25 @@ class AppContainer(private val context: Context) {
 
     val financeRepository: FinanceRepository get() = kernelRepository
 
+    /** The paired PC (public data only), read by sync and by requests for the PC to act. */
+    val pairedPcStore: PairedPcStore by lazy { PairedPcStore(File(syncRoot, "paired_pc.json")) }
+
+    /** Requests for the PC to open or close an app. Results come back as lines in Talk, from the PC's own report. */
+    val pcRequests: PcRequestTracker by lazy {
+        PcRequestTracker(
+            pc = { pairedPcStore.load() },
+            gateway = SignedPcGateway(KeystoreDeviceSigner(), PinnedHttpsTransport()),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            onText = { voice.postReply(it) },
+        )
+    }
+
     /** Pairing and LAN sync with the user's own PC. Signs with a Keystore key; pins the PC's TLS key from the QR code. */
     val syncService: SyncService by lazy {
         SyncEngine(
             kernel = { kernelRepository.kernelHandle() },
             signer = KeystoreDeviceSigner(),
-            store = PairedPcStore(File(syncRoot, "paired_pc.json")),
+            store = pairedPcStore,
             transport = PinnedHttpsTransport(),
             deviceName = android.os.Build.MODEL ?: "Android phone",
             // A sync that applied events from the PC moves the change counter, so open screens reload.
@@ -88,7 +103,7 @@ class AppContainer(private val context: Context) {
             permissions = micPermission,
             availability = { AndroidRecognizerAvailability.check(context) },
             recognizerFactory = { AndroidSpeechRecognizer(context) },
-            replies = PolicyReplies(registry),
+            replies = PolicyReplies(registry, pc = pcRequests),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),

@@ -47,7 +47,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-005 | R2 | S12 | PARTIAL | C1 | C1b: avatar loads offline in a locked-down WebView (verified on an API 36 emulator: ready report, rendered pose, no network); mouth from played-audio envelope tested on the JVM; interrupt timing and airplane-mode launch on a phone are NEEDS_HARDWARE |
 | AR-AND-006 | R2 | S12 | PARTIAL | C2 | AND-1-manifest PASS for current manifest; re-verify after C2 intents |
 | AR-AND-007 | R2 | S13 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
-| AR-AND-008 | R2 | S15 | NOT STARTED | C2 | phone->PC actions |
+| AR-AND-008 | R2 | S15 | PARTIAL | C2 | C2a/b/c-1: PC side, desktop pickup and the phone sender done (signed requests, same-id retry, evidence-only success, phone cannot approve); phone-side actions (alarm/reminder/calendar/share/open) and hardware rows pending |
 | AR-AND-009 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-010 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-011 | R3 | S21 | NOT STARTED | C3 | standalone/offline-lite |

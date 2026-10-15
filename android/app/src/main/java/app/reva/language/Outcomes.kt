@@ -17,6 +17,18 @@ object Outcomes {
     const val NOTHING_TO_UNDO = "There's nothing I can undo."
     const val NOTHING_TO_REPEAT = "I haven't said anything yet."
 
+    /** Words that only a verified outcome may produce (same list as the PC). */
+    val SUCCESS_WORDS = listOf("opened", "saved", "closed", "done", "added", "set", "created", "logged", "recorded", "undone")
+
+    /** The built-in apps by their display names (same as the PC's templates). */
+    val APP_NAMES = mapOf(
+        "notepad" to "Notepad",
+        "calculator" to "Calculator",
+        "chrome" to "Chrome",
+        "vscode" to "VS Code",
+        "spotify" to "Spotify",
+    )
+
     /** The sentence for a proposal that was not authorized. */
     fun refusalText(reason: String, capability: String): String {
         if (reason == "FORBIDDEN_CAPABILITY") {

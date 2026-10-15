@@ -28,6 +28,7 @@ from reva_core.language import outcomes  # noqa: E402
 from reva_core.language.entities import AppResolver  # noqa: E402
 from reva_core.language.rules import parse  # noqa: E402
 from reva_core.policy import authorize as policy  # noqa: E402
+from reva_core.policy.authorize import Resolution  # noqa: E402
 from reva_core.policy.registry import DEFAULT_REGISTRY  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -464,6 +465,29 @@ def refusal_cases() -> list[dict[str, Any]]:
     ]
 
 
+APP_PHRASES = [
+    "calculator", "the calculator app", "calc", "my calculator please", "notepad",
+    "notes app", "note pad", "chrome", "google chrome", "the browser", "browser",
+    "chrome browser", "vs code", "vscode", "visual studio code", "code", "vs-code",
+    "spotify", "music", "music app", "spotfy", "something else", "", "the",
+    "calculator and notepad", "Calculator", "SPOTIFY", "a music",
+]  # fmt: skip
+
+
+def app_resolution_cases() -> list[dict[str, Any]]:
+    """What the Python ladder trusts: an exact or alias hit with no words left over."""
+    resolver = AppResolver(("notepad", "calculator", "chrome", "vscode", "spotify"))
+    out = []
+    for phrase in APP_PHRASES:
+        match = resolver.resolve(phrase)
+        trusted = match.key is not None and match.entity.resolution in (
+            Resolution.EXACT,
+            Resolution.ALIAS,
+        )
+        out.append({"phrase": phrase, "key": match.key if trusted and not match.leftover else None})
+    return out
+
+
 def build() -> dict[str, Any]:
     return {
         "authorize-cases.json": {
@@ -472,7 +496,11 @@ def build() -> dict[str, Any]:
             "cases": authorize_cases(),
             "hashes": hash_cases(),
         },
-        "rules-cases.json": {"cases": rules_cases(), "refusals": refusal_cases()},
+        "rules-cases.json": {
+            "cases": rules_cases(),
+            "refusals": refusal_cases(),
+            "app_resolution": app_resolution_cases(),
+        },
     }
 
 
