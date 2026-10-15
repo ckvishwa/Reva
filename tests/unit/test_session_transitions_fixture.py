@@ -1,8 +1,8 @@
 """The session transition table is shared with the Android app through a fixture.
 
-`tests/fixtures/session-transitions.json` is compared with the Core's table here and with the Kotlin
-`VoiceTransitions` in `android/app/src/test/java/app/reva/voice/VoiceSessionTest.kt`. If either side changes
-a state or a legal move, one of the two tests fails until both agree again.
+`tests/fixtures/session-transitions.json` is compared with the Core's table here and with the
+Kotlin `VoiceTransitions` in `android/.../voice/VoiceSessionTest.kt`. If either side changes a state
+or a legal move, one of the two tests fails until both agree again.
 """
 
 from __future__ import annotations
