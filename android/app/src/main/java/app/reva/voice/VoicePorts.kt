@@ -1,5 +1,7 @@
 package app.reva.voice
 
+import app.reva.mood.ExpressionEvent
+
 /** Where the microphone permission stands. Text never depends on it. */
 enum class MicPermission {
     /** Never asked. The system dialog is allowed. */
@@ -84,18 +86,41 @@ interface ReplySource {
     class Reply(val text: String, val source: String)
 }
 
-/** Speaks one reply. A later slice plugs in Android TTS; until then replies are shown, not spoken. */
+/** How a reply should sound. Comes from the mood engine; it can change speed and pitch, never the words. */
+data class Prosody(val rate: Float = 1f, val pitchSt: Int = 0)
+
+/** Told, about 60 times a second while a sentence plays, how loud the audio that reached the speaker is. */
+fun interface LevelSink {
+    fun onLevel(epoch: Int, rms: Double, tMs: Int)
+}
+
+/**
+ * Speaks one reply. [speak] returns when the sentence finished or was stopped, and reports the loudness of the
+ * audio it actually plays through [levels] (the avatar's mouth follows that and nothing else). After [release]
+ * the next [speak] sets everything up again.
+ */
 interface Speaker {
-    /** Returns when the sentence finished or was stopped. [epoch] lets a late finish be ignored. */
-    suspend fun speak(text: String, epoch: Int)
+    suspend fun speak(text: String, epoch: Int, prosody: Prosody, levels: LevelSink)
     fun stop()
     fun release()
 }
 
 object SilentSpeaker : Speaker {
-    override suspend fun speak(text: String, epoch: Int) = Unit
+    override suspend fun speak(text: String, epoch: Int, prosody: Prosody, levels: LevelSink) = Unit
     override fun stop() = Unit
     override fun release() = Unit
+}
+
+/** What the mood engine decided for one turn: how to sound and which face (if any) may be shown. */
+class MoodDecision(val prosody: Prosody, val expression: ExpressionEvent?)
+
+/** Chooses mood for a heard sentence. The engine implementation is in `app.reva.mood`; tests can fake it. */
+fun interface VoiceMood {
+    fun decide(userText: String): MoodDecision
+}
+
+object NeutralMood : VoiceMood {
+    override fun decide(userText: String) = MoodDecision(Prosody(), null)
 }
 
 /** Starts and stops the foreground service that keeps the microphone legal while the app is in use. */

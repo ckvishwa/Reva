@@ -1,6 +1,6 @@
 # Android voice (C1)
 
-Status: C1a (this file's first slice) ships the voice session, the permission flow, the on-device recognizer rule, the microphone service and the Talk screen. Speech out and the avatar are C1b; the shared registry, rules and `authorize()` port is C1c.
+Status: C1a shipped the voice session, the permission flow, the on-device recognizer rule, the microphone service and the Talk screen. C1b adds speech out, the avatar and the mood engine. The shared registry, rules and `authorize()` port is C1c.
 
 ## Parts (`android/app/src/main/java/app/reva/voice/`)
 
@@ -28,9 +28,26 @@ Status: C1a (this file's first slice) ships the voice session, the permission fl
 
 `RECORD_AUDIO`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`. `POST_NOTIFICATIONS` is not requested: Android still lists a running foreground service in its task manager and shows the microphone indicator. `ManifestTest` pins the exact set, the private microphone service, no boot receiver, no `QUERY_ALL_PACKAGES` and no accessibility service.
 
+## Speech out, avatar, mood (C1b)
+
+| File | What it does |
+|---|---|
+| `voice/AndroidTtsSpeaker.kt` | Android TTS writes the sentence to a WAV file (offline voices only), `AudioTrack` plays it, and the loudness of what the track has actually played is reported about 60 times a second |
+| `voice/Playback.kt` | WAV decoding and the level meter (same 60 windows a second as the Windows meter) |
+| `avatar/AvatarProtocol.kt` | The only way to build a host-to-page message; invalid input returns null. Golden messages in `avatar/test/fixtures/host-messages.json` are validated by the page tests and compared by `AvatarTest` |
+| `avatar/AvatarDriver.kt` | Maps the session's true state to avatar messages: listening only while the microphone is open, mouth only while speaking for the current epoch |
+| `avatar/AvatarHostBridge.kt` | The page's only way back: `ready` or `error`, parsed strictly, everything else ignored |
+| `ui/talk/AvatarView.kt` | WebView serving the page and model from the APK through `WebViewAssetLoader`; every other request is blocked; no file access; destroyed when Talk is left |
+| `mood/MoodEngine.kt`, `MoodFlags.kt`, `EngineMood.kt` | The mood engine ported from Python, reading the same `contracts/mood-rules.v1.json` (copied into the APK at build time). `tests/fixtures/mood-cases.json` (written by the Python engine) is replayed by `MoodEngineTest` |
+
+Gradle copies `avatar/dist` and the mood rules into the APK (`stageRevaAssets`). Build the page first (`cd avatar; npm ci; npm run build`); without it the APK still runs and Talk shows no avatar. In debug builds WebView DevTools is on (`chrome://inspect`).
+
+Checked on an API 36 emulator (not a phone): the page loads offline from the APK and draws; Speak shows the system dialog only after the tap; the second refusal shows the blocked card; after granting, the voice service runs with the OS microphone indicator and Home stops it. The emulator run found two real bugs (a zero-height canvas inside the WebView, and avatar messages lost before the page loaded), both fixed.
+
+Speech is only spoken for a voice turn, not for typed text. If the phone has no offline voice the reply stays on screen.
+
 ## What is not here yet
 
-- Replies are not spoken and no avatar is shown (C1b).
 - Nothing answers a question: `UnavailableReplies` says so. The PC route is C2, the local brain C3.
 - Streaming Kokoro audio from the PC needs a gateway route that does not exist; it is part of C2.
 - Mic-level jank and battery profiling need a device (see `docs/android/voice-device-checklist.md`).

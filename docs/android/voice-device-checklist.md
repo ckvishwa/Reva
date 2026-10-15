@@ -17,3 +17,13 @@ Prerequisites: debug APK from `python tools/android/build_apk.py` installed with
 | 9 | On Android 12 (or an emulator without an on-device model) tap Speak. | No dialog, no listening; Talk says voice input is off and why and that nothing is sent to a server. | `C1-hw-no-on-device` |
 | 10 | With an Android profiler or `adb shell dumpsys gfxinfo app.reva.android`, run steps 4 and 8 ten times. | Janky frames under 5%; no main-thread StrictMode violations in `adb logcat -s StrictMode` during voice use. | `AND-018-jank-hardware` |
 | 11 | Run steps 4 and 8 ten times and look at Settings > Apps > REVA > Memory, or `adb shell dumpsys meminfo app.reva.android`. | Memory does not climb steadily across sessions. | `C1-hw-no-leak` |
+
+## Speech out and avatar (C1b)
+
+| # | Steps | Expected | Row |
+|---|---|---|---|
+| 12 | With an offline English voice installed, tap Speak and say "hello". | The reply is spoken in that voice (no network needed); the avatar's mouth moves with the sound; status shows Speaking. If the phone has no offline voice, the reply stays on screen and nothing is spoken. | `C1-hw-speech-and-avatar-phone` |
+| 13 | While REVA speaks, tap Interrupt. | Audio and the mouth stop together (record with a screen recording; under 300 ms); the microphone opens again. | same |
+| 14 | Turn on airplane mode, force-stop REVA, open Talk. | The avatar appears with no network. | same |
+| 15 | Turn the avatar switch off, then on. | The avatar disappears and drawing stops, then returns. | same |
+| 16 | Run a 10-minute Talk session with the avatar visible, then check Settings > Battery and a GPU/jank trace. | No sustained high CPU/GPU when idle; the avatar pauses when the app is in the background. | same |
