@@ -11,7 +11,7 @@ is audited as `authentication_failed`.
 
 Client control messages (JSON text frames): `capture.requested`,
 `capture.open`, `capture.denied`, `capture.lost`, `interrupt`, `cancel`,
-`ping`, `ptt.down`, `ptt.up`, `mic.mute`, `mic.unmute`, `playback.finished`
+`ping`, `ptt.down`, `ptt.up`, `ptt.cancel`, `mic.mute`, `mic.unmute`, `playback.finished`
 (optionally with the `turn_epoch` of the reply that finished). Anything else, or
 an illegal one for the current state, produces a typed `BAD_CONTROL_MESSAGE`
 error event and changes nothing.
@@ -268,6 +268,7 @@ async def _handle_control(session: VoiceSession, raw: str, pipeline: TurnPipelin
             {
                 "ptt.down": pipeline.on_ptt_down,
                 "ptt.up": pipeline.on_ptt_up,
+                "ptt.cancel": pipeline.on_ptt_cancel,
                 "mic.mute": _sync(lambda: pipeline.set_muted(True)),
                 "mic.unmute": _sync(lambda: pipeline.set_muted(False)),
                 "playback.finished": _playback(pipeline, epoch),

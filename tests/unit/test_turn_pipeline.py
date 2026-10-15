@@ -454,3 +454,16 @@ async def test_endless_speech_without_a_pause_is_discarded_not_buffered_forever(
         for e in events
     )
     assert rig.session.state == SessionState.LISTENING
+
+
+async def test_ptt_cancel_drops_the_utterance_without_transcribing_it(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, "should not run")
+    await rig.listening()
+
+    await rig.pipeline.on_ptt_down()
+    await rig.pipeline.on_audio(tone(600))
+    await rig.pipeline.on_ptt_cancel()
+    await rig.pipeline.on_ptt_up()
+    await rig.pipeline.wait_idle()
+
+    assert rig.stt.paths == [] and rig.session.state == SessionState.LISTENING
