@@ -19,7 +19,7 @@ Deliberately does NOT use `from __future__ import annotations`; see the note at 
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from reva_core.api.auth import build_auth_dependency
 from reva_core.api.versioned import VersionedRequest
@@ -31,10 +31,50 @@ from reva_core.shared.ids import new_id
 LOCAL_DEVICE = "local"
 
 
+MAX_ARG_KEYS = 32
+MAX_ARG_KEY_CHARS = 64
+MAX_ARG_TEXT_CHARS = 20_000  # the longest text any capability takes (a journal entry)
+MAX_ARG_DEPTH = 4
+MAX_ARG_ITEMS = 256
+MAX_ARGS_CHARS = 64 * 1024
+
+
+def _check_value(value: Any, depth: int, budget: list[int]) -> None:
+    budget[0] -= 1
+    if budget[0] < 0:
+        raise ValueError("arguments are too large")
+    if isinstance(value, str):
+        if len(value) > MAX_ARG_TEXT_CHARS:
+            raise ValueError("a text argument is too long")
+        budget[1] -= len(value)
+    elif isinstance(value, dict):
+        if depth >= MAX_ARG_DEPTH or len(value) > MAX_ARG_KEYS:
+            raise ValueError("arguments are nested too deeply or have too many keys")
+        for key, item in value.items():
+            if len(str(key)) > MAX_ARG_KEY_CHARS:
+                raise ValueError("an argument name is too long")
+            budget[1] -= len(str(key))
+            _check_value(item, depth + 1, budget)
+    elif isinstance(value, list):
+        if depth >= MAX_ARG_DEPTH or len(value) > MAX_ARG_ITEMS:
+            raise ValueError("an argument list is too long")
+        for item in value:
+            _check_value(item, depth + 1, budget)
+    if budget[1] < 0:
+        raise ValueError("arguments are too large")
+
+
 class ProposalRequest(VersionedRequest):
     capability: str = Field(min_length=1, max_length=100)
     args: dict[str, Any]
     proposal_id: str | None = Field(default=None, min_length=8, max_length=64)
+
+    @field_validator("args")
+    @classmethod
+    def _bounded_args(cls, value: dict[str, Any]) -> dict[str, Any]:
+        """Free text is bounded here, at the door, so nothing oversized reaches the broker."""
+        _check_value(value, 0, [MAX_ARG_ITEMS * 4, MAX_ARGS_CHARS])
+        return value
 
 
 class ApprovalRequest(VersionedRequest):

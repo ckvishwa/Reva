@@ -76,6 +76,21 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
     def version() -> dict[str, str]:
         return {"version": __version__}
 
+    max_json_bytes = 1024 * 1024
+    big_body_paths = ("/v1/voice/transcriptions", "/v1/domains/")
+
+    @app.middleware("http")
+    async def limit_body_size(request: Request, call_next: Any) -> Any:
+        """One megabyte for JSON. Audio uploads and domain imports have their own, larger limits."""
+        length = request.headers.get("content-length", "")
+        path = request.url.path
+        exempt = path.startswith(big_body_paths[0]) or (
+            path.startswith(big_body_paths[1]) and path.endswith("/import")
+        )
+        if length.isdigit() and int(length) > max_json_bytes and not exempt:
+            return error_body(request, "payload_too_large", 413)
+        return await call_next(request)
+
     def error_body(request: Request, error: str, status: int, **extra: Any) -> JSONResponse:
         """The one error shape: `error` (as always), `code` (taxonomy), `correlation_id`."""
         content: dict[str, Any] = {
@@ -99,7 +114,11 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
         # Field names only. FastAPI's default body echoes the offending input, which could be a
         # key or a note; this one never does.
         first = exc.errors()[0] if exc.errors() else {}
-        location = [str(part) for part in first.get("loc", ()) if part not in ("body", "query")]
+        location = [
+            str(part)
+            for part in first.get("loc", ())
+            if part not in ("body", "query") and not isinstance(part, int)
+        ]
         field = location[-1] if location else None
         if field == "schema_version":
             return error_body(request, "unsupported_schema_version", 422, field=field)

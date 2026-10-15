@@ -263,8 +263,9 @@ public sealed class ActionsApi : IActionsApi
     {
         try
         {
+            // A typed validation error carries a sentence in "detail"; other errors only a code.
             return JsonNode.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false)) is JsonObject o
-                ? o["error"]?.GetValue<string>()
+                ? (o["detail"]?.GetValue<string>() ?? o["error"]?.GetValue<string>())
                 : null;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)

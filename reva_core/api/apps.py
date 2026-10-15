@@ -13,10 +13,11 @@ No `from __future__ import annotations`: see the note at the top of `routes.py`.
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from reva_core.api.auth import build_auth_dependency
+from reva_core.domains.service import DomainRequestError
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.policy import activity
 from reva_core.policy.apps import AppCatalogError
@@ -39,7 +40,7 @@ class ApproveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str | None = Field(default=None, max_length=60)
-    aliases: list[str] = Field(default_factory=list, max_length=8)
+    aliases: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=8)
 
 
 def build_apps_router(lifecycle: CoreLifecycle) -> APIRouter:
@@ -84,9 +85,7 @@ def build_apps_router(lifecycle: CoreLifecycle) -> APIRouter:
         try:
             lifecycle.apps.approve(key, payload.display_name, payload.aliases)
         except AppCatalogError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-            ) from exc
+            raise DomainRequestError("validation_error", 422, str(exc)) from exc
         return listing()
 
     @router.delete("/apps/{key}")
@@ -98,9 +97,7 @@ def build_apps_router(lifecycle: CoreLifecycle) -> APIRouter:
             lifecycle.apps.remove(key)
             lifecycle.apps.dismiss(key)
         except AppCatalogError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-            ) from exc
+            raise DomainRequestError("validation_error", 422, str(exc)) from exc
         return listing()
 
     @router.get("/activity")

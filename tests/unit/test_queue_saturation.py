@@ -265,3 +265,18 @@ def test_oversized_ledger_payloads_stay_valid_and_do_not_mutate_input(
         assert json.dumps(payload) == original
     finally:
         conn.close()
+
+
+def test_an_unreported_grant_that_expired_shows_in_activity_as_could_not_confirm() -> None:
+    from reva_core.policy import activity
+
+    broker = make_broker()
+    view = broker.propose(Proposal("act-unreported", "windows.app.open", {"app_key": "notepad"}))
+    assert view.order is not None
+    broker.clock = lambda: NOW + GRANT_TTL + timedelta(seconds=1)
+    broker.get(view.action_id)  # any read releases it
+
+    (row,) = activity.recent(broker.ledger)
+
+    assert row["action_id"] == "act-unreported"
+    assert row["result"] == "Couldn't confirm"
