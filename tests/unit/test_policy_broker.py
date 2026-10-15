@@ -688,3 +688,30 @@ def test_no_registry_names_a_payment_transfer_purchase_bank_login_or_dosing_capa
             "files.delete",
             "email.send",
         } <= set(document["forbidden_capability_prefixes"])
+
+
+# ----------------------------------------------- shared vectors (also run by the Windows tests)
+
+
+def _vector_cases():
+    path = ROOT / "tests" / "fixtures" / "grant_vectors.json"
+    document = json.loads(path.read_text("utf-8"))
+    return document["public_key_pem"], document["cases"]
+
+
+@pytest.mark.parametrize("case", _vector_cases()[1], ids=lambda c: c["name"])
+def test_the_shared_grant_vectors_give_the_same_answer_in_python(case: dict) -> None:
+    public_key, _ = _vector_cases()
+    verifier = GrantVerifier(public_key.encode("ascii"), ReplayCache())
+
+    result = verifier.verify(
+        Grant.from_dict(case["grant"]),
+        case["signature"],
+        now=datetime.fromisoformat(case["now"]),
+        capability=case["capability"],
+        args_hash=args_hash(case["args"]),
+        target_device=case["target_device"],
+        actor=case["actor"],
+    )
+
+    assert result.reason == case["expect"], case["name"]
