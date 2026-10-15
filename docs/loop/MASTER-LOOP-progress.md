@@ -2,7 +2,7 @@
 
 Resume command: "Resume MASTER LOOP from docs/loop/MASTER-LOOP-progress.md"
 
-Last updated 2026-10-15, main at 0cb327d. Current phase: B (Windows). Next slice: **B3 (S09 commands + open apps)**, then B4.
+Last updated 2026-10-15, main at d384df2. Current phase: B closeout, then C (phone) in order C1 → C2 → C3. Order after C: D → G → E → F → H. Stop point: after C3 software, Phase C report, before D1.
 
 | Slice | PR | Merge commit | CI lanes at merge | Findings fixed / left | Tests at merge | Open hardware rows | Pending tag | Status |
 |---|---|---|---|---|---|---|---|---|
@@ -16,8 +16,9 @@ Last updated 2026-10-15, main at 0cb327d. Current phase: B (Windows). Next slice
 | B2a mood engine, avatar-events 2.1, rate to voice | #12 | 81d5a03 | all pass (rerun after ledger conflict) | judgement calls on persona conflicts documented | Python 974 | - | alpha.7 | merged |
 | B2b avatar package + avatar CI lane | #13 | see git log | all 7 pass (avatar lane fixed once: slow software WebGL on CI) | frame schedule bug (48 fps on 144 Hz) fixed | avatar unit 35, browser 9 | GPU profile, lip-sync offset, pose screenshots | alpha.7 | merged |
 | B2c avatar host (WebView2), settings | #14 | 0c39678 | all pass | WebView2 failed with 0x8007007E until the app built as win-x64; browser accessibility tree off | dotnet 735, FlaUI 10 | see B2 rows | alpha.7 | merged |
-| B3 S09 commands + open apps | - | - | - | - | - | - | alpha.8 | next |
-| B4 CORE-2 | - | - | - | - | - | - | alpha.9 | queued |
+| B3a/b/c S09 broker, routing, executor | #15, #16, #17 | see git log | all pass | see PR pages | see PR pages | B3c rows | alpha.8 | merged |
+| B4 CORE-2 (+ B4-FIX) | #18 | d384df25c651 | all 6 pass at 518d9a43d10b (run 38790464725); main push run 38794259392 pass | streamed body limits, version validation, Activity expiry, telemetry deletion fixed | recorded: Python 1618/20 skipped, .NET 806/12 UI skips, avatar 35+9 | none new | alpha.9 PENDING | merged |
+| B-reconcile | - | - | - | - | - | - | - | next |
 
 CI run ids are on each PR page. Tags pushed since v2.0.0-alpha.2: none. Pending tags (never tagged with open hardware rows): alpha.3 to alpha.5 (older slices), alpha.6 (B1), alpha.7 (B2), then alpha.8 onward.
 
@@ -36,3 +37,12 @@ CI run ids are on each PR page. Tags pushed since v2.0.0-alpha.2: none. Pending 
 ## Notes
 - Working tree `D:\Projects\Reva` (branch `fixing-things`) holds uncommitted PIPE-1/planner work and is untouched. Loop work uses worktrees `D:\Projects\Reva-<slice>`.
 - Two merge conflicts so far came from appending rows to the end of `tests/evidence/ledger.csv` in parallel branches; resolution is keeping both sets.
+
+## Known limitations (kept explicit)
+- AR-CORE-010 PARTIAL: consent filter exists; live cloud domain context not wired (G4). Spoken transcripts are sent when hosted voice processing is on.
+- Vault config precedence works with injected stores; production startup injection incomplete (AR-CORE-008 PARTIAL).
+- Dependency advisories (15 findings, 5 packages) and playback-watchdog cleanup warnings unresolved.
+- Hardware rows open; no release tag, AWS deployment or cloud CD pipeline.
+
+## Exact next action
+Phase 2: reconcile B requirements against code and ledger (`docs/loop/B-RECONCILIATION.md`), then C1.
