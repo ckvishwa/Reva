@@ -2,14 +2,37 @@
 
 Resume command: "Resume MASTER LOOP from docs/loop/MASTER-LOOP-progress.md"
 
-| Slice | PR | Merge commit | CI run / lanes | Findings fixed/left | Tests | Open hardware rows | Pending tag | Status |
+Last updated 2026-10-15, main at 0cb327d. Current phase: B (Windows). Next slice: **B3 (S09 commands + open apps)**, then B4.
+
+| Slice | PR | Merge commit | CI lanes at merge | Findings fixed / left | Tests at merge | Open hardware rows | Pending tag | Status |
 |---|---|---|---|---|---|---|---|---|
-| Loop file | direct to main | 5c454c3 | docs only | - | - | - | - | done |
-| A0 coverage audit | direct to main | see git log | docs only | - | 207 rows: 42 DONE, 41 PARTIAL, 123 NOT STARTED, 1 DEFERRED | - | - | done |
-| B0 housekeeping | #6 | b6198f8 | run 38694534772: python, csharp-desktop, contracts, kernel, android all pass (first run failed: ledger CSV quoting, fixed) | 1 self-review finding fixed (migration could overwrite newer file) | Python 776 passed / 122 skipped | none | none | merged |
-| B1 S07 real voice loop | - | - | - | - | - | - | v2.0.0-alpha.6 | next |
+| Loop file | direct | 5c454c3 | docs only | - | - | - | - | done |
+| A0 coverage audit | direct | f76be18 | docs only | - | 207 rows | - | - | done (COVERAGE.md refreshed after B2) |
+| B0 housekeeping | #6 | b6198f8 | python, csharp-desktop, contracts, kernel, android pass (first run failed on ledger CSV quoting) | 1 self-review finding fixed (migration could overwrite a newer file) | Python 776 | none | none | merged |
+| B1a Core voice turn pipeline | #8 | cd90d12 | all pass | self-review: endless VAD speech was unbounded, fixed | Python 824 | see B1 rows | v2.0.0-alpha.6 | merged |
+| B1b Windows live voice (NAudio, PTT, Talk panel) | #9 | 9f032f0 | all pass | injected keys ignored by the hotkey, reply fetch limited to this session's audio path | dotnet 660, FlaUI 9 | AR-WIN-004/005/010/015 hardware | alpha.6 | merged |
+| B1c cloud reasoning, Ollama eval, measuring tools | #10 | aaf21c1 | all pass (rerun after ledger conflict) | key echoed in a 422 body fixed (body read by hand); client closed after each call | Python 905 | STT benchmark, wake word, real cloud turn | alpha.6 | merged |
+| B1d Settings page for cloud + notice | #11 | see git log | all pass | none | dotnet 674, FlaUI 10 | - | alpha.6 | merged |
+| B2a mood engine, avatar-events 2.1, rate to voice | #12 | 81d5a03 | all pass (rerun after ledger conflict) | judgement calls on persona conflicts documented | Python 974 | - | alpha.7 | merged |
+| B2b avatar package + avatar CI lane | #13 | see git log | all 7 pass (avatar lane fixed once: slow software WebGL on CI) | frame schedule bug (48 fps on 144 Hz) fixed | avatar unit 35, browser 9 | GPU profile, lip-sync offset, pose screenshots | alpha.7 | merged |
+| B2c avatar host (WebView2), settings | #14 | 0c39678 | all pass | WebView2 failed with 0x8007007E until the app built as win-x64; browser accessibility tree off | dotnet 735, FlaUI 10 | see B2 rows | alpha.7 | merged |
+| B3 S09 commands + open apps | - | - | - | - | - | - | alpha.8 | next |
+| B4 CORE-2 | - | - | - | - | - | - | alpha.9 | queued |
 
-Pending tags (none pushed since v2.0.0-alpha.2): alpha.3-5 pending hardware (see ledger), then alpha.6 onward per loop file.
+CI run ids are on each PR page. Tags pushed since v2.0.0-alpha.2: none. Pending tags (never tagged with open hardware rows): alpha.3 to alpha.5 (older slices), alpha.6 (B1), alpha.7 (B2), then alpha.8 onward.
 
-Notes
-- Working tree D:\Projects\Reva (branch fixing-things) holds uncommitted PIPE-1/planner work; not touched. Loop work uses worktrees under D:\Projects\Reva-<slice>.
+## Decisions taken in this loop (owner can overrule)
+- Ollama local model for tool routing: `qwen2.5:3b-instruct-q4_K_M` (18/20, 0.43 s p50). `llama3.1:8b` stays the ADK chat default until measured.
+- Cloud model default `claude-opus-5-5`, 8 s timeout, `claude-sonnet-5-5` suggested for faster voice. All domains default off for cloud.
+- Placeholder avatar: pixiv VRM1_Constraint_Twist_Sample (VRM licence 1.0).
+- App builds as `win-x64` (needed by WebView2).
+- UI-automation runs set `REVA_DESKTOP_AVATAR=off`.
+
+## Open items for the owner (not blocking)
+- Hardware rows in `tests/evidence/ledger.csv` (see the Phase B checklist in `docs/loop/PHASE-B-hardware.md`).
+- A custom "Hey Reva" openWakeWord model must be trained (none exists) before that engine can be compared.
+- `docs/voice/mood-engine.md`: Kokoro has no pitch or softness control; only speaking rate is applied.
+
+## Notes
+- Working tree `D:\Projects\Reva` (branch `fixing-things`) holds uncommitted PIPE-1/planner work and is untouched. Loop work uses worktrees `D:\Projects\Reva-<slice>`.
+- Two merge conflicts so far came from appending rows to the end of `tests/evidence/ledger.csv` in parallel branches; resolution is keeping both sets.
