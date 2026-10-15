@@ -44,6 +44,8 @@ public sealed class LiveVoiceViewModel : ObservableObject
 
     public string? Reply => _loop.LastReply is null ? null : $"REVA: {_loop.LastReply}";
 
+    public string? Notice => _loop.LastNotice;
+
     /// <summary>True only while the microphone device is really open.</summary>
     public bool MicOpen => _loop.MicOpen;
 
@@ -98,7 +100,7 @@ public sealed class LiveVoiceViewModel : ObservableObject
         foreach (var name in new[]
         {
             nameof(IsOn), nameof(CanTalk), nameof(StateText), nameof(Message), nameof(Transcript),
-            nameof(Reply), nameof(MicOpen), nameof(MicMuted), nameof(SpeakerMuted),
+            nameof(Reply), nameof(Notice), nameof(MicOpen), nameof(MicMuted), nameof(SpeakerMuted),
         })
         {
             RaisePropertyChanged(name);
