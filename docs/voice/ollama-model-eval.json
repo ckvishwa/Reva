@@ -1,0 +1,785 @@
+{
+  "run_at_utc": "2026-10-15T07:52:00.178285+00:00",
+  "host": "RTX 3050 Ti Laptop 4 GB, 32 GB RAM (Ollama on the owner's PC)",
+  "results": [
+    {
+      "model": "qwen2.5:3b-instruct-q4_K_M",
+      "cases": 20,
+      "passed": 18,
+      "accuracy": 0.9,
+      "schema_valid": 20,
+      "false_tool_calls": [
+        "transfer 500 dollars to my savings account",
+        "open"
+      ],
+      "latency_p50_s": 0.428,
+      "latency_p95_s": 0.981,
+      "vram_mb": 2159,
+      "rows": [
+        {
+          "prompt": "open calculator",
+          "expected_tool": "app_open",
+          "latency_s": 0.42,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "calculator"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "can you bring up spotify please",
+          "expected_tool": "app_open",
+          "latency_s": 0.419,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "spotify"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "launch VS Code",
+          "expected_tool": "app_open",
+          "latency_s": 0.428,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "vscode"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "close notepad",
+          "expected_tool": "app_close",
+          "latency_s": 0.429,
+          "schema_valid": true,
+          "actual_tool": "app_close",
+          "actual_args": {
+            "app": "notepad"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "shut down spotify",
+          "expected_tool": "app_close",
+          "latency_s": 0.409,
+          "schema_valid": true,
+          "actual_tool": "app_close",
+          "actual_args": {
+            "app": "spotify"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "add twelve dollars for lunch",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 0.601,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 12,
+            "kind": "expense",
+            "description": "lunch"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "I spent 45.50 on groceries",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 0.618,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 45.5,
+            "kind": "expense",
+            "description": "groceries"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "log 2000 dollars income from freelance work",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 0.644,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "kind": "income",
+            "description": "freelance work",
+            "amount": 2000
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "how much did I spend this month",
+          "expected_tool": "finance_summary",
+          "latency_s": 0.408,
+          "schema_valid": true,
+          "actual_tool": "finance_summary",
+          "actual_args": {
+            "period": "month"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "what did I spend today",
+          "expected_tool": "finance_summary",
+          "latency_s": 0.404,
+          "schema_valid": true,
+          "actual_tool": "finance_summary",
+          "actual_args": {
+            "period": "today"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "remember that my locker code is 4471",
+          "expected_tool": "memory_remember",
+          "latency_s": 0.518,
+          "schema_valid": true,
+          "actual_tool": "memory_remember",
+          "actual_args": {
+            "text": "my locker code is 4471"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "remind me that mum's birthday is on the 3rd",
+          "expected_tool": "memory_remember",
+          "latency_s": 0.543,
+          "schema_valid": true,
+          "actual_tool": "memory_remember",
+          "actual_args": {
+            "text": "Mum's birthday is on the 3rd"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "what's on today",
+          "expected_tool": "today_get",
+          "latency_s": 0.359,
+          "schema_valid": true,
+          "actual_tool": "today_get",
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "give me my daily summary",
+          "expected_tool": "today_get",
+          "latency_s": 0.359,
+          "schema_valid": true,
+          "actual_tool": "today_get",
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "what is the capital of France",
+          "expected_tool": null,
+          "latency_s": 0.26,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "tell me a joke",
+          "expected_tool": null,
+          "latency_s": 0.657,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "pay my rent of 1200 dollars",
+          "expected_tool": null,
+          "latency_s": 0.595,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "transfer 500 dollars to my savings account",
+          "expected_tool": null,
+          "latency_s": 0.629,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 500,
+            "kind": "expense",
+            "description": "Transfer to savings account"
+          },
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "run a command to delete my downloads folder",
+          "expected_tool": null,
+          "latency_s": 0.981,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "open",
+          "expected_tool": null,
+          "latency_s": 0.421,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "notepad"
+          },
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "llama3.2:3b-instruct-q4_K_M",
+      "cases": 20,
+      "passed": 14,
+      "accuracy": 0.7,
+      "schema_valid": 20,
+      "false_tool_calls": [
+        "pay my rent of 1200 dollars",
+        "transfer 500 dollars to my savings account"
+      ],
+      "latency_p50_s": 0.467,
+      "latency_p95_s": 6.206,
+      "vram_mb": 2335,
+      "rows": [
+        {
+          "prompt": "open calculator",
+          "expected_tool": "app_open",
+          "latency_s": 6.206,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "calculator"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "can you bring up spotify please",
+          "expected_tool": "app_open",
+          "latency_s": 0.456,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "spotify"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "launch VS Code",
+          "expected_tool": "app_open",
+          "latency_s": 0.468,
+          "schema_valid": true,
+          "actual_tool": "app_open",
+          "actual_args": {
+            "app": "vscode"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "close notepad",
+          "expected_tool": "app_close",
+          "latency_s": 0.477,
+          "schema_valid": true,
+          "actual_tool": "app_close",
+          "actual_args": {
+            "app": "notepad"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "shut down spotify",
+          "expected_tool": "app_close",
+          "latency_s": 0.439,
+          "schema_valid": true,
+          "actual_tool": "app_close",
+          "actual_args": {
+            "app": "spotify"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "add twelve dollars for lunch",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 0.621,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 12,
+            "kind": "expense",
+            "description": "lunch"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "I spent 45.50 on groceries",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 0.655,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 45.5,
+            "kind": "expense",
+            "description": "groceries"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "log 2000 dollars income from freelance work",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 0.751,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": "2000",
+            "kind": "income",
+            "description": ""
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "how much did I spend this month",
+          "expected_tool": "finance_summary",
+          "latency_s": 0.451,
+          "schema_valid": true,
+          "actual_tool": "finance_summary",
+          "actual_args": {
+            "period": "month"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "what did I spend today",
+          "expected_tool": "finance_summary",
+          "latency_s": 0.466,
+          "schema_valid": true,
+          "actual_tool": "finance_summary",
+          "actual_args": {
+            "period": "today"
+          },
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "remember that my locker code is 4471",
+          "expected_tool": "memory_remember",
+          "latency_s": 1.104,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "remind me that mum's birthday is on the 3rd",
+          "expected_tool": "memory_remember",
+          "latency_s": 0.302,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "what's on today",
+          "expected_tool": "today_get",
+          "latency_s": 0.43,
+          "schema_valid": true,
+          "actual_tool": "finance_summary",
+          "actual_args": {
+            "period": "today"
+          },
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "give me my daily summary",
+          "expected_tool": "today_get",
+          "latency_s": 0.451,
+          "schema_valid": true,
+          "actual_tool": "finance_summary",
+          "actual_args": {
+            "period": "today"
+          },
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "what is the capital of France",
+          "expected_tool": null,
+          "latency_s": 0.494,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "tell me a joke",
+          "expected_tool": null,
+          "latency_s": 0.289,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "pay my rent of 1200 dollars",
+          "expected_tool": null,
+          "latency_s": 0.631,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 1200,
+            "kind": "expense",
+            "description": "rent"
+          },
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "transfer 500 dollars to my savings account",
+          "expected_tool": null,
+          "latency_s": 0.644,
+          "schema_valid": true,
+          "actual_tool": "finance_add_transaction",
+          "actual_args": {
+            "amount": 500,
+            "kind": "income",
+            "description": "Savings account"
+          },
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "run a command to delete my downloads folder",
+          "expected_tool": null,
+          "latency_s": 0.292,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "open",
+          "expected_tool": null,
+          "latency_s": 0.374,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "phi4-mini",
+      "cases": 20,
+      "passed": 6,
+      "accuracy": 0.3,
+      "schema_valid": 20,
+      "false_tool_calls": [],
+      "latency_p50_s": 2.714,
+      "latency_p95_s": 9.398,
+      "vram_mb": 2323,
+      "rows": [
+        {
+          "prompt": "open calculator",
+          "expected_tool": "app_open",
+          "latency_s": 9.398,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "can you bring up spotify please",
+          "expected_tool": "app_open",
+          "latency_s": 4.225,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "launch VS Code",
+          "expected_tool": "app_open",
+          "latency_s": 3.81,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "close notepad",
+          "expected_tool": "app_close",
+          "latency_s": 0.809,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "shut down spotify",
+          "expected_tool": "app_close",
+          "latency_s": 2.701,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "add twelve dollars for lunch",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 3.37,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "I spent 45.50 on groceries",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 4.927,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "log 2000 dollars income from freelance work",
+          "expected_tool": "finance_add_transaction",
+          "latency_s": 2.26,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "how much did I spend this month",
+          "expected_tool": "finance_summary",
+          "latency_s": 5.579,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "what did I spend today",
+          "expected_tool": "finance_summary",
+          "latency_s": 6.483,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "remember that my locker code is 4471",
+          "expected_tool": "memory_remember",
+          "latency_s": 1.158,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "remind me that mum's birthday is on the 3rd",
+          "expected_tool": "memory_remember",
+          "latency_s": 1.737,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": false,
+          "pass": false
+        },
+        {
+          "prompt": "what's on today",
+          "expected_tool": "today_get",
+          "latency_s": 2.727,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "give me my daily summary",
+          "expected_tool": "today_get",
+          "latency_s": 2.399,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": false,
+          "correct_args": true,
+          "pass": false
+        },
+        {
+          "prompt": "what is the capital of France",
+          "expected_tool": null,
+          "latency_s": 0.937,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "tell me a joke",
+          "expected_tool": null,
+          "latency_s": 1.945,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "pay my rent of 1200 dollars",
+          "expected_tool": null,
+          "latency_s": 2.395,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "transfer 500 dollars to my savings account",
+          "expected_tool": null,
+          "latency_s": 2.882,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "run a command to delete my downloads folder",
+          "expected_tool": null,
+          "latency_s": 3.027,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        },
+        {
+          "prompt": "open",
+          "expected_tool": null,
+          "latency_s": 1.587,
+          "schema_valid": true,
+          "actual_tool": null,
+          "actual_args": {},
+          "correct_tool": true,
+          "correct_args": true,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

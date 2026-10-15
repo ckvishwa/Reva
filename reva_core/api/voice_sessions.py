@@ -11,7 +11,7 @@ is audited as `authentication_failed`.
 
 Client control messages (JSON text frames): `capture.requested`,
 `capture.open`, `capture.denied`, `capture.lost`, `interrupt`, `cancel`,
-`ping`, `ptt.down`, `ptt.up`, `mic.mute`, `mic.unmute`, `playback.finished`
+`ping`, `ptt.down`, `ptt.up`, `ptt.cancel`, `mic.mute`, `mic.unmute`, `playback.finished`
 (optionally with the `turn_epoch` of the reply that finished). Anything else, or
 an illegal one for the current state, produces a typed `BAD_CONTROL_MESSAGE`
 error event and changes nothing.
@@ -44,6 +44,7 @@ from reva_core.language.dialogue import FileDialogueStore
 from reva_core.language.router import IntentRouter
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.orchestration.typed_interaction import TypedInteractionService
+from reva_core.providers.cloud import HybridResponder
 from reva_core.session.coordinator import SessionCoordinator, VoiceSession
 from reva_core.session.events import SessionErrorCode, SessionEventKind
 from reva_core.session.pipeline import TurnPipeline
@@ -104,7 +105,7 @@ def build_voice_session_router(
     )
     _sweep_scratch(scratch)
 
-    async def reply_text(text: str, correlation_id: str) -> str:
+    async def local_reply(text: str, correlation_id: str) -> str:
         service = TypedInteractionService(
             lifecycle.connection,
             lifecycle.primary_device_id,
@@ -114,6 +115,8 @@ def build_voice_session_router(
             ranking_config=lifecycle.ranking_config,
         )
         return (await service.handle_typed_message(text, correlation_id)).reply
+
+    reply_text = HybridResponder(local_reply, lifecycle.cloud_reasoner())
 
     def attach_pipeline(session: VoiceSession) -> TurnPipeline:
         scratch.mkdir(parents=True, exist_ok=True)
@@ -268,6 +271,7 @@ async def _handle_control(session: VoiceSession, raw: str, pipeline: TurnPipelin
             {
                 "ptt.down": pipeline.on_ptt_down,
                 "ptt.up": pipeline.on_ptt_up,
+                "ptt.cancel": pipeline.on_ptt_cancel,
                 "mic.mute": _sync(lambda: pipeline.set_muted(True)),
                 "mic.unmute": _sync(lambda: pipeline.set_muted(False)),
                 "playback.finished": _playback(pipeline, epoch),
