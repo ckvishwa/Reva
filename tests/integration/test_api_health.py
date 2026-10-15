@@ -20,7 +20,7 @@ def test_health_endpoint_reports_healthy(tmp_path):
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "healthy"
-        assert body["db_schema_version"] == 3
+        assert body["db_schema_version"] == 4
     finally:
         lifecycle.shutdown()
 
