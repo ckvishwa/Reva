@@ -23,6 +23,7 @@ public sealed class NavigationViewModel : ObservableObject
     public const string TalkId = "talk";
     public const string FinanceId = "finance";
     public const string DevicesId = "devices";
+    public const string SettingsId = "settings";
 
     public static IReadOnlyList<NavSection> AllSections { get; } = new[]
     {
@@ -39,7 +40,7 @@ public sealed class NavigationViewModel : ObservableObject
         new NavSection("activity", "Activity", NavGroup.Tools, IsBuilt: false),
         new NavSection(DevicesId, "Devices", NavGroup.Tools, IsBuilt: true),
         new NavSection("persona", "Persona & Voice", NavGroup.Tools, IsBuilt: false),
-        new NavSection("settings", "Settings", NavGroup.Tools, IsBuilt: false),
+        new NavSection(SettingsId, "Settings", NavGroup.Tools, IsBuilt: true),
     };
 
     public IReadOnlyList<NavSection> DomainSections { get; } = AllSections.Where(s => s.Group == NavGroup.Domains).ToList();
@@ -58,6 +59,7 @@ public sealed class NavigationViewModel : ObservableObject
                 RaisePropertyChanged(nameof(ShowsTalk));
                 RaisePropertyChanged(nameof(ShowsFinance));
                 RaisePropertyChanged(nameof(ShowsDevices));
+                RaisePropertyChanged(nameof(ShowsSettings));
                 RaisePropertyChanged(nameof(ShowsComingSoon));
                 RaisePropertyChanged(nameof(ComingSoonTitle));
                 RaisePropertyChanged(nameof(ComingSoonText));
@@ -70,6 +72,8 @@ public sealed class NavigationViewModel : ObservableObject
     public bool ShowsFinance => Selected.Id == FinanceId;
 
     public bool ShowsDevices => Selected.Id == DevicesId;
+
+    public bool ShowsSettings => Selected.Id == SettingsId;
 
     public bool ShowsComingSoon => !Selected.IsBuilt;
 

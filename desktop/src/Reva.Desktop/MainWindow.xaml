@@ -170,6 +170,11 @@
         ViewModel="{x:Bind Devices}"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsDevices), Mode=OneWay}" />
 
+    <views:SettingsPage
+        x:Name="SettingsPanel"
+        ViewModel="{x:Bind CloudSettings}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsSettings), Mode=OneWay}" />
+
     <views:ComingSoonPage
         x:Name="ComingSoonPanel"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsComingSoon), Mode=OneWay}" />
