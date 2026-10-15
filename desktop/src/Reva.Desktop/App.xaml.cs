@@ -69,6 +69,17 @@ public partial class App : Application
         var financeApi = new Finance.FinanceApiClient(
             httpClient, tokenProvider, configuration.RequestTimeout);
         var today = new ViewModels.TodayViewModel(financeApi);
+        var uiQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        var voiceLoop = new Voice.VoiceLoopController(
+            new Voice.VoiceSessionClient(httpClient, tokenProvider, configuration.CoreBaseUrl),
+            new Voice.ArbitratedAudioCapture(
+                new Voice.NAudioCapture(),
+                microphoneArbiter,
+                () => wakeWord.SuspendForHoldToTalkAsync(),
+                () => wakeWord.ResumeAfterHoldToTalkAsync()),
+            new Voice.NAudioPlayback(),
+            new Voice.GlobalPushToTalkHotkey());
+        var liveVoice = new ViewModels.LiveVoiceViewModel(voiceLoop, action => uiQueue.TryEnqueue(() => action()));
         var devicesApi = new Devices.DevicesApiClient(httpClient, tokenProvider, configuration.RequestTimeout);
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),
@@ -78,6 +89,7 @@ public partial class App : Application
             new ViewModels.FinanceViewModel(financeApi),
             today,
             new ViewModels.DevicesViewModel(devicesApi, new Devices.QrCoderEncoder()),
+            liveVoice,
             wakeWord);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)
