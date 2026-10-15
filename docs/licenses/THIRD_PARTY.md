@@ -157,3 +157,12 @@ has no license field; it does not mean the package has no license.
 | Component | Version | Declared license | Notes |
 |---|---|---|---|
 | NAudio (meta-package) and its parts `NAudio.Core`, `NAudio.Wasapi`, `NAudio.WinMM`, `NAudio.Asio`, `NAudio.Midi` | 2.2.1 (released 2023, pinned in `Reva.Desktop.csproj`, hashes in `packages.lock.json`) | MIT (read from the package `.nuspec` files on 2026-10-15; the meta-package ships `license.txt`) | Microphone capture and reply playback on WASAPI (decision recorded in `CLAUDE.md`). Permissive: keep the copyright notice with any redistribution. No native code of its own; it calls Windows audio APIs. |
+
+## Avatar page (avatar/)
+
+| Component | Version | Licence | Notes |
+|---|---|---|---|
+| three | 0.186.1 (2026-09-24) | MIT | Bundled into `avatar/dist/avatar.js`; no CDN. |
+| @pixiv/three-vrm and its parts | 3.5.5 (2026-07-09) | MIT | Loads and animates VRM models. |
+| esbuild, ajv, playwright-core | 0.28.2, 8.20.0, 1.63.0 | MIT, MIT, Apache-2.0 | Dev tools only (build and tests); not shipped. |
+| `assets/avatar/placeholder.vrm` | VRM1_Constraint_Twist_Sample v1.0.1, SHA-256 `12c2b97e95e700783a6a550dc0eee2d7880aeedccef9ae67bc4c5a2f0f2631a2` | VRM Consortium licence 1.0 (`https://vrm.dev/licenses/1.0/`), copyright 2022 pixiv Inc. | Read from the file's own VRM metadata on 2026-10-15: redistribution allowed, modification allowed, commercial use by a corporation allowed, credit notation unnecessary. Taken from the pixiv/three-vrm repository examples. Placeholder only; replaced by the owner's Blender model at F0. |
