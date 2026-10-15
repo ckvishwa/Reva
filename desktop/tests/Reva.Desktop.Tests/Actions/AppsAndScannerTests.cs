@@ -68,6 +68,21 @@ public sealed class AppsAndScannerTests : IDisposable
         Assert.Null(new AppTargetStore(path).Find("obsidian"));
     }
 
+    [Theory]
+    [InlineData("ApplicationFrameHost")]
+    [InlineData("explorer")]
+    [InlineData("svchost")]
+    [InlineData("WindowsTerminal")]
+    public void Shared_host_processes_are_never_learned_as_an_apps_process_name(string host)
+    {
+        var store = new AppTargetStore(null);
+        store.Remember("some-uwp-app", "Some App", @"C:\Start\Some.lnk");
+
+        store.Learn("some-uwp-app", host);
+
+        Assert.Empty(store.Find("some-uwp-app")!.ProcessNames);
+    }
+
     [Fact]
     public void A_damaged_target_file_means_no_extra_apps_not_a_crash()
     {

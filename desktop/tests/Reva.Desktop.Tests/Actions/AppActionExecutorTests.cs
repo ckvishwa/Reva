@@ -107,10 +107,24 @@ public sealed class AppActionExecutorTests : IDisposable
     }
 
     [Fact]
+    public async Task An_approved_app_with_no_known_process_needs_a_window_that_looks_like_it()
+    {
+        _targets.Add(new LaunchTarget("obsidian", "Obsidian", @"C:\Start\Obsidian.lnk", Array.Empty<string>()));
+        _launcher.StartPid = 31;
+        _launcher.Running = new[] { 31 };
+        _launcher.OnStart = () => _windows.Add(new TopWindow(new IntPtr(0x56), 90, "SomethingElse", "Unrelated popup"));
+
+        var report = await Executor().ExecuteAsync(Order("valid_obsidian"));
+
+        Assert.Equal("unknown", report.Status);
+        Assert.Empty(_targets.Learned);
+    }
+
+    [Fact]
     public async Task An_approved_app_with_no_known_process_learns_its_name_from_the_window()
     {
         _targets.Add(new LaunchTarget("obsidian", "Obsidian", @"C:\Start\Obsidian.lnk", Array.Empty<string>()));
-        _launcher.OnStart = () => _windows.Add(new TopWindow(new IntPtr(0x55), 31, "Obsidian"));
+        _launcher.OnStart = () => _windows.Add(new TopWindow(new IntPtr(0x55), 31, "Obsidian", "Vault - Obsidian v1.5"));
 
         var report = await Executor().ExecuteAsync(Order("valid_obsidian"));
 

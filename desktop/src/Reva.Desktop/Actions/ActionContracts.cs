@@ -23,7 +23,7 @@ public sealed record ActionReport(string Status, ActionEvidence? Evidence, strin
 }
 
 /// <summary>A visible, titled top-level window.</summary>
-public readonly record struct TopWindow(IntPtr Handle, int ProcessId, string ProcessName);
+public readonly record struct TopWindow(IntPtr Handle, int ProcessId, string ProcessName, string Title = "");
 
 public interface IWindowProbe
 {

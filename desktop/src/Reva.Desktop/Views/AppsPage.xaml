@@ -7,7 +7,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Padding="24" Spacing="16" MaxWidth="820" HorizontalAlignment="Left">
-            <TextBlock Text="Apps &amp; Actions" Style="{StaticResource RevaTitleText}" />
+            <TextBlock Text="Apps &amp; Actions" Style="{StaticResource RevaTitleText}" AutomationProperties.AutomationId="AppsTitle" />
             <TextBlock
                 Style="{StaticResource RevaMutedText}"
                 TextWrapping="Wrap"

@@ -22,6 +22,14 @@ public sealed class AppTargetStore : IAppTargets
         new("spotify", "Spotify", "spotify:", new[] { "Spotify" }),
     };
 
+    // Shared host processes: closing "by name" would close other programs, so they are never learned.
+    private static readonly string[] SharedHosts =
+    {
+        "ApplicationFrameHost", "explorer", "svchost", "dwm", "RuntimeBroker", "ShellExperienceHost",
+        "SystemSettings", "WWAHost", "msedgewebview2", "sihost", "StartMenuExperienceHost",
+        "SearchHost", "TextInputHost", "dllhost", "conhost", "cmd", "powershell", "pwsh", "WindowsTerminal",
+    };
+
     private readonly string? _path;
     private readonly object _lock = new();
     private readonly Dictionary<string, StoredApp> _stored = new(StringComparer.Ordinal);
@@ -79,6 +87,7 @@ public sealed class AppTargetStore : IAppTargets
         lock (_lock)
         {
             if (!_stored.TryGetValue(key, out var app) || processName.Length == 0
+                || SharedHosts.Contains(processName, StringComparer.OrdinalIgnoreCase)
                 || app.ProcessNames.Contains(processName, StringComparer.OrdinalIgnoreCase))
             {
                 return;

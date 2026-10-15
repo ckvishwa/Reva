@@ -106,7 +106,7 @@ public sealed class SystemWindowProbe : IWindowProbe
 
                 if (name.Length > 0)
                 {
-                    found.Add(new TopWindow(handle, (int)pid, name));
+                    found.Add(new TopWindow(handle, (int)pid, name, Title(handle)));
                 }
 
                 return true;
@@ -116,6 +116,18 @@ public sealed class SystemWindowProbe : IWindowProbe
     }
 
     public IntPtr Foreground() => Native.GetForegroundWindow();
+
+    private static string Title(IntPtr handle)
+    {
+        var length = Native.GetWindowTextLength(handle);
+        if (length <= 0 || length > 512)
+        {
+            return string.Empty;
+        }
+
+        var buffer = new System.Text.StringBuilder(length + 1);
+        return Native.GetWindowText(handle, buffer, buffer.Capacity) > 0 ? buffer.ToString() : string.Empty;
+    }
 
     private static string ProcessName(int pid)
     {
@@ -142,6 +154,9 @@ public sealed class SystemWindowProbe : IWindowProbe
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         public static extern int GetWindowTextLength(IntPtr handle);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetWindowText(IntPtr handle, System.Text.StringBuilder text, int maxCount);
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
         public static extern IntPtr GetWindowLongPtr(IntPtr handle, int index);

@@ -146,11 +146,23 @@ public sealed class AppActionExecutor
             : new ActionReport(ActionReport.Unknown, new ActionEvidence("process_started", $"pid:{pid} no_window"), "no window");
     }
 
+    private static string Squash(string text) =>
+        new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
     private TopWindow? FindWindow(LaunchTarget target, HashSet<IntPtr> before)
     {
         var names = target.ProcessNames;
+        var squashedKey = Squash(target.Key);
+        var squashedName = Squash(target.DisplayName);
+
+        // A known process name must match. An approved app we have not opened before has none yet, so
+        // the new window must look like it: its process or its title carries the app's name or key.
         bool Matches(TopWindow w) =>
-            names.Count == 0 || names.Contains(w.ProcessName, StringComparer.OrdinalIgnoreCase);
+            names.Count > 0
+                ? names.Contains(w.ProcessName, StringComparer.OrdinalIgnoreCase)
+                : Squash(w.ProcessName).Contains(squashedKey, StringComparison.Ordinal)
+                  || Squash(w.Title).Contains(squashedName, StringComparison.Ordinal)
+                  || Squash(w.Title).Contains(squashedKey, StringComparison.Ordinal);
 
         var windows = _windows.VisibleWindows();
         foreach (var window in windows)
