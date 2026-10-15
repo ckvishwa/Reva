@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://reva.local/schemas/avatar-events/2.0",
+  "$id": "https://reva.local/schemas/avatar-events/2.1",
   "title": "REVA avatar events (host to page, page to host)",
   "oneOf": [
     {
@@ -106,7 +106,8 @@
             "verified_outcome",
             "greeting",
             "error",
-            "idle_variation"
+            "idle_variation",
+            "mood"
           ]
         },
         "action_id": {
