@@ -125,7 +125,7 @@ test('the avatar mirrors states, drops stale epochs and moves the mouth only whi
 
   await send(page, { type: 'avatar.state', state: 'speaking', turn_epoch: 3 });
   await until('speaking');
-  const end = Date.now() + 3000;
+  const end = Date.now() + SLOW_RUNNER_MS; // ends as soon as the mouth opens; only a failure waits
   let opened = 0;
   while (Date.now() < end && opened <= 0.3) {
     await send(page, { type: 'avatar.mouth', t_ms: 0, rms: 0.8, turn_epoch: 3 });
@@ -178,7 +178,11 @@ test('drawing is capped at 60 fps, stops when the avatar is off and resumes when
   await page.waitForTimeout(2000);
   const drawn = (await renders(page)) - start;
   assert.ok(drawn <= 2 * 60 + 4, `drew ${drawn} frames in 2 s`);
-  assert.ok(drawn >= 2, `drew only ${drawn} frames in 2 s`); // software WebGL on CI is slow: this only proves it is drawing
+  // Software WebGL on a shared runner can draw fewer than two frames in two seconds, so "it is
+  // drawing" waits for frames to arrive instead of counting them in a fixed window.
+  await page.waitForFunction((from) => window.__revaAvatarDebug.renders >= from + 2, start, {
+    timeout: SLOW_RUNNER_MS,
+  });
 
   await send(page, { type: 'avatar.settings', enabled: false });
   await page.waitForTimeout(300);
@@ -187,8 +191,9 @@ test('drawing is capped at 60 fps, stops when the avatar is off and resumes when
   assert.equal(await renders(page), frozen, 'frames were drawn while the avatar was off');
 
   await send(page, { type: 'avatar.settings', enabled: true });
-  await page.waitForTimeout(600);
-  assert.ok((await renders(page)) > frozen, 'drawing did not resume');
+  await page.waitForFunction((from) => window.__revaAvatarDebug.renders > from, frozen, {
+    timeout: SLOW_RUNNER_MS,
+  }); // fails with a timeout if drawing never resumes
   await page.close();
 });
 
