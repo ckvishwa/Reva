@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from reva_core import __version__
+from reva_core.api.actions import build_actions_router
 from reva_core.api.cloud_settings import build_cloud_settings_router
 from reva_core.api.routes import build_router
 from reva_core.api.schemas import ErrorResponse
@@ -55,6 +56,7 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
     app.include_router(build_domains_router(lifecycle))
     app.include_router(build_devices_router(lifecycle))
     app.include_router(build_cloud_settings_router(lifecycle))
+    app.include_router(build_actions_router(lifecycle))
     app.include_router(voice_router)
     app.state.voice_sessions = voice_sessions
 
