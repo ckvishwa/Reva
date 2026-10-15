@@ -199,6 +199,11 @@ class TurnPipeline:
         if self.session.state == SessionState.LISTENING:
             self._spawn(self._run_turn(bytes(buffer)))
 
+    async def on_ptt_cancel(self) -> None:
+        """The client dropped the utterance (audio could not keep up, or the mic was muted)."""
+        self._ptt = None
+        self._discarding = False
+
     def set_muted(self, muted: bool) -> None:
         self.mic_muted = muted
         if muted:
