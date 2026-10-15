@@ -37,6 +37,8 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("GET", "/v1/settings/cloud"),
     ("PUT", "/v1/settings/cloud"),
     ("PUT", "/v1/settings/cloud/key"),
+    ("GET", "/v1/settings/privacy"),
+    ("PUT", "/v1/settings/privacy"),
     ("DELETE", "/v1/settings/cloud/key"),
     ("POST", "/v1/voice/sessions"),
     ("DELETE", "/v1/voice/sessions/{session_id}"),

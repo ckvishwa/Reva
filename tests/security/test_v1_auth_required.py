@@ -21,6 +21,8 @@ import pytest
         ("put", "/v1/settings/cloud", {"json": {"enabled": False}}),
         ("put", "/v1/settings/cloud/key", {"json": {"api_key": "sk-ant-nope-0123456789012"}}),
         ("delete", "/v1/settings/cloud/key", {}),
+        ("get", "/v1/settings/privacy", {}),
+        ("put", "/v1/settings/privacy", {"json": {"domains": {}}}),
         ("post", "/v1/voice/sessions", {"json": {}}),
         ("delete", "/v1/voice/sessions/some-session-id", {}),
         ("get", "/v1/voice/sessions/some-session-id/audio/some-audio-id", {}),
