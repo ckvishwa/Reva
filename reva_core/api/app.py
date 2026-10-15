@@ -29,6 +29,7 @@ from reva_core.api.apps import build_apps_router
 from reva_core.api.cloud_settings import build_cloud_settings_router
 from reva_core.api.privacy import build_privacy_router
 from reva_core.api.routes import build_router
+from reva_core.api.telemetry import build_telemetry_router
 from reva_core.api.voice_sessions import build_voice_session_router
 from reva_core.domains.routes import build_domains_router
 from reva_core.domains.service import DomainRequestError
@@ -61,6 +62,7 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
     app.include_router(build_devices_router(lifecycle))
     app.include_router(build_cloud_settings_router(lifecycle))
     app.include_router(build_privacy_router(lifecycle))
+    app.include_router(build_telemetry_router(lifecycle))
     app.include_router(build_actions_router(lifecycle))
     app.include_router(build_apps_router(lifecycle))
     app.include_router(voice_router)
@@ -82,6 +84,8 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
             "correlation_id": getattr(request.state, "correlation_id", None),
         }
         content.update({k: v for k, v in extra.items() if v})
+        if status >= 500:
+            lifecycle.telemetry.record("http.error", code=content["code"])
         return JSONResponse(status_code=status, content=content)
 
     @app.exception_handler(HTTPException)

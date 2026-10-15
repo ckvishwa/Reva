@@ -42,6 +42,7 @@ from reva_core.shared.logging import get_logger
 from reva_core.shared.time import utc_now
 from reva_core.storage.bootstrap import initialize_database
 from reva_core.storage.repositories.device_repository import DeviceRepository
+from reva_core.telemetry import Telemetry
 from reva_core.voice.vocabulary import build_vocabulary_prompt
 
 logger = get_logger("orchestration")
@@ -73,6 +74,7 @@ class CoreLifecycle:
         self._domain_key_provider = domain_key_provider
         self._domain_service: DomainService | None = None
         self._domain_privacy = DomainPrivacyStore(settings.data_dir)
+        self._telemetry = Telemetry(settings.data_dir)
         self._gateway_key_provider = gateway_key_provider
         self._gateway: GatewayManager | None = None
         self._anthropic_secret_store = anthropic_secret_store
@@ -129,6 +131,7 @@ class CoreLifecycle:
             )
         self._started_at = utc_now()
         self._status = CoreStatus.HEALTHY
+        self._telemetry.record("core.start", ok=True)
         logger.info(
             "core started",
             extra={
@@ -331,6 +334,10 @@ class CoreLifecycle:
     @property
     def cloud_settings_store(self) -> CloudSettingsStore:
         return self._cloud_settings_store
+
+    @property
+    def telemetry(self) -> Telemetry:
+        return self._telemetry
 
     @property
     def privacy_settings(self) -> PrivacySettings:
