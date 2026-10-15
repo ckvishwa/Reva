@@ -35,11 +35,12 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
 
 from reva_core.api.auth import bearer_token_matches, build_auth_dependency, record_auth_failure
 from reva_core.api.correlation import resolve_correlation_id
+from reva_core.api.versioned import VersionedRequest
 from reva_core.language.dialogue import FileDialogueStore
 from reva_core.language.router import IntentRouter
 from reva_core.orchestration.lifecycle import CoreLifecycle
@@ -52,6 +53,7 @@ from reva_core.session.pipeline import TurnPipeline
 from reva_core.session.turn_log import TurnRecorder
 from reva_core.shared.errors import ValidationError
 from reva_core.shared.logging import get_logger
+from reva_core.shared.versioning import ensure_supported
 
 logger = get_logger("api.voice_sessions")
 
@@ -60,9 +62,7 @@ _WS_POLICY_VIOLATION = 1008
 _MAX_CONTROL_CHARS = 4096
 
 
-class VoiceSessionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class VoiceSessionRequest(VersionedRequest):
     device_id: str | None = Field(default=None, min_length=8, max_length=64)
 
 
@@ -279,6 +279,9 @@ async def _handle_control(session: VoiceSession, raw: str, pipeline: TurnPipelin
     except json.JSONDecodeError:
         message = None
     kind = message.get("type") if isinstance(message, dict) else None
+    if isinstance(message, dict) and not _version_supported(message.get("schema_version")):
+        _bad_control(session)  # a message for another major version is refused, not guessed at
+        return
     if pipeline is not None and isinstance(message, dict):
         epoch = message.get("turn_epoch")
         handlers.update(
@@ -299,6 +302,14 @@ async def _handle_control(session: VoiceSession, raw: str, pipeline: TurnPipelin
         await handler()
     except ValidationError:
         _bad_control(session)
+
+
+def _version_supported(version: Any) -> bool:
+    try:
+        ensure_supported(version)
+    except ValidationError:
+        return False
+    return True
 
 
 def _sync(action: Callable[[], None]) -> Callable[[], Awaitable[None]]:

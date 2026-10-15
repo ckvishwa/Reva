@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from reva_core.api.auth import build_auth_dependency
+from reva_core.api.versioned import VersionedRequest
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.policy.authorize import Proposal
 from reva_core.policy.broker import ActionView, Broker, BrokerFull, GrantMismatch, UnknownAction
@@ -30,17 +31,13 @@ from reva_core.shared.ids import new_id
 LOCAL_DEVICE = "local"
 
 
-class ProposalRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ProposalRequest(VersionedRequest):
     capability: str = Field(min_length=1, max_length=100)
     args: dict[str, Any]
     proposal_id: str | None = Field(default=None, min_length=8, max_length=64)
 
 
-class ApprovalRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ApprovalRequest(VersionedRequest):
     decision: str = Field(pattern="^(approve|deny)$")
     via: str = Field(default="click", min_length=1, max_length=16)
 
@@ -52,9 +49,7 @@ class EvidenceBody(BaseModel):
     ref: str = Field(min_length=1, max_length=200)
 
 
-class OutcomeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class OutcomeRequest(VersionedRequest):
     grant_id: str = Field(min_length=1, max_length=64)
     status: str = Field(pattern="^(attempted|observed|verified|failed|unknown|denied)$")
     evidence: EvidenceBody | None = None
