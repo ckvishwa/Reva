@@ -34,7 +34,7 @@ public class WakeWordProductionHardeningTests
         var lockPath = Path.Combine(FindRepoRoot(), "desktop", "src", "Reva.Desktop", "packages.lock.json");
         using var document = JsonDocument.Parse(File.ReadAllText(lockPath));
         var dependencies = document.RootElement.GetProperty("dependencies");
-        var target = dependencies.EnumerateObject().Single().Value;
+        var target = dependencies.GetProperty("net10.0-windows10.0.19041"); // the RID-less target; win-x64 adds only runtime packs
 
         Assert.Equal("4.0.2", target.GetProperty("Porcupine").GetProperty("resolved").GetString());
         Assert.Equal("1.2.13", target.GetProperty("PvRecorder").GetProperty("resolved").GetString());

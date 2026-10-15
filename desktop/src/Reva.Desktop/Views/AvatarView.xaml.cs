@@ -24,6 +24,7 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
     public AvatarView()
     {
         InitializeComponent();
+        Loaded += async (_, _) => await StartAsync();
     }
 
     public event Action<PageMessage>? PageMessageReceived;
@@ -42,6 +43,7 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
         }
 
         _started = true;
+        DesktopLogger.Info("avatar.webview.starting");
         if (!File.Exists(Path.Combine(AvatarFolder, "index.html")))
         {
             Fail("Avatar files are missing.");
@@ -50,9 +52,10 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
 
         try
         {
-            Environment.SetEnvironmentVariable(
-                "WEBVIEW2_USER_DATA_FOLDER", Path.Combine(RuntimePaths.GetDefaultDataDirectory(), "webview2"));
+            var userData = Path.Combine(RuntimePaths.GetDefaultDataDirectory(), "webview2");
+            Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", userData);
             await Web.EnsureCoreWebView2Async();
+            DesktopLogger.Info("avatar.webview.core_ready");
             Harden(Web.CoreWebView2);
             Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 AvatarNavigationPolicy.VirtualHost, AvatarFolder, CoreWebView2HostResourceAccessKind.Deny);
@@ -61,7 +64,8 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException
             or ArgumentException)
         {
-            Fail("The avatar can't start: Microsoft Edge WebView2 isn't available.");
+            DesktopLogger.Info($"avatar.webview.start_failed {ex.GetType().Name} 0x{ex.HResult:X8} {ex.StackTrace}");
+            Fail($"The avatar can't start: Microsoft Edge WebView2 isn't available ({ex.GetType().Name} 0x{ex.HResult:X8}).");
             return;
         }
 
@@ -113,12 +117,14 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
         {
             if (!AvatarNavigationPolicy.IsAllowed(args.Request.Uri))
             {
+                DesktopLogger.Info("avatar.webview.blocked " + (Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var blocked) ? blocked.Scheme + "://" + blocked.Host + blocked.AbsolutePath : "unparsable"));
                 args.Response = core.Environment.CreateWebResourceResponse(null, 403, "Blocked", string.Empty);
             }
         };
 
         core.NavigationCompleted += (_, args) =>
         {
+            DesktopLogger.Info($"avatar.webview.navigation_completed success={args.IsSuccess} status={args.WebErrorStatus}");
             if (args.IsSuccess)
             {
                 _loaded = true;
@@ -141,7 +147,7 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
                 };
                 if (message.Kind == PageMessageKind.Ready)
                 {
-                    StatusText.Visibility = Visibility.Collapsed;
+                    StatusText.Opacity = 0; // invisible, but still there for screen readers and UI tests
                 }
 
                 PageMessageReceived?.Invoke(message);
@@ -153,6 +159,6 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
     private void Fail(string text)
     {
         StatusText.Text = text;
-        StatusText.Visibility = Visibility.Visible;
+        StatusText.Opacity = 1;
     }
 }

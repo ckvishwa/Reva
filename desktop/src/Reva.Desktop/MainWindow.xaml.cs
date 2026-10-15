@@ -91,7 +91,6 @@ public sealed partial class MainWindow : Window
                 _avatarDirector.SetWindowVisible(presenter.State != Microsoft.UI.Windowing.OverlappedPresenterState.Minimized);
             }
         };
-        Activated += async (_, _) => await view.StartAsync();
     }
 
     private void ApplyDarkTitleBar()
