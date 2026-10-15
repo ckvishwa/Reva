@@ -63,14 +63,14 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-CORE-003 | R1 | S05 | PARTIAL | B1 | registry + Kokoro + opt-in Anthropic provider; selection by capability for all kinds continues |
 | AR-CORE-004 | P0 | S03 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
 | AR-CORE-005 | R1 | S06 | PARTIAL | B4 | session/turn ids on session events; correlation on all events audited in B4 |
-| AR-CORE-006 | R1 | S06 | NOT STARTED | B4 |  |
+| AR-CORE-006 | R1 | S06 | DONE | - | B4-schema-major; supported/unsupported version API regressions |
 | AR-CORE-007 | R2 | S13 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
-| AR-CORE-008 | R3 | S20 | NOT STARTED | B4 |  |
+| AR-CORE-008 | R3 | S20 | PARTIAL | B4 | B4-config-precedence tests: defaults/file/env/arguments; vault precedence works with injected stores, not yet injected by production startup |
 | AR-CORE-009 | R1 | S06 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
 | AR-CORE-010 | R1 | S20 | PARTIAL | G4 | filter exists and is tested at the SDK boundary; no domain context is passed to the cloud path yet, so it is enforced only when the context builder lands (G4). The spoken transcript is sent whenever cloud is on (disclosed) |
-| AR-CORE-011 | R4 | S27 | NOT STARTED | B4 |  |
-| AR-CORE-012 | R1 | S06 | PARTIAL | B4 | bounded queues exist in session/coordinator; saturation tests + doc missing |
-| AR-CORE-013 | R4 | S27 | NOT STARTED | B4 |  |
+| AR-CORE-011 | R4 | S27 | DONE | - | B4-migrations-reversible; snapshot retention, safety rollback copy, atomic script/version row and forced-failure restore tests |
+| AR-CORE-012 | R1 | S06 | DONE | - | B4-bounded-queues; saturation/expiry and API chunked-size regressions; docs/architecture/bounded-queues.md |
+| AR-CORE-013 | R4 | S27 | DONE | - | B4-telemetry; off/redacted/removable tests including concurrent writer/delete and deletion failure |
 | AR-VA-001 | R1 | S07 | DONE | - | NAudio capture/playback behind interfaces |
 | AR-VA-002 | R1 | S07 | DONE | - | bounded buffers, overlong utterances discarded whole |
 | AR-VA-003 | R1 | S07 | DONE | - | one mic owner via arbiter |
