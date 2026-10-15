@@ -2,8 +2,8 @@
   "devices": [
     {
       "actions": {
-        "close_apps": false,
-        "open_apps": false
+        "close_apps": true,
+        "open_apps": true
       },
       "approved_at": "2026-10-12T09:00:00+00:00",
       "device_id": "00000000-0000-7000-8000-000000000001",
@@ -13,7 +13,9 @@
       "platform": "android",
       "revoked_at": null,
       "scopes": [
-        "finance"
+        "finance",
+        "pc.app.open",
+        "pc.app.close"
       ],
       "status": "active"
     }

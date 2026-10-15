@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "action_id": "ph-0000000000000000000000000000000000000002",
+      "capability": "windows.app.close",
+      "deadline": "2026-10-12T09:00:00+00:00",
+      "from": "Pixel 8",
+      "order": null,
+      "prompt": "Close Calculator? Approve it on screen.",
+      "status": "awaiting_approval",
+      "tier": "T2"
+    }
+  ],
+  "seq": 2
+}

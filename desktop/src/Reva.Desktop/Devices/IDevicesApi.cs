@@ -16,4 +16,9 @@ public interface IDevicesApi
     Task<DevicesResult<DeniedPairing>> DenyPairingAsync(CancellationToken cancellationToken = default);
 
     Task<DevicesResult<RevokeOutcome>> RevokeAsync(string deviceId, CancellationToken cancellationToken = default);
+
+    /// <summary>Choose which PC actions this phone may ask for (open apps, close apps). Closing still
+    /// needs a click on this PC every time.</summary>
+    Task<DevicesResult<PhoneAccessOutcome>> SetPhoneAccessAsync(
+        string deviceId, bool openApps, bool closeApps, CancellationToken cancellationToken = default);
 }

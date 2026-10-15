@@ -31,6 +31,54 @@ public class DevicesContractFixtureTests
         Serving(HttpStatusCode.OK, Fixture(fixture)).GetAsync();
 
     [Fact]
+    public async Task A_phone_paired_before_actions_existed_has_no_action_access()
+    {
+        var result = await Snapshot("devices-paired");
+
+        var phone = Assert.Single(result.Value!.Devices);
+        Assert.Equal(new PhoneActionAccess(false, false), phone.Actions);
+    }
+
+    [Fact]
+    public async Task The_owners_choice_of_phone_access_comes_back_in_the_device_list()
+    {
+        var result = await Snapshot("devices-paired-with-access");
+
+        var phone = Assert.Single(result.Value!.Devices);
+        Assert.Equal(new PhoneActionAccess(true, true), phone.Actions);
+        Assert.Contains("pc.app.open", phone.Scopes);
+        Assert.Contains("finance", phone.Scopes);
+    }
+
+    [Fact]
+    public async Task Setting_phone_access_sends_a_patch_with_both_choices_and_reads_the_answer()
+    {
+        string? method = null;
+        string? path = null;
+        string? body = null;
+        var handler = new StubHandler
+        {
+            Responder = async (request, _) =>
+            {
+                method = request.Method.Method;
+                path = request.RequestUri!.AbsolutePath;
+                body = request.Content is null ? null : await request.Content.ReadAsStringAsync();
+                return StubHandler.Json(HttpStatusCode.OK, Fixture("pc-access"));
+            },
+        };
+        var client = new DevicesApiClient(
+            new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1:8756/") }, new StubTokens(), TimeSpan.FromSeconds(5));
+
+        var result = await client.SetPhoneAccessAsync("dev-1", true, false);
+
+        Assert.True(result.IsSuccess, result.Error?.SafeMessage);
+        Assert.Equal(("PATCH", "/v1/devices/dev-1/pc-access"), (method, path));
+        Assert.Contains("\"open_apps\":true", body);
+        Assert.Contains("\"close_apps\":false", body);
+        Assert.True(result.Value!.OpenApps && result.Value.CloseApps);
+    }
+
+    [Fact]
     public async Task A_gateway_that_was_never_turned_on_is_off_with_no_key_and_no_devices()
     {
         var result = await Snapshot("devices-off");

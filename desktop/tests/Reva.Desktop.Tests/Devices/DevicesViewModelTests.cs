@@ -501,6 +501,64 @@ public class DevicesViewModelTests
     }
 
     [Fact]
+    public async Task The_owner_lets_a_phone_open_apps_here_and_can_take_it_back()
+    {
+        var (vm, api, _, _) = Create();
+        api.Devices.Add(Phone("d1"));
+        await vm.RefreshAsync();
+        Assert.False(vm.Devices[0].OpenAppsAllowed);
+        Assert.False(vm.Devices[0].CloseAppsAllowed);
+
+        await vm.SetPhoneAccessAsync(vm.Devices[0], openApps: true, closeApps: false);
+
+        Assert.Equal(("d1", true, false), Assert.Single(api.AccessChanges));
+        Assert.True(vm.Devices[0].OpenAppsAllowed);
+        Assert.False(vm.Devices[0].CloseAppsAllowed);
+        await vm.SetPhoneAccessAsync(vm.Devices[0], openApps: false, closeApps: false);
+        Assert.False(vm.Devices[0].OpenAppsAllowed);
+    }
+
+    [Fact]
+    public async Task Closing_is_described_as_needing_the_owners_approval_here()
+    {
+        var (vm, api, _, _) = Create();
+        api.Devices.Add(Phone("d1"));
+        await vm.RefreshAsync();
+
+        await vm.SetPhoneAccessAsync(vm.Devices[0], openApps: true, closeApps: true);
+
+        Assert.Contains("can open apps here", vm.Devices[0].ScopesText);
+        Assert.Contains("can ask to close apps (you approve here)", vm.Devices[0].ScopesText);
+        Assert.StartsWith("Finance sync", vm.Devices[0].ScopesText);
+    }
+
+    [Fact]
+    public async Task A_failed_access_change_shows_the_error_and_changes_nothing_on_screen()
+    {
+        var (vm, api, _, _) = Create();
+        api.Devices.Add(Phone("d1"));
+        await vm.RefreshAsync();
+        api.Failures["SetPhoneAccess:d1:True:True"] = new DevicesError(DevicesErrorKind.ServerFailure, "REVA Core reported an internal error.");
+
+        await vm.SetPhoneAccessAsync(vm.Devices[0], openApps: true, closeApps: true);
+
+        Assert.Equal("REVA Core reported an internal error.", vm.ErrorMessage);
+        Assert.False(vm.Devices[0].OpenAppsAllowed);
+    }
+
+    [Fact]
+    public async Task A_revoked_phone_cannot_be_given_access()
+    {
+        var (vm, api, _, _) = Create();
+        api.Devices.Add(Phone("d1", "revoked"));
+        await vm.RefreshAsync();
+
+        await vm.SetPhoneAccessAsync(vm.Devices[0], openApps: true, closeApps: true);
+
+        Assert.Empty(api.AccessChanges);
+    }
+
+    [Fact]
     public async Task A_failed_revoke_shows_the_error_and_leaves_the_phone_active()
     {
         var (vm, api, _, _) = Create();
@@ -551,6 +609,8 @@ public class DevicesViewModelTests
         public Task<DevicesResult<DeniedPairing>> DenyPairingAsync(CancellationToken c = default) => throw new NotSupportedException();
 
         public Task<DevicesResult<RevokeOutcome>> RevokeAsync(string deviceId, CancellationToken c = default) => throw new NotSupportedException();
+
+        public Task<DevicesResult<PhoneAccessOutcome>> SetPhoneAccessAsync(string deviceId, bool openApps, bool closeApps, CancellationToken c = default) => throw new NotSupportedException();
     }
 
     [Fact]
