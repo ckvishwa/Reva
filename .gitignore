@@ -83,3 +83,6 @@ tests/voice-evals/outputs/
 /android/build/
 *.keystore
 !/android/gradle/wrapper/gradle-wrapper.jar
+
+# Node
+node_modules/
