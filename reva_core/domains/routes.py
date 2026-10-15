@@ -10,9 +10,10 @@ import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from reva_core.api.auth import build_auth_dependency
+from reva_core.api.versioned import VersionedRequest
 from reva_core.domains.service import DomainRequestError, DomainService, translate
 from reva_core.orchestration.lifecycle import CoreLifecycle
 
@@ -40,7 +41,7 @@ _INT_PARAMS = {"limit", "offset", "days", "min_amount_minor", "max_amount_minor"
 _MAX_IMPORT_BYTES = 8 * 1024 * 1024
 
 
-class ImportRequest(BaseModel):
+class ImportRequest(VersionedRequest):
     model_config = ConfigDict(extra="forbid")
 
     format: str = Field(pattern="^(csv|ofx|json)$")
@@ -150,7 +151,11 @@ def build_domains_router(lifecycle: CoreLifecycle) -> APIRouter:
         body: dict[str, Any],
         header_correlation_id: Annotated[str, Depends(require_token)],
     ) -> dict[str, Any]:
-        return {"domain": domain, "privacy": lifecycle.domain_privacy.update(domain, body)}
+        privacy = lifecycle.domain_privacy.update(domain, body)
+        if "hosted_model_access" in body:
+            # The consent filter reads the cloud switch; keep the two the same switch.
+            lifecycle.privacy_settings.set_hosted_model(domain, privacy["hosted_model_access"])
+        return {"domain": domain, "privacy": privacy}
 
     @router.get("/domains/finance/conflicts")
     def list_conflicts(

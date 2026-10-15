@@ -35,6 +35,11 @@ export async function startServer() {
   return { origin: `http://127.0.0.1:${port}`, port, requests, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
+// Software-rendered WebGL on a shared CI runner can be many times slower than on a desk: the first
+// full-page load took over 30 s there (Playwright's default navigation limit). A wait that gives up
+// early reports a slow machine as a broken avatar, so every wait here has the same generous bound.
+export const SLOW_RUNNER_MS = 120000;
+
 export async function launch() {
   return chromium.launch({
     channel: 'msedge',
@@ -46,13 +51,15 @@ export async function launch() {
 /** Opens the page with the host-outbox shim and waits for avatar.ready (or avatar.error). */
 export async function openAvatar(browser, origin, { query = '?debug=1', viewport = { width: 480, height: 640 } } = {}) {
   const page = await browser.newPage({ viewport });
+  page.setDefaultTimeout(SLOW_RUNNER_MS);
+  page.setDefaultNavigationTimeout(SLOW_RUNNER_MS);
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.addInitScript(() => {
     window.__revaHostOutbox = [];
   });
   await page.goto(`${origin}/index.html${query}`);
-  await page.waitForFunction(() => window.__revaHostOutbox.length > 0, null, { timeout: 90000 });
+  await page.waitForFunction(() => window.__revaHostOutbox.length > 0, null, { timeout: SLOW_RUNNER_MS });
   const outbox = await page.evaluate(() => window.__revaHostOutbox);
   return { page, outbox, pageErrors };
 }

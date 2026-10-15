@@ -1,5 +1,6 @@
 {
   "body": {
+    "code": "DOMAIN.DELETED",
     "correlation_id": "CORRELATION",
     "detail": "transaction tx-new-00001",
     "error": "deleted"

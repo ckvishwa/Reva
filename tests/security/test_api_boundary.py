@@ -42,6 +42,8 @@ _ALLOWED_PATHS = {
     "/v1/devices/{device_id}/revoke",
     "/v1/settings/cloud",
     "/v1/settings/cloud/key",
+    "/v1/settings/privacy",
+    "/v1/settings/telemetry",
     "/v1/voice/sessions",
     "/v1/voice/sessions/{session_id}",
     "/v1/voice/sessions/{session_id}/events",

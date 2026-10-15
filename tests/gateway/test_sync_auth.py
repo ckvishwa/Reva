@@ -551,3 +551,42 @@ def test_denied_requests_are_logged_with_the_device_and_without_secrets(env: Env
     assert revoked[0].actor_device_id == phone.device_id
     dump = json.dumps([e.model_dump(mode="json") for e in events])
     assert "signature" not in dump.lower() and env.lifecycle.local_token not in dump
+
+
+def test_the_devices_switch_blocks_a_paired_phone_even_while_sync_is_on(env: Env) -> None:
+    phone = _paired(env)
+    env.add_account(phone.kernel)
+    off = env.client.put(
+        "/v1/settings/privacy",
+        json={"domains": {"finance": {"devices": False}}},
+        headers=env.headers,
+    )
+    assert off.status_code == 200 and off.json()["domains"]["finance"] == {
+        "sync": True,
+        "devices": False,
+        "hosted_model": False,
+    }
+
+    pulled = phone.signed("/sync/pull", {"domain": "finance", "limit": 5}, verify_reply=False)
+    batch = phone.kernel.sync_export(phone.pc_kernel_id, 10)
+    pushed = phone.signed(
+        "/sync/push",
+        {
+            "domain": "finance",
+            "events_json": batch.events_json,
+            "cursor_from": 0,
+            "cursor_to": batch.cursor_to,
+            "count": batch.count,
+        },
+        verify_reply=False,
+    )
+
+    assert (pulled.status, pulled.json()["error"]) == (403, "devices_disabled")
+    assert (pushed.status, pushed.json()["error"]) == (403, "devices_disabled")
+    assert env.pc_kernel().event_count() == 0
+    env.client.put(
+        "/v1/settings/privacy",
+        json={"domains": {"finance": {"devices": True}}},
+        headers=env.headers,
+    )
+    assert phone.push().status == 200

@@ -40,6 +40,7 @@ APPROVAL_TTL = timedelta(minutes=2)
 MAX_OPEN = 64
 MAX_KEPT = 1000  # finished actions kept in memory; the ledger keeps them all
 MAX_EVIDENCE_REF = 200
+OPEN = frozenset({"awaiting_approval", "granted", "attempted", "observed"})
 
 # Statuses an executor may report, in the order an action moves through them.
 OUTCOME_ORDER = {
@@ -174,10 +175,7 @@ class Broker:
             ):
                 return self._refuse_collision(proposal, now)
             return self._view(existing)
-        if (
-            sum(1 for r in self._records.values() if r.status in ("awaiting_approval", "granted"))
-            >= MAX_OPEN
-        ):
+        if sum(1 for r in self._records.values() if r.status in OPEN) >= MAX_OPEN:
             raise BrokerFull("too many actions are waiting")
 
         decision = authorize(
@@ -284,6 +282,7 @@ class Broker:
             raise GrantMismatch("that grant was not issued for this action")
         if status not in OUTCOME_ORDER:
             raise ValueError("unknown outcome status")
+        self._expire(self.clock())
         if record.status in TERMINAL:
             return self._view(record)  # the first final answer stands
         current = OUTCOME_ORDER.get(record.status, -1)
@@ -319,6 +318,10 @@ class Broker:
         return self._view(record)
 
     # ---------------------------------------------------------------------- reading
+
+    def expire(self) -> None:
+        """Refresh expired actions before serving views built directly from the ledger."""
+        self._expire(self.clock())
 
     def get(self, action_id: str) -> ActionView:
         self._expire(self.clock())
@@ -393,6 +396,17 @@ class Broker:
                 record.status = "expired"
                 record.reason = "APPROVAL_EXPIRED"
                 self._log(record, "expired", {})
+                self._notify(self._view(record))
+            elif (
+                record.status in {"granted", "attempted", "observed"}
+                and record.grant is not None
+                and now >= datetime.fromisoformat(record.grant.expires_at)
+            ):
+                # The executor may have acted without reporting. Expiry releases capacity,
+                # but cannot establish success or failure and must not permit execution again.
+                record.status = "unknown"
+                record.reason = "GRANT_EXPIRED"
+                self._log(record, "outcome", {"status": "unknown", "reason": "GRANT_EXPIRED"})
                 self._notify(self._view(record))
 
     def _refuse_collision(self, proposal: Proposal, now: datetime) -> ActionView:

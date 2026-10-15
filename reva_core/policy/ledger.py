@@ -51,13 +51,38 @@ def redact_args(capability: Capability, args: dict[str, Any]) -> dict[str, Any]:
     return safe
 
 
+def _bounded_payload(payload: dict[str, Any]) -> str:
+    """Keep a valid, bounded JSON object; explicitly mark fields omitted for size.
+
+    The largest fields go first so small status/capability fields survive. Both backends use
+    the same representation; clipping never changes the proposal or signed execution args.
+    """
+    clean = dict(payload)
+    text = json.dumps(clean, separators=(",", ":"), ensure_ascii=False)
+    if len(text) <= MAX_PAYLOAD_CHARS:
+        return text
+    clean["truncated"] = True
+    fields = sorted(
+        (key for key in clean if key != "truncated"),
+        key=lambda key: len(json.dumps({key: clean[key]}, ensure_ascii=False)),
+        reverse=True,
+    )
+    for key in fields:
+        clean[key] = "<truncated>"
+        text = json.dumps(clean, separators=(",", ":"), ensure_ascii=False)
+        if len(text) <= MAX_PAYLOAD_CHARS:
+            return text
+    # Many keys (or one enormous key) cannot be bounded by replacing values alone.
+    return '{"truncated":true}'
+
+
 class MemoryLedger:
     def __init__(self) -> None:
         self._rows: list[LedgerRow] = []
 
     def append(self, action_id: str, kind: str, at: str, payload: dict[str, Any]) -> LedgerRow:
         seq = sum(1 for r in self._rows if r.action_id == action_id)
-        row = LedgerRow(action_id, seq, at, kind, json.loads(json.dumps(payload)))
+        row = LedgerRow(action_id, seq, at, kind, json.loads(_bounded_payload(payload)))
         self._rows.append(row)
         return row
 
@@ -73,9 +98,7 @@ class SqliteLedger:
         self._conn = conn
 
     def append(self, action_id: str, kind: str, at: str, payload: dict[str, Any]) -> LedgerRow:
-        text = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
-        if len(text) > MAX_PAYLOAD_CHARS:
-            raise StorageError("an action ledger row is too large")
+        text = _bounded_payload(payload)
         try:
             with self._conn:
                 seq = self._conn.execute(

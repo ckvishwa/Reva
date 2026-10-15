@@ -63,7 +63,12 @@ def build_auth_dependency(lifecycle: CoreLifecycle) -> Callable[..., Awaitable[s
         request.state.correlation_id = correlation_id
 
         if not bearer_token_matches(authorization, lifecycle.local_token):
-            _record_auth_failure(lifecycle, correlation_id, path=request.url.path)
+            _record_auth_failure(
+                lifecycle,
+                correlation_id,
+                path=request.url.path,
+                client=request.client.host if request.client else None,
+            )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
         return correlation_id
@@ -71,12 +76,17 @@ def build_auth_dependency(lifecycle: CoreLifecycle) -> Callable[..., Awaitable[s
     return require_local_token
 
 
-def record_auth_failure(lifecycle: CoreLifecycle, correlation_id: str, *, path: str) -> None:
+def record_auth_failure(
+    lifecycle: CoreLifecycle, correlation_id: str, *, path: str, client: str | None = None
+) -> None:
     """Public hook for transports that cannot use the HTTP dependency (WebSocket)."""
-    _record_auth_failure(lifecycle, correlation_id, path=path)
+    _record_auth_failure(lifecycle, correlation_id, path=path, client=client)
 
 
-def _record_auth_failure(lifecycle: CoreLifecycle, correlation_id: str, *, path: str) -> None:
+def _record_auth_failure(
+    lifecycle: CoreLifecycle, correlation_id: str, *, path: str, client: str | None = None
+) -> None:
+    """Who asked (the connecting address) and what, never the credential that was offered."""
     try:
         AuditRepository(lifecycle.connection).insert(
             AuditEvent(
@@ -85,7 +95,7 @@ def _record_auth_failure(lifecycle: CoreLifecycle, correlation_id: str, *, path:
                 action="authentication_failed",
                 outcome=AuditOutcome.DENIED,
                 correlation_id=correlation_id,
-                metadata={"path": path},
+                metadata={"path": path, "client": client or "unknown"},
                 occurred_at=utc_now(),
             )
         )

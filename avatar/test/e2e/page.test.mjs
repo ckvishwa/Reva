@@ -1,7 +1,16 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { debugFrame, dist, launch, openAvatar, renders, send, startServer } from './helpers.mjs';
+import {
+  SLOW_RUNNER_MS,
+  debugFrame,
+  dist,
+  launch,
+  openAvatar,
+  renders,
+  send,
+  startServer,
+} from './helpers.mjs';
 
 const built = existsSync(`${dist}/placeholder.vrm`);
 const skip = built ? false : 'avatar/dist has no model: run "npm run build" with Git LFS files pulled';
@@ -22,6 +31,8 @@ test('the page loads offline from local files only and reports ready', { skip },
   const blocked = [];
   const context = await browser.newContext();
   const page = await context.newPage();
+  page.setDefaultTimeout(SLOW_RUNNER_MS);
+  page.setDefaultNavigationTimeout(SLOW_RUNNER_MS);
   await page.route('**/*', (route) => {
     const url = route.request().url();
     if (url.startsWith(server.origin)) return route.continue();
@@ -34,7 +45,7 @@ test('the page loads offline from local files only and reports ready', { skip },
     window.__revaHostOutbox = [];
   });
   await page.goto(`${server.origin}/index.html?debug=1`);
-  await page.waitForFunction(() => window.__revaHostOutbox.length > 0, null, { timeout: 90000 });
+  await page.waitForFunction(() => window.__revaHostOutbox.length > 0, null, { timeout: SLOW_RUNNER_MS });
 
   assert.deepEqual(await page.evaluate(() => window.__revaHostOutbox), [{ type: 'avatar.ready' }]);
   assert.deepEqual(blocked, [], 'the page tried to reach outside the local files');
@@ -104,7 +115,7 @@ test('the model name can only be a plain local .vrm file name', { skip }, async 
 test('the avatar mirrors states, drops stale epochs and moves the mouth only while speaking', { skip }, async () => {
   const { page } = await openAvatar(browser, server.origin);
 
-  const until = (state) => page.waitForFunction((s) => window.__revaAvatarDebug.frame?.state === s, state, { timeout: 15000 });
+  const until = (state) => page.waitForFunction((s) => window.__revaAvatarDebug.frame?.state === s, state, { timeout: SLOW_RUNNER_MS });
   await send(page, { type: 'avatar.state', state: 'listening', turn_epoch: 3 });
   const refused = await send(page, { type: 'avatar.mouth', t_ms: 0, rms: 1, turn_epoch: 3 });
   await until('listening');
@@ -114,7 +125,7 @@ test('the avatar mirrors states, drops stale epochs and moves the mouth only whi
 
   await send(page, { type: 'avatar.state', state: 'speaking', turn_epoch: 3 });
   await until('speaking');
-  const end = Date.now() + 3000;
+  const end = Date.now() + SLOW_RUNNER_MS; // ends as soon as the mouth opens; only a failure waits
   let opened = 0;
   while (Date.now() < end && opened <= 0.3) {
     await send(page, { type: 'avatar.mouth', t_ms: 0, rms: 0.8, turn_epoch: 3 });
@@ -167,7 +178,11 @@ test('drawing is capped at 60 fps, stops when the avatar is off and resumes when
   await page.waitForTimeout(2000);
   const drawn = (await renders(page)) - start;
   assert.ok(drawn <= 2 * 60 + 4, `drew ${drawn} frames in 2 s`);
-  assert.ok(drawn >= 2, `drew only ${drawn} frames in 2 s`); // software WebGL on CI is slow: this only proves it is drawing
+  // Software WebGL on a shared runner can draw fewer than two frames in two seconds, so "it is
+  // drawing" waits for frames to arrive instead of counting them in a fixed window.
+  await page.waitForFunction((from) => window.__revaAvatarDebug.renders >= from + 2, start, {
+    timeout: SLOW_RUNNER_MS,
+  });
 
   await send(page, { type: 'avatar.settings', enabled: false });
   await page.waitForTimeout(300);
@@ -176,8 +191,9 @@ test('drawing is capped at 60 fps, stops when the avatar is off and resumes when
   assert.equal(await renders(page), frozen, 'frames were drawn while the avatar was off');
 
   await send(page, { type: 'avatar.settings', enabled: true });
-  await page.waitForTimeout(600);
-  assert.ok((await renders(page)) > frozen, 'drawing did not resume');
+  await page.waitForFunction((from) => window.__revaAvatarDebug.renders > from, frozen, {
+    timeout: SLOW_RUNNER_MS,
+  }); // fails with a timeout if drawing never resumes
   await page.close();
 });
 

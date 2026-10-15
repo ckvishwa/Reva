@@ -1,5 +1,6 @@
 {
   "body": {
+    "code": "CORE.CONFLICT",
     "correlation_id": "CORRELATION",
     "error": "gateway_off"
   },

@@ -51,6 +51,7 @@ class ApiModel(VersionedModel):
 
 class ErrorResponse(ApiModel):
     error: str
+    code: str = "CORE.INTERNAL"
     correlation_id: CorrelationId | None = None
 
 

@@ -1,8 +1,8 @@
 {
   "body": {
+    "code": "AUTH.REQUIRED",
     "correlation_id": "CORRELATION",
-    "error": "Unauthorized",
-    "schema_version": 1
+    "error": "Unauthorized"
   },
   "status": 401
 }

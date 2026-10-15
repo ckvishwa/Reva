@@ -8,12 +8,19 @@ text via `repr()`/`str()`, including in accidental log lines.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
+from reva_core.config.layers import ConfigFileSource, resolve_secrets
+from reva_core.security.credential_store import SecretStore
 from reva_core.shared.errors import ConfigurationError
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -132,6 +139,19 @@ class Settings(BaseSettings):
     cloud_model: str = "claude-opus-5-5"
     cloud_timeout_seconds: float = 8.0
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Highest first: code arguments, environment, .env, then config.json, then field defaults.
+        # (Secrets from Credential Manager are applied last, in `load_settings`.)
+        return (init_settings, env_settings, dotenv_settings, ConfigFileSource(settings_cls))
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "reva.db"
@@ -146,12 +166,20 @@ class Settings(BaseSettings):
         return None
 
 
-def load_settings(**overrides: object) -> Settings:
+def load_settings(
+    secret_stores: Mapping[str, SecretStore] | None = None, **overrides: object
+) -> Settings:
     """Build `Settings` and enforce security invariants that Pydantic
     field validation alone should not own (kept as domain-level checks
     so callers see `ConfigurationError`, not a bare `pydantic.ValidationError`).
+
+    Precedence, lowest to highest: field defaults, `config.json` in the data directory, environment
+    (`REVA_*`, `.env`), arguments, and for secrets the Credential Manager entry in `secret_stores`.
     """
     settings = Settings(**overrides)  # type: ignore[arg-type]
+    vault = resolve_secrets(secret_stores)
+    if vault:
+        settings = settings.model_copy(update={k: SecretStr(v) for k, v in vault.items()})
     if settings.api_host.lower() not in _LOOPBACK_HOSTS:
         raise ConfigurationError(
             f"REVA_API_HOST must be a loopback address, got {settings.api_host!r}. "
