@@ -24,6 +24,8 @@ public sealed class NavigationViewModel : ObservableObject
     public const string FinanceId = "finance";
     public const string DevicesId = "devices";
     public const string SettingsId = "settings";
+    public const string AppsId = "apps";
+    public const string ActivityId = "activity";
 
     public static IReadOnlyList<NavSection> AllSections { get; } = new[]
     {
@@ -36,8 +38,8 @@ public sealed class NavigationViewModel : ObservableObject
         new NavSection("cyber", "Cyber", NavGroup.Domains, IsBuilt: false),
         new NavSection("personal", "Personal", NavGroup.Domains, IsBuilt: false),
         new NavSection("memory", "Memory", NavGroup.Domains, IsBuilt: false),
-        new NavSection("apps", "Apps & Actions", NavGroup.Tools, IsBuilt: false),
-        new NavSection("activity", "Activity", NavGroup.Tools, IsBuilt: false),
+        new NavSection(AppsId, "Apps & Actions", NavGroup.Tools, IsBuilt: true),
+        new NavSection(ActivityId, "Activity", NavGroup.Tools, IsBuilt: true),
         new NavSection(DevicesId, "Devices", NavGroup.Tools, IsBuilt: true),
         new NavSection("persona", "Persona & Voice", NavGroup.Tools, IsBuilt: false),
         new NavSection(SettingsId, "Settings", NavGroup.Tools, IsBuilt: true),
@@ -60,6 +62,8 @@ public sealed class NavigationViewModel : ObservableObject
                 RaisePropertyChanged(nameof(ShowsFinance));
                 RaisePropertyChanged(nameof(ShowsDevices));
                 RaisePropertyChanged(nameof(ShowsSettings));
+                RaisePropertyChanged(nameof(ShowsApps));
+                RaisePropertyChanged(nameof(ShowsActivity));
                 RaisePropertyChanged(nameof(ShowsComingSoon));
                 RaisePropertyChanged(nameof(ComingSoonTitle));
                 RaisePropertyChanged(nameof(ComingSoonText));
@@ -74,6 +78,10 @@ public sealed class NavigationViewModel : ObservableObject
     public bool ShowsDevices => Selected.Id == DevicesId;
 
     public bool ShowsSettings => Selected.Id == SettingsId;
+
+    public bool ShowsApps => Selected.Id == AppsId;
+
+    public bool ShowsActivity => Selected.Id == ActivityId;
 
     public bool ShowsComingSoon => !Selected.IsBuilt;
 

@@ -34,6 +34,12 @@ public sealed partial class MainWindow : Window
 
     public AvatarSettingsViewModel AvatarSettingsModel { get; }
 
+    public AppsViewModel AppsModel { get; }
+
+    public ActivityViewModel ActivityModel { get; }
+
+    public ApprovalCardViewModel ApprovalModel { get; }
+
     private AvatarDirector? _avatarDirector;
 
     public MainWindow(
@@ -47,6 +53,9 @@ public sealed partial class MainWindow : Window
         LiveVoiceViewModel liveVoice,
         CloudSettingsViewModel cloudSettings,
         AvatarSettingsViewModel avatarSettings,
+        AppsViewModel apps,
+        ActivityViewModel activity,
+        ApprovalCardViewModel approval,
         WakeWordCoordinator? wakeWord = null)
     {
         // Set before InitializeComponent: x:Bind reads these while the tree is built.
@@ -60,6 +69,9 @@ public sealed partial class MainWindow : Window
         LiveVoiceModel = liveVoice;
         CloudSettings = cloudSettings;
         AvatarSettingsModel = avatarSettings;
+        AppsModel = apps;
+        ActivityModel = activity;
+        ApprovalModel = approval;
         WakeWord = wakeWord;
         InitializeComponent();
         Title = "REVA";
@@ -130,6 +142,16 @@ public sealed partial class MainWindow : Window
         if (Navigation.ShowsSettings)
         {
             await SettingsPanel.LoadAsync();
+        }
+
+        if (Navigation.ShowsApps)
+        {
+            await AppsPanel.LoadAsync();
+        }
+
+        if (Navigation.ShowsActivity)
+        {
+            await ActivityPanel.LoadAsync();
         }
 
         if (Navigation.ShowsFinance)

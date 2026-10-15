@@ -62,6 +62,7 @@ def main() -> None:
         actor: str = "owner",
         signed_by: GrantSigner = signer,
     ) -> None:
+        g = replace(g, grant_id=f"grant-{name}")  # unique per case, set before signing
         cases.append(
             {
                 "name": name,

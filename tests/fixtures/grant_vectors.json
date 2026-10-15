@@ -1,11 +1,11 @@
 {
-  "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDyDrQ/dPCph9rQnQ4v0TVc9AxFaN\nYyx1wp2YwpopDbBT1ah+CP9ilQ2JYV2OfTQZ1CFtWtzSMos1vNGd6huhkw==\n-----END PUBLIC KEY-----\n",
+  "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEy4bBjyfbwdCG+e25hTNpW1sqPrl5\nk08vJ14mV7/BhelNBltGX7ysD9KwdN1/TfiZcJD1B+v/SThdHzhZboZZEQ==\n-----END PUBLIC KEY-----\n",
   "note": "Shared by the Python grant tests and the Windows executor tests.",
   "cases": [
     {
       "name": "valid",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-valid",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -16,7 +16,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "iHzauwy87uqiXQ5JHBdblev2tLM_dBZn14zAMrMp662y5py_3akHHOBLyAIhhfTB7l_kAQxT19aeHB_7pAIF3w",
+      "signature": "MZFZkgZQl1xH8ijmuo4u_qodaWLNmGr7kKuISORL074UquKlxsj6GnTQYj2tTQSMU9jW480RkOj9ctG59xIfQA",
       "args": {
         "app_key": "notepad"
       },
@@ -29,7 +29,7 @@
     {
       "name": "valid_unicode_args",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-valid_unicode_args",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "d47a015fc0353e606746017268b4fedfb1bb75778c76eefb9c747a519e7cd91e",
@@ -40,7 +40,7 @@
         "idempotency_key": "idem-uni",
         "version": "1"
       },
-      "signature": "i2zayGYe7RTv2wq3-k43M9_JSI3YFc9lTEtexjEmBV5AMczjPaHyknv7rTTt4xH_hSIizy2s0VooxrXSsuryJg",
+      "signature": "PGnIOuytAzOQrXJ9pAht3wtjhK1gDVIogBqY7Y8wL2laRMcv1nCxoiSLt0UXPce1ZJhCRr-LAcwLF4f54K7Jbg",
       "args": {
         "app_key": "caf\u00e9 \"quoted\" \\ slash",
         "note": "line\nbreak\ttab \u2603"
@@ -54,7 +54,7 @@
     {
       "name": "valid_close",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-valid_close",
         "action_id": "act-0001",
         "capability": "windows.app.close",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -65,7 +65,7 @@
         "idempotency_key": "idem-close",
         "version": "1"
       },
-      "signature": "-Hikqqyn5efspmLde5niWXJY0k__j10ycAFsdJQ_PK9r1qmBuavEr4IX49tJaGvWt3bN2efpLX1mm8kV6ilx9A",
+      "signature": "egkgZiH4xiUsb2BDO_023zQkQ8ICuKLbr7U_HDUNuVW-QgAB02uRuNoFvkVx_UVjV7fDDE__thBkX7D46Gb5iQ",
       "args": {
         "app_key": "notepad"
       },
@@ -78,7 +78,7 @@
     {
       "name": "valid_obsidian",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-valid_obsidian",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "5bd190c2fcd6870b043ae51fd64f53211222357c2feaac6abc07b6030baa477f",
@@ -89,7 +89,7 @@
         "idempotency_key": "idem-obsidian",
         "version": "1"
       },
-      "signature": "Y-xTkpoBq996oPMcJLCrAT-IK9smiOwDYfO7bO0DX1Ku3Ad4FRjGWMa3EbdlCjxfhdDEppdlUA_ja1mC_B-OKw",
+      "signature": "_uer6M0phqPb1rRprwq20wBo3lG5Njv0IFWmtqFxY1DM8Y7tEf07RqCSfct_HbmSdwb11gt-QR0dAjH7IapKTA",
       "args": {
         "app_key": "obsidian"
       },
@@ -102,7 +102,7 @@
     {
       "name": "expired",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-expired",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -113,7 +113,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "OCWJNVSPrDtBMMe5XZglQk5Q7umy1q15Qanxw_HCgIzjci1ybMjuq8Jv3sTyLFmoylFQogQ1NbzosqjIMBUzhQ",
+      "signature": "ToE9uKa1YfIS-ImWrFuh-jiTQPqRoyeI9LArGEAicB_8mkjQfvlNG9qr5dx7BY7FSpnrtgMbMQhC25MJ7h4C4Q",
       "args": {
         "app_key": "notepad"
       },
@@ -126,7 +126,7 @@
     {
       "name": "from_the_future",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-from_the_future",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -137,7 +137,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "rDO6sIIQ6gpx_A8e1sv8X4TEEgEsLCNRCXOwu6FF7O3sdXLPPWYuqqIKv4LnZKQbaeW7Sxkrf0Y7KTQH3GZ1RA",
+      "signature": "vmAk2bONsvZF_5xJ74M3-5zoM1z7gbiVAqdGNIxfIyMbWiCYawPD9ilkWVNcemM20KQOATLnZAYjwS6rLPL_lw",
       "args": {
         "app_key": "notepad"
       },
@@ -150,7 +150,7 @@
     {
       "name": "wrong_signer",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-wrong_signer",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -161,7 +161,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "cg_334jwPSytkx8-uulkuPEirgsLTV3L17Mh1vPslaCDnI07unUjxje0iqTA60XrUREAQodXr0SxCKPZ6UE28Q",
+      "signature": "HBtPmrhaSjtXGjQ7J-W6UIgXahSdDjkZUpUqHzQEKQtwgP2EB6ZXzDGIrypFzU9uXWr0SgGJUgqAy1Ns-wM3CQ",
       "args": {
         "app_key": "notepad"
       },
@@ -174,7 +174,7 @@
     {
       "name": "tampered_args_hash",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-tampered_args_hash",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -185,7 +185,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "dr5tl1EQkUct6QEsJIJWReYxeP5iUMPO4c_UBO2-YlP8PIN8nHHTaLv32tAxDAqBtXKjP4yjIrTwxUnFJoNn1g",
+      "signature": "tZ9evsmElTuZYJCRxfE4vLCwaHwgrhq5gqHWeV1AuWl7ilRSn8ZcSgLRJReLoFWOkfOhSgGkMLH7P2-qc4twsA",
       "args": {
         "app_key": "notepad"
       },
@@ -198,7 +198,7 @@
     {
       "name": "substituted_args",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-substituted_args",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -209,7 +209,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "id1QEampY1RIAB3nN826lEqUmdvrrn8Tp92SCXAdjy4XGWlV-UKWT7m_rHyge1GtMhW_thIaxGB2k3J0t2B40A",
+      "signature": "NcdaOzxzPKJ5W--bZmNAay8RZJFmzdsfB6LyglCSPKNr-uM3jpUgdoF-vgaII_WzXCVwbUhYol_hDxSjW1z2zg",
       "args": {
         "app_key": "chrome"
       },
@@ -222,7 +222,7 @@
     {
       "name": "substituted_capability",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-substituted_capability",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -233,7 +233,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "G6ipJAJWDP6wlnotullufwSHRpTGNmo1wYDChJy3aGp5MWvxQK1W-11wBSlizwIZgUBM3-pg6nQGUKvXiKmdjA",
+      "signature": "aI4EwHU0hUL2ansRU3E7X0eC3y2DkXmBzYqUjO5O4eAcnGHbr67-R61IDCz8AvzMUggJoHhiHXTCMPaPpeYuhA",
       "args": {
         "app_key": "notepad"
       },
@@ -246,7 +246,7 @@
     {
       "name": "wrong_target",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-wrong_target",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -257,7 +257,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "fCkfw6MTmZl-aUPT5_0K7SQfGAZxu2-ql2HzlHKkJ9CKARgzEIN0ldnX2qxtkh3VduQCnbGd672dtzYfDYBu_w",
+      "signature": "q5k0w_Ii9os7djLVbuiK2kn5BLlc02OB5wgR6KimGOnfh7f4eRKgO9FYNtoea0YYBOshLhJyxPP-A7TdIsZGzA",
       "args": {
         "app_key": "notepad"
       },
@@ -270,7 +270,7 @@
     {
       "name": "wrong_actor",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-wrong_actor",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -281,7 +281,7 @@
         "idempotency_key": "idem-0001",
         "version": "1"
       },
-      "signature": "wlTBYMFyhYZ2IKTZOxKHbsQn0WkvooUdLiove55CUWeAON3NjxraBtV9ExbTB1x-TwHE1gPonSUNPXKwuteH1Q",
+      "signature": "xB5qSbe8alfFg_fUjjvUeqDPZCPHI-7gXGaZNjoqHRcRiBdb4WhaPtBNlVfvzlcDlna3gDtbU-b-y7vJ-s6JxA",
       "args": {
         "app_key": "notepad"
       },
@@ -294,7 +294,7 @@
     {
       "name": "malformed_signature",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-malformed_signature",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
@@ -318,7 +318,7 @@
     {
       "name": "not_base64",
       "grant": {
-        "grant_id": "01j-grant-0001",
+        "grant_id": "grant-not_base64",
         "action_id": "act-0001",
         "capability": "windows.app.open",
         "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
