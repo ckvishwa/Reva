@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -41,14 +42,15 @@ def test_a_failed_websocket_login_is_recorded_the_same_way(client, core) -> None
         "/v1/voice/sessions", headers={"Authorization": f"Bearer {core.local_token}"}, json={}
     ).json()
 
-    try:
-        with client.websocket_connect(
+    # The server closes the socket with a policy violation, which the client raises.
+    with (
+        contextlib.suppress(Exception),
+        client.websocket_connect(
             f"/v1/voice/sessions/{session['session_id']}/events",
             headers={"Authorization": BAD_TOKEN},
-        ) as ws:
-            ws.receive_json()
-    except Exception:  # the server closes the socket with a policy violation
-        pass
+        ) as ws,
+    ):
+        ws.receive_json()
 
     rows = audit_rows(core)
     assert len(rows) == 1
