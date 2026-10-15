@@ -21,14 +21,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import tempfile
 import wave
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
+from reva_core.language import mood as moods
+from reva_core.language.mood_flags import utterance_flags
 from reva_core.language.router import IntentRouter
 from reva_core.models.stt import SpeechToTextProvider, TranscriptionInput, TranscriptionResult
 from reva_core.models.tts import SynthesizedAudio
@@ -62,6 +65,13 @@ REPLY_NO_SPEECH = ""
 
 class SpeechSynthesizer(Protocol):
     async def synthesize(self, text: str, language: str) -> SynthesizedAudio: ...
+
+
+def _accepts_speed(function: Any) -> bool:
+    try:
+        return "speed" in inspect.signature(function).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 Responder = Callable[[str, str], Awaitable[str | AssistantReply]]
@@ -138,6 +148,8 @@ class TurnPipeline:
         self._discarding = False
         self._speech_ms = 0
         self._turn_tasks: set[asyncio.Task[None]] = set()
+        self._mood = moods.MoodState()
+        self.mood_settings = moods.MoodSettings()
         self._watchdog: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------ inputs
@@ -367,8 +379,9 @@ class TurnPipeline:
         final: dict[str, object] = {"text": reply, "source": source, "provider": provider}
         if notice is not None:
             final["notice"] = notice
+        voice = self._decide_mood(transcript.text, routed.kind, final)
         session.emit(SessionEventKind.ASSISTANT_TEXT_FINAL, final)
-        await self._speak(reply, transcript.language, epoch)
+        await self._speak(reply, transcript.language, epoch, speed=voice.rate)
 
     async def _transcribe(self, pcm: bytes) -> TranscriptionResult | ProviderError | None:
         assert self._stt is not None
@@ -417,7 +430,41 @@ class TurnPipeline:
             return None
         return result.value
 
-    async def _speak(self, text: str, language: str, epoch: int) -> None:
+    def _decide_mood(self, transcript: str, route: str, final: dict[str, object]) -> moods.Voice:
+        """Next mood for this turn. Nothing here can be verified yet (no executor), so no event is
+        marked verified_outcome and the avatar never gets a result expression from this path."""
+        now = self._now()
+        domain = "finance" if route in ("proposed", "amended", "accepted", "clarify") else None
+        inputs = moods.MoodInputs(
+            local_time=now.time(),
+            flags=utterance_flags(transcript),
+            domain=domain,
+            settings=self.mood_settings,
+            events=frozenset({moods.APPROVAL_PENDING})
+            if route in ("proposed", "amended")
+            else frozenset(),
+            action_in_flight=route in ("proposed", "amended"),
+        )
+        result = moods.next_mood(self._mood, inputs)
+        self._mood = result.state
+        final["mood"] = {
+            "name": result.mood.value,
+            "template_variant": result.template_variant,
+            "voice": {
+                "rate": result.voice.rate,
+                "pitch_st": result.voice.pitch_st,
+                "softness": result.voice.softness,
+            },
+            "avatar": {"expression": result.avatar.expression, "clip": result.avatar.clip},
+        }
+        event = moods.avatar_expression_event(result, inputs)
+        if event is not None:
+            final["avatar_event"] = event
+        return result.voice
+
+    async def _speak(
+        self, text: str, language: str, epoch: int, speed: float | None = None
+    ) -> None:
         session = self.session
         await session.transition(SessionState.SPEAKING)
         if self._tts is None or not text:
@@ -427,6 +474,8 @@ class TurnPipeline:
 
         async def call() -> SynthesizedAudio | None:
             try:
+                if speed is not None and _accepts_speed(tts.synthesize):
+                    return await tts.synthesize(text, language, speed=speed)  # type: ignore[call-arg]
                 return await tts.synthesize(text, language)
             except Exception:
                 logger.warning("speech synthesis failed", exc_info=True)

@@ -122,11 +122,17 @@ class KokoroSpeechProvider:
     # ------------------------------------------------------------------- speak
 
     async def speak(
-        self, text: str, *, language: str, turn_epoch: int, scope: str = ""
+        self,
+        text: str,
+        *,
+        language: str,
+        turn_epoch: int,
+        scope: str = "",
+        speed: float | None = None,
     ) -> AsyncIterator[SpeechChunk]:
         clean = _validate_text(text)
         lang = _validate_language(language)
-        stream = await self._begin(clean, lang, turn_epoch, scope)
+        stream = await self._begin(clean, lang, turn_epoch, scope, clamp_speed(speed))
         if stream is None:
             return
         index_seen = False
@@ -164,14 +170,16 @@ class KokoroSpeechProvider:
         self._epochs[scope] = max(self._epoch_of(scope), turn_epoch)
         await self._cancel_active(scope)
 
-    async def synthesize(self, text: str, language: str) -> SynthesizedAudio:
+    async def synthesize(
+        self, text: str, language: str, *, speed: float | None = None
+    ) -> SynthesizedAudio:
         """Legacy `/v1/voice/speech` shape: join every chunk into one WAV."""
         async with self._legacy_lock:
             paths: list[Path] = []
             saw_final = False
             try:
                 async for chunk in self.speak(
-                    text, language=language, turn_epoch=self._epoch_of("")
+                    text, language=language, turn_epoch=self._epoch_of(""), speed=speed
                 ):
                     paths.append(chunk.path)
                     saw_final = chunk.final
@@ -212,7 +220,7 @@ class KokoroSpeechProvider:
         return self._epochs.get(scope, 0)
 
     async def _begin(
-        self, text: str, language: str, turn_epoch: int, scope: str = ""
+        self, text: str, language: str, turn_epoch: int, scope: str = "", speed: float = 1.0
     ) -> _Stream | None:
         if turn_epoch < self._epoch_of(scope):
             logger.info("stale speak ignored")
@@ -238,6 +246,7 @@ class KokoroSpeechProvider:
                         "command": "speak",
                         "text": text,
                         "language": language,
+                        "speed": speed,
                         "output_dir": str(self._output_dir),
                     }
                 )
@@ -427,6 +436,17 @@ class KokoroSpeechProvider:
         if stream is not None and stream.worker is worker and not stream.worker_done.is_set():
             stream.queue.put_nowait({"status": "worker_exit"})
             stream.worker_done.set()
+
+
+MIN_SPEED = 0.8
+MAX_SPEED = 1.2
+
+
+def clamp_speed(speed: float | None) -> float:
+    """Speaking rate for the worker: 1.0 when unset, never outside a natural range."""
+    if speed is None or speed != speed:  # None or NaN
+        return 1.0
+    return min(MAX_SPEED, max(MIN_SPEED, float(speed)))
 
 
 def _validate_text(text: str) -> str:
