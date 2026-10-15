@@ -313,3 +313,267 @@ def test_a_failed_upgrade_puts_the_database_back_exactly_as_it_was(
         check.close()
     assert versions == {1, 2, -1}  # exactly the pre-upgrade state, marker included
     assert "device_grants" not in names and "ok" not in names
+
+
+# ------------------------------------------------- B4-FIX: atomicity, restore and recovery
+
+
+def _broken_catalog(monkeypatch: pytest.MonkeyPatch) -> list[Migration]:
+    """Make the real startup path see a catalog whose migration 4 is broken."""
+    import reva_core.storage.bootstrap as bootstrap
+    import reva_core.storage.migrations as migrations
+
+    broken = [*MIGRATIONS[:3], Migration(4, "broken", "BEGIN; CREATE TABLE ok (x); NOPE; COMMIT;")]
+    monkeypatch.setattr(migrations, "MIGRATIONS", broken)
+    monkeypatch.setattr(
+        bootstrap, "apply_migrations", lambda c: migrations.apply_migrations(c, broken)
+    )
+    monkeypatch.setattr(
+        bootstrap, "pending_versions", lambda c: migrations.pending_versions(c, broken)
+    )
+    return broken
+
+
+def _state(db: Path) -> tuple[set[int], set[str]]:
+    check = sqlite3.connect(db)
+    try:
+        versions = {r[0] for r in check.execute("SELECT version FROM schema_migrations")}
+        names = {r[0] for r in check.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    finally:
+        check.close()
+    return versions, names
+
+
+def test_upgrade_rollback_reupgrade_then_a_forced_failure_restores_the_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "reva.db"
+    conn, top = initialize_database(db)  # fresh -> latest
+    assert top == MIGRATIONS[-1].version
+    rollback_to(conn, 2)  # takes its own safety snapshot
+    conn.execute(
+        "INSERT INTO schema_migrations (version, name, applied_at) VALUES (-1, 'marker', 'x')"
+    )
+    conn.close()
+    before = _state(db)
+    _broken_catalog(monkeypatch)
+
+    with pytest.raises(StorageError, match="migration 4"):
+        initialize_database(db)  # re-upgrade 3 and 4: 4 is broken
+
+    assert _state(db) == before
+    assert before[0] == {1, 2, -1}
+    assert "device_grants" not in before[1] and "ok" not in before[1]
+
+
+def test_a_missing_snapshot_fails_loudly_instead_of_a_bare_file_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import reva_core.storage.bootstrap as bootstrap
+
+    db = tmp_path / "reva.db"
+    old = open_connection(db)
+    apply_migrations(old, MIGRATIONS[:2])
+    old.close()
+    _broken_catalog(monkeypatch)
+    real = bootstrap.snapshot
+
+    def vanishing(conn: sqlite3.Connection, directory: Path, **kw: object) -> Path:
+        path = real(conn, directory, **kw)  # type: ignore[arg-type]
+        path.unlink()  # the copy disappears before it is needed
+        return path
+
+    monkeypatch.setattr(bootstrap, "snapshot", vanishing)
+
+    with pytest.raises(StorageError, match="snapshot is missing") as caught:
+        initialize_database(db)
+
+    assert isinstance(caught.value.__cause__, StorageError)  # the original migration error
+
+
+def test_a_migration_and_its_version_row_commit_together() -> None:
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    first = Migration(1, "one", "BEGIN; CREATE TABLE one (x); COMMIT;")
+    second = Migration(2, "two", "BEGIN; CREATE TABLE two (x); COMMIT;")
+    apply_migrations(conn, [first])
+
+    class Failing:
+        """A connection whose version INSERT fails, as a crash right after the script would."""
+
+        def __init__(self, inner: sqlite3.Connection) -> None:
+            self._inner = inner
+
+        def execute(self, sql: str, *args: object) -> sqlite3.Cursor:
+            if sql.lstrip().startswith("INSERT INTO schema_migrations"):
+                raise sqlite3.OperationalError("disk full")
+            return self._inner.execute(sql, *args)  # type: ignore[arg-type]
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._inner, name)
+
+    with pytest.raises(StorageError, match="migration 2"):
+        apply_migrations(Failing(conn), [first, second])  # type: ignore[arg-type]
+
+    assert "two" not in tables(conn)  # the script was rolled back with the failed insert
+    assert apply_migrations(conn, [first, second]) == 2  # and a retry now works
+
+
+def test_a_failing_script_leaves_none_of_its_statements_behind() -> None:
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    bad = Migration(1, "bad", "CREATE TABLE half (x); INSERT INTO nowhere VALUES (1);")
+
+    with pytest.raises(StorageError):
+        apply_migrations(conn, [bad])
+
+    assert "half" not in tables(conn) and not conn.in_transaction
+
+
+def test_triggers_with_their_own_begin_and_end_still_apply(conn: sqlite3.Connection) -> None:
+    apply_migrations(conn)
+    conn.execute(
+        "INSERT INTO action_events (action_id, seq, at, kind, payload) "
+        "VALUES ('a', 0, 't', 'proposed', '{}')"
+    )
+
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        conn.execute("DELETE FROM action_events")  # the 0004 trigger exists and fires
+
+
+def test_a_down_script_and_its_version_delete_commit_together(tmp_path: Path) -> None:
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    migrations = [
+        Migration(1, "one", "CREATE TABLE one (x);", "DROP TABLE one;"),
+        Migration(2, "two", "CREATE TABLE two (x);", "DROP TABLE two; DROP TABLE missing_table;"),
+    ]
+    apply_migrations(conn, migrations)
+
+    with pytest.raises(StorageError, match="rolling back migration 2"):
+        rollback_to(conn, 1, migrations, snapshot_directory=tmp_path / "snaps")
+
+    assert "two" in tables(conn) and current_version(conn) == 2  # nothing half-undone
+
+
+def test_a_failed_copy_never_truncates_the_live_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import reva_core.storage.bootstrap as bootstrap
+
+    db = tmp_path / "reva.db"
+    db.write_bytes(b"live bytes")
+    snap = tmp_path / "snap.db"
+    snap.write_bytes(b"snapshot bytes")
+
+    def explode(src: object, dst: object) -> None:
+        Path(str(dst)).write_bytes(b"par")  # a partial temp file
+        raise OSError("disk full")
+
+    monkeypatch.setattr(bootstrap.shutil, "copyfile", explode)
+
+    with pytest.raises(StorageError, match="restore failed"):
+        bootstrap._restore(snap, db, cause=RuntimeError("x"))
+
+    assert db.read_bytes() == b"live bytes"
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".restore")] == []
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm"])
+def test_restore_fails_loudly_if_a_wal_file_cannot_be_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    import reva_core.storage.bootstrap as bootstrap
+
+    db = tmp_path / "reva.db"
+    db.write_bytes(b"live bytes")
+    (tmp_path / f"reva.db{suffix}").write_bytes(b"stale")
+    snap = tmp_path / "snap.db"
+    snap.write_bytes(b"snapshot bytes")
+    real_unlink = Path.unlink
+
+    def locked(self: Path, missing_ok: bool = False) -> None:
+        if self.name.endswith(suffix):
+            raise PermissionError("in use")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", locked)
+
+    with pytest.raises(StorageError, match=suffix):
+        bootstrap._restore(snap, db, cause=RuntimeError("x"))
+
+    assert db.read_bytes() == b"live bytes"  # not restored over a stale WAL
+
+
+def test_restore_replaces_the_database_atomically_and_clears_old_wal_files(tmp_path: Path) -> None:
+    import reva_core.storage.bootstrap as bootstrap
+
+    db = tmp_path / "reva.db"
+    db.write_bytes(b"half migrated")
+    for suffix in ("-wal", "-shm"):
+        (tmp_path / f"reva.db{suffix}").write_bytes(b"stale")
+    snap = tmp_path / "snap.db"
+    snap.write_bytes(b"snapshot bytes")
+
+    bootstrap._restore(snap, db, cause=RuntimeError("x"))
+
+    assert db.read_bytes() == b"snapshot bytes"
+    assert not (tmp_path / "reva.db-wal").exists() and not (tmp_path / "reva.db-shm").exists()
+    assert snap.exists()  # the snapshot is kept; it is still the only good copy
+
+
+@pytest.mark.parametrize("failure", [RuntimeError("boom"), OSError("io"), KeyboardInterrupt()])
+def test_any_failure_during_an_upgrade_restores_not_only_storage_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: BaseException
+) -> None:
+    import reva_core.storage.bootstrap as bootstrap
+
+    db = tmp_path / "reva.db"
+    old = open_connection(db)
+    apply_migrations(old, MIGRATIONS[:2])
+    old.execute(
+        "INSERT INTO schema_migrations (version, name, applied_at) VALUES (-1, 'marker', 'x')"
+    )
+    old.close()
+
+    def half_then_fail(c: sqlite3.Connection) -> int:
+        apply_migrations(c, MIGRATIONS[:3])  # really changes the file first
+        raise failure
+
+    monkeypatch.setattr(bootstrap, "apply_migrations", half_then_fail)
+
+    with pytest.raises(type(failure)):
+        initialize_database(db)
+
+    versions, names = _state(db)
+    assert versions == {1, 2, -1} and "device_grants" not in names
+
+
+def test_the_connection_is_closed_when_the_snapshot_cannot_be_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import reva_core.storage.bootstrap as bootstrap
+
+    db = tmp_path / "reva.db"
+    old = open_connection(db)
+    apply_migrations(old, MIGRATIONS[:2])
+    old.close()
+    opened: list[sqlite3.Connection] = []
+    real_open = bootstrap.open_connection
+
+    def tracking(path: Path) -> sqlite3.Connection:
+        opened.append(real_open(path))
+        return opened[-1]
+
+    def refuse(*_a: object, **_k: object) -> Path:
+        raise StorageError("could not take a database snapshot: disk full")
+
+    monkeypatch.setattr(bootstrap, "open_connection", tracking)
+    monkeypatch.setattr(bootstrap, "snapshot", refuse)
+
+    with pytest.raises(StorageError, match="snapshot"):
+        initialize_database(db)
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        opened[0].execute("SELECT 1")  # closed, not leaked
+    assert _state(db)[0] == {1, 2}  # and nothing was migrated

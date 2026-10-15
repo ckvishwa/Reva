@@ -12,6 +12,7 @@ than opened and half understood.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,13 +99,14 @@ def apply_migrations(conn: sqlite3.Connection, migrations: list[Migration] | Non
         if migration.version in applied_versions:
             continue
         try:
-            conn.executescript(migration.sql)
-            conn.execute(
+            # The script and its version row commit together or not at all.
+            _run_atomically(
+                conn,
+                migration.sql,
                 "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
                 (migration.version, migration.name, utc_now().isoformat()),
             )
         except sqlite3.Error as exc:
-            _abandon_open_transaction(conn)
             raise StorageError(
                 f"migration {migration.version} ({migration.name}) failed: {exc}"
             ) from exc
@@ -154,10 +156,13 @@ def rollback_to(
         step = known[version]
         assert step.down_sql is not None
         try:
-            conn.executescript(step.down_sql)
-            conn.execute("DELETE FROM schema_migrations WHERE version = ?", (version,))
+            _run_atomically(
+                conn,
+                step.down_sql,
+                "DELETE FROM schema_migrations WHERE version = ?",
+                (version,),
+            )
         except sqlite3.Error as exc:
-            _abandon_open_transaction(conn)
             raise StorageError(f"rolling back migration {version} failed: {exc}") from exc
     return current_version(conn)
 
@@ -190,6 +195,55 @@ def snapshot(conn: sqlite3.Connection, directory: Path, *, keep: int = 3) -> Pat
     for old in older[: max(0, len(older) - (keep - 1))]:
         old.unlink(missing_ok=True)
     return target
+
+
+_TRANSACTION_CONTROL = re.compile(
+    r"(?:--[^\n]*\n\s*)*"
+    r"(?:BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION)?|COMMIT|END(?:\s+TRANSACTION)?)"
+    r"\s*;",
+    re.IGNORECASE,
+)
+
+
+def _statements(script: str) -> list[str]:
+    """Split a migration script into complete statements, dropping its own BEGIN and COMMIT.
+
+    `sqlite3.complete_statement` knows that a trigger's inner `;` does not end the statement, so a
+    `CREATE TRIGGER ... BEGIN ... END;` stays in one piece.
+    """
+    statements: list[str] = []
+    start = 0
+    for index, char in enumerate(script):
+        if char == ";" and sqlite3.complete_statement(script[start : index + 1]):
+            text = script[start : index + 1].strip()
+            start = index + 1
+            if not _TRANSACTION_CONTROL.fullmatch(text):
+                statements.append(text)
+    leftover = script[start:].strip()
+    if leftover and any(not part.lstrip().startswith("--") for part in leftover.splitlines()):
+        statements.append(leftover)
+    return statements
+
+
+def _run_atomically(
+    conn: sqlite3.Connection, script: str, then_sql: str, then_params: tuple[object, ...]
+) -> None:
+    """Run every statement of `script`, then `then_sql`, inside ONE transaction.
+
+    `executescript` commits before it runs and the scripts commit themselves, which left a window
+    where a crash kept the new tables but not their version row. Here the script's own
+    BEGIN/COMMIT are dropped and SQLite (whose DDL is transactional) commits all or nothing.
+    """
+    statements = _statements(script)
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for statement in statements:
+            conn.execute(statement)
+        conn.execute(then_sql, then_params)
+        conn.execute("COMMIT")
+    except BaseException:
+        _abandon_open_transaction(conn)
+        raise
 
 
 def _abandon_open_transaction(conn: sqlite3.Connection) -> None:
