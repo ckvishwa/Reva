@@ -135,6 +135,7 @@ class VoiceSession:
         self._ack_delay = ack_delay
         self._ack_task: asyncio.Task[None] | None = None
         self._ack_active = False
+        self._close_hooks: list[Callable[[], Awaitable[None]]] = []
         self.turn_number = 0
         # What was talked about, per device: survives a new session after a crash or restart.
         self.dialogue = DialogueTracker(device_id, dialogue_store)
@@ -201,8 +202,17 @@ class VoiceSession:
         self._end_ack("cancel")
         self._enter(SessionState.IDLE, "cancel")
 
+    def add_close_hook(self, hook: Callable[[], Awaitable[None]]) -> None:
+        """Run `hook` when the session closes (the voice pipeline removes its audio files)."""
+        self._close_hooks.append(hook)
+
     async def close(self) -> None:
         await self.cancel()
+        for hook in self._close_hooks:
+            try:
+                await hook()
+            except Exception:
+                logger.warning("session close hook failed", exc_info=True)
         for task in list(self._tasks):
             task.cancel()
         for subscription in list(self._subscribers):
@@ -213,6 +223,9 @@ class VoiceSession:
 
     def mark(self, name: str) -> None:
         self._timings.mark(name)
+
+    def timings_snapshot(self) -> dict[str, int]:
+        return self._timings.snapshot()
 
     async def run_stage[T](self, stage: Stage, fn: Callable[[], Awaitable[T]]) -> StageResult[T]:
         epoch = self.turn_epoch
