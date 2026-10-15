@@ -1,0 +1,25 @@
+{
+  "name": "reva-avatar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "REVA avatar page: three.js + three-vrm, bundled locally, shared by the Windows (WebView2) and Android (WebView) apps.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test \"test/unit/*.test.mjs\"",
+    "test:e2e": "node --test --test-concurrency=1 \"test/e2e/*.test.mjs\""
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "3.5.5",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.63.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
