@@ -41,6 +41,18 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/voice/sessions"),
     ("DELETE", "/v1/voice/sessions/{session_id}"),
     ("GET", "/v1/voice/sessions/{session_id}/audio/{audio_id}"),
+    # B3: the typed action broker. Exactly these three paths; every other "action" path stays
+    # forbidden (see test_no_tool_or_action_keyword_in_any_route_path).
+    ("POST", "/v1/actions/proposals"),
+    ("POST", "/v1/actions/{action_id}/approval"),
+    ("GET", "/v1/actions/{action_id}"),
+    ("PUT", "/v1/actions/{action_id}"),
+}
+
+_ALLOWED_ACTION_PATHS = {
+    "/v1/actions/proposals",
+    "/v1/actions/{action_id}/approval",
+    "/v1/actions/{action_id}",
 }
 
 _ALLOWED_NON_DOMAIN_PREFIXES = {
@@ -71,6 +83,22 @@ def test_no_tool_or_action_keyword_in_any_route_path(client):
     for route in iter_effective_routes(client.app):
         path = getattr(route, "path", None) or ""
         assert "tool" not in path.lower()
+        if path in _ALLOWED_ACTION_PATHS:
+            continue
         assert "action" not in path.lower()
         assert "execute" not in path.lower()
         assert "command" not in path.lower()
+
+
+def test_no_other_action_path_is_routable(client, auth_headers):
+    for method, path in [
+        ("post", "/v1/actions"),
+        ("post", "/v1/actions/execute"),
+        ("post", "/v1/actions/some-id/execute"),
+        ("post", "/v1/actions/some-id/run"),
+        ("delete", "/v1/actions/some-id"),
+        ("get", "/v1/actions"),
+        ("get", "/v1/actions/some-id/grant"),
+    ]:
+        response = getattr(client, method)(path, headers=auth_headers)
+        assert response.status_code in (404, 405), (method, path, response.status_code)

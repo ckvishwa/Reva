@@ -24,6 +24,14 @@ import pytest
         ("post", "/v1/voice/sessions", {"json": {}}),
         ("delete", "/v1/voice/sessions/some-session-id", {}),
         ("get", "/v1/voice/sessions/some-session-id/audio/some-audio-id", {}),
+        ("post", "/v1/actions/proposals", {"json": {"capability": "windows.app.open", "args": {}}}),
+        ("post", "/v1/actions/some-action-id/approval", {"json": {"decision": "approve"}}),
+        ("get", "/v1/actions/some-action-id", {}),
+        (
+            "put",
+            "/v1/actions/some-action-id",
+            {"json": {"grant_id": "g", "status": "verified"}},
+        ),
         ("post", "/v1/voice/speech", {"json": {"text": "hi", "language": "en"}}),
         (
             "post",
