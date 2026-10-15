@@ -99,7 +99,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-LANG-004 | R1 | S09 | DONE | - | B3b-entity-ladder (vector rung shadow-only) |
 | AR-LANG-005 | R1 | S06 | DONE | - | reference() and accept_proposal() wired through the router; at-rest DPAPI (B0) |
 | AR-LANG-006 | R1 | S09 | NOT STARTED | planner | planner is not on main |
-| AR-LANG-007 | R1 | S09 | DONE | - | B3a-authorize-pure |
+| AR-LANG-007 | R1 | S09 | DONE | - | B3a-authorize-pure; C1c: Kotlin authorize() equals the Python one on 1006 generated cases |
 | AR-LANG-008 | R1 | S09 | DONE | - | tests/unit/test_policy_authorize.py::test_leftover_content_words_block_the_action; test_normalizer filler fixtures |
 | AR-LANG-009 | R1 | S10 | PARTIAL | D1 | action outcome templates by status done (B3c-reply-from-executor); per-intent x status coverage test for the other domains with each domain |
 | AR-LANG-010 | R1 | S06 | DONE | - | S06-normalizer (114 tests), S06-ack-first |
@@ -107,7 +107,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-LANG-012 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): templates + number check folded into B3 |
 | AR-LANG-013 | R1 | S10 | NOT STARTED | B1 | gap (spec S10): spoken rewrite + chunking with turn_epoch folded into B1.2 |
 | AR-LANG-014 | R1 | S07 | DONE | - | redacted TurnEvent recording + failed-turn fixtures |
-| AR-LANG-015 | R2 | S12 | PARTIAL | C1c | C1b: mood engine and flags ported with 664 shared fixture cases; registry, authorize() and rules parity in C1c |
+| AR-LANG-015 | R2 | S12 | PARTIAL | C3 | C1b/c: mood rules, capability registry and rule fast path (non-app rules) shared with the PC and checked by fixtures the Python code writes (664 mood, 1006 authorize, 75 rule cases); normalizer (money, dates) and the app-name ladder are not ported: needed for phone expense entry in C3 |
 | AR-LANG-016 | R3 | S24 | NOT STARTED | E2 |  |
 | AR-LANG-017 | R3 | S24 | NOT STARTED | E4 |  |
 | AR-LANG-018 | R1 | S09 | DONE | - | B3b-forbidden-refusals |
