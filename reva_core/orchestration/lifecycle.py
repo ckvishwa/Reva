@@ -13,7 +13,7 @@ from pathlib import Path
 
 from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.config.settings import Settings
-from reva_core.domains.keys import DomainKeyProvider, default_key_provider
+from reva_core.domains.keys import DomainKeyProvider, KeyStoreError, default_key_provider
 from reva_core.domains.privacy import DomainPrivacyStore
 from reva_core.domains.service import DomainService
 from reva_core.gateway.manager import GatewayManager
@@ -24,6 +24,9 @@ from reva_core.models.embedding_providers import OllamaEmbeddingProvider
 from reva_core.models.faster_whisper_stt import FasterWhisperSTTProvider
 from reva_core.models.stt import SpeechToTextProvider
 from reva_core.models.tts import TextToSpeechProvider
+from reva_core.policy.broker import Broker
+from reva_core.policy.grants import grant_key_provider, load_or_create_signer
+from reva_core.policy.ledger import SqliteLedger
 from reva_core.providers.cloud import KEY_ENTRY, CloudReasoner, CloudSettingsStore
 from reva_core.providers.registry import ProviderKind
 from reva_core.providers.tts import RegistryTTS, build_tts_registry
@@ -50,6 +53,7 @@ class CoreLifecycle:
         domain_key_provider: DomainKeyProvider | None = None,
         gateway_key_provider: DomainKeyProvider | None = None,
         anthropic_secret_store: SecretStore | None = None,
+        grant_key_provider: DomainKeyProvider | None = None,
     ) -> None:
         self._settings = settings
         self._conn: sqlite3.Connection | None = None
@@ -69,6 +73,8 @@ class CoreLifecycle:
         self._gateway_key_provider = gateway_key_provider
         self._gateway: GatewayManager | None = None
         self._anthropic_secret_store = anthropic_secret_store
+        self._grant_key_provider = grant_key_provider
+        self._broker: Broker | None = None
         self._cloud_settings_store = CloudSettingsStore(settings.data_dir / "cloud_settings.json")
 
     def startup(self) -> HealthStatus:
@@ -96,6 +102,7 @@ class CoreLifecycle:
             api_base=self._settings.embedding_model_api_base,
             timeout_seconds=self._settings.embedding_timeout_seconds,
         )
+        self._build_broker()
         self._build_speech_to_text_provider()
         self._build_text_to_speech_provider()
         self._run_startup_backfill()
@@ -126,6 +133,25 @@ class CoreLifecycle:
             },
         )
         return self.health()
+
+    def _build_broker(self) -> None:
+        """The action broker. Without the OS key vault there is no way to sign a grant, so the
+        broker stays off (the actions routes answer 503) and the rest of Core carries on."""
+        assert self._conn is not None
+        try:
+            provider = self._grant_key_provider or grant_key_provider(
+                self._settings.domain_keystore, self._settings.data_dir
+            )
+            signer = load_or_create_signer(provider)
+            signer.write_public_key(self._settings.data_dir)
+            self._broker = Broker(signer=signer, ledger=SqliteLedger(self._conn))
+        except (KeyStoreError, OSError):
+            logger.warning("action broker unavailable: the grant key could not be used")
+            self._broker = None
+
+    @property
+    def broker(self) -> Broker | None:
+        return self._broker
 
     def _run_startup_backfill(self) -> None:
         # asyncio.run is safe here: startup() runs before uvicorn creates
