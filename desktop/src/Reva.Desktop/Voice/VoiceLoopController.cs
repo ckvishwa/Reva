@@ -9,6 +9,7 @@ public enum LiveVoiceState
     Ready,
     Listening,
     Thinking,
+    Approval,
     Speaking,
     Error,
 }
@@ -66,6 +67,7 @@ public sealed class VoiceLoopController : IAsyncDisposable
         _capture.Frame += OnFrame;
         _capture.Lost += OnCaptureLost;
         _playback.Finished += OnPlaybackFinished;
+        _playback.Level += level => PlaybackLevel?.Invoke(level);
         if (_hotkey is not null)
         {
             // Press and release go through one queue so a quick tap can never be reordered.
@@ -75,6 +77,12 @@ public sealed class VoiceLoopController : IAsyncDisposable
     }
 
     public event Action? Changed;
+
+    /// <summary>Every event Core sends, after the loop has handled it (the avatar reads faces from these).</summary>
+    public event Action<VoiceEvent>? CoreEvent;
+
+    /// <summary>Loudness of the reply being played; only for the current turn.</summary>
+    public event Action<PlaybackLevel>? PlaybackLevel;
 
     public LiveVoiceState State { get; private set; } = LiveVoiceState.Off;
 
@@ -418,6 +426,18 @@ public sealed class VoiceLoopController : IAsyncDisposable
             _playback.Flush(); // anything still playing belongs to an older turn
         }
 
+        try
+        {
+            HandleCoreEvent(ev);
+        }
+        finally
+        {
+            CoreEvent?.Invoke(ev);
+        }
+    }
+
+    private void HandleCoreEvent(VoiceEvent ev)
+    {
         switch (ev.Kind)
         {
             case "session.state":
@@ -451,8 +471,8 @@ public sealed class VoiceLoopController : IAsyncDisposable
         var next = state switch
         {
             "listening" => _pttActive ? LiveVoiceState.Listening : LiveVoiceState.Ready,
-            "endpointing" or "transcribing" or "reasoning" or "approval_pending" or "executing"
-                => LiveVoiceState.Thinking,
+            "endpointing" or "transcribing" or "reasoning" or "executing" => LiveVoiceState.Thinking,
+            "approval_pending" => LiveVoiceState.Approval,
             "speaking" => LiveVoiceState.Speaking,
             "idle" or "cancelling" => LiveVoiceState.Ready,
             "recoverable_error" or "fatal_error" => LiveVoiceState.Error,

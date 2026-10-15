@@ -1,0 +1,21 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.AvatarView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid MinHeight="220">
+        <WebView2
+            x:Name="Web"
+            AutomationProperties.AutomationId="AvatarWebView"
+            AutomationProperties.Name="REVA avatar"
+            DefaultBackgroundColor="Transparent" />
+        <TextBlock
+            x:Name="StatusText"
+            AutomationProperties.AutomationId="AvatarStatus"
+            Text="Starting avatar…"
+            VerticalAlignment="Bottom"
+            HorizontalAlignment="Left"
+            Margin="8"
+            Foreground="{StaticResource RevaMutedBrush}" />
+    </Grid>
+</UserControl>
