@@ -149,3 +149,18 @@ def test_arguments_are_checked_before_anything_is_asked(rig) -> None:
             "/v1/actions/proposals", json={"capability": "assistant.undo", "args": args}
         ).json()
         assert refused["status"] == "refused" and refused["reason"] == "INVALID_ARGS"
+
+
+def test_only_the_newest_expense_can_be_undone_so_the_card_never_misnames_it(rig) -> None:
+    client, _ = rig
+    first = _saved(client)
+    second = _saved(client)
+
+    older = _approve(client, _undo(client, first)["action_id"])
+    assert older["status"] == "failed" and len(_items(client)) == 2
+
+    newest = _approve(client, _undo(client, second)["action_id"])
+    assert newest["status"] == "verified" and len(_items(client)) == 1
+
+    now_newest = _approve(client, _undo(client, first)["action_id"])
+    assert now_newest["status"] == "verified" and _items(client) == []

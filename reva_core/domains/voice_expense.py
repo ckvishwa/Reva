@@ -50,7 +50,9 @@ class ExpenseLog:
         self._rows.pop(action_id, None)
 
     def undoable(self, action_id: str) -> bool:
-        return action_id in self._rows
+        """Only the newest expense can be undone, so the card's "last expense" is literally true
+        whoever proposed it (voice or the screen)."""
+        return bool(self._rows) and next(reversed(self._rows)) == action_id
 
 
 class FinanceExpenseExecutor:
@@ -129,7 +131,7 @@ class ExpenseUndoExecutor:
     def __call__(self, order: ExecutionOrder) -> tuple[str, Mapping[str, Any] | None]:
         target = str(order.args.get("target_action_id", ""))
         transaction_id = self._log.get(target)
-        if transaction_id is None:
+        if transaction_id is None or not self._log.undoable(target):
             return "failed", None
         service = self._service()
         handle = service.handle("finance")
