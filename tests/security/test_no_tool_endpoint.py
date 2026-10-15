@@ -36,6 +36,7 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/devices/{device_id}/revoke"),
     ("POST", "/v1/voice/sessions"),
     ("DELETE", "/v1/voice/sessions/{session_id}"),
+    ("GET", "/v1/voice/sessions/{session_id}/audio/{audio_id}"),
 }
 
 _ALLOWED_NON_DOMAIN_PREFIXES = {

@@ -19,6 +19,7 @@ import pytest
         ("post", "/v1/devices/some-device/revoke", {}),
         ("post", "/v1/voice/sessions", {"json": {}}),
         ("delete", "/v1/voice/sessions/some-session-id", {}),
+        ("get", "/v1/voice/sessions/some-session-id/audio/some-audio-id", {}),
         ("post", "/v1/voice/speech", {"json": {"text": "hi", "language": "en"}}),
         (
             "post",

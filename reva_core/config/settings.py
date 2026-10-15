@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     stt_timeout_seconds: float = 60.0
     stt_max_upload_bytes: int = 10 * 1024 * 1024
     stt_max_duration_seconds: float = 30.0
+    # Extra names for the speech-to-text vocabulary hint (words only; see voice/vocabulary.py).
+    stt_vocabulary_extra: list[str] = []
+    # One redacted line per voice turn, kept on this PC (no audio). Off switch for privacy.
+    turn_recording_enabled: bool = True
 
     @property
     def db_path(self) -> Path:
