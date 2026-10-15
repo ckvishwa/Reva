@@ -139,6 +139,7 @@ def build_voice_session_router(
                 lifecycle.broker,
                 resolver=lifecycle.apps.resolver,
                 app_names=lifecycle.apps.display_names,
+                can_undo=lifecycle.expense_log.undoable,
             ),
             recorder=recorder,
             scratch_dir=scratch,
