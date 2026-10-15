@@ -23,7 +23,7 @@ def test_startup_reports_healthy_with_schema_version(tmp_path):
     health = lifecycle.startup()
     try:
         assert health.status == CoreStatus.HEALTHY
-        assert health.db_schema_version == 3
+        assert health.db_schema_version == 4
         assert health.started_at is not None
     finally:
         lifecycle.shutdown()
