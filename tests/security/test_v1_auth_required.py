@@ -40,3 +40,12 @@ def test_health_does_not_require_auth(client):
 def test_version_does_not_require_auth(client):
     response = client.get("/version")
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize("header", ["Bearer café-token", "Bearer ÿþ"])
+def test_a_non_ascii_bearer_on_http_is_a_401_and_is_audited(client, header):
+    """B0 (closes VOICE-1 R-1): a hostile header must not become a 500 or skip the audit record."""
+    response = client.get("/v1/audit-events", headers={"Authorization": header.encode("latin-1")})
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "Unauthorized"
