@@ -193,3 +193,36 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: python tools/kernel/build_android.py
+
+  avatar:
+    # three.js + three-vrm page: unit tests (events, mood faces, stale epochs, frame cap, lip-sync offset)
+    # and browser tests in Edge (offline load, CSP, no network, drawing stops when off). Needs the
+    # placeholder model, which is in Git LFS.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: avatar/package-lock.json
+
+      - name: Install
+        working-directory: avatar
+        run: npm ci
+
+      - name: Build
+        working-directory: avatar
+        run: npm run build
+
+      - name: Unit tests
+        working-directory: avatar
+        run: npm test
+
+      - name: Browser tests (Edge)
+        working-directory: avatar
+        run: npm run test:e2e
