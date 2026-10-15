@@ -151,3 +151,9 @@ has no license field; it does not mean the package has no license.
 | `weasel` | 1.0.0 | MIT |
 | `win32_setctime` | 1.2.0 | MIT license |
 | `wrapt` | 2.5.1 | BSD-2-Clause |
+
+## Windows app audio (.NET)
+
+| Component | Version | Declared license | Notes |
+|---|---|---|---|
+| NAudio (meta-package) and its parts `NAudio.Core`, `NAudio.Wasapi`, `NAudio.WinMM`, `NAudio.Asio`, `NAudio.Midi` | 2.2.1 (released 2023, pinned in `Reva.Desktop.csproj`, hashes in `packages.lock.json`) | MIT (read from the package `.nuspec` files on 2026-10-15; the meta-package ships `license.txt`) | Microphone capture and reply playback on WASAPI (decision recorded in `CLAUDE.md`). Permissive: keep the copyright notice with any redistribution. No native code of its own; it calls Windows audio APIs. |

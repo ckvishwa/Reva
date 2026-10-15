@@ -16,10 +16,12 @@
     <Grid Grid.Column="1">
 
     <!-- Talk & Today: the existing assistant/voice/memory UI, unchanged, under the Today summary. -->
-    <Grid x:Name="TalkPage" RowDefinitions="Auto,*" Visibility="{x:Bind views:Vis.Show(Navigation.ShowsTalk), Mode=OneWay}">
+    <Grid x:Name="TalkPage" RowDefinitions="Auto,Auto,*" Visibility="{x:Bind views:Vis.Show(Navigation.ShowsTalk), Mode=OneWay}">
     <views:TodayCard x:Name="TodayPanel" Margin="24,24,24,0" ViewModel="{x:Bind Today}" />
 
-    <Grid Grid.Row="1" Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
+    <views:LiveVoicePanel x:Name="LiveVoice" Grid.Row="1" Margin="24,16,24,0" ViewModel="{x:Bind LiveVoiceModel}" />
+
+    <Grid Grid.Row="2" Padding="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto" Loaded="Root_Loaded">
 
         <StackPanel Grid.Row="0" Spacing="8">
             <TextBlock Text="REVA" FontSize="28" FontWeight="SemiBold" />
