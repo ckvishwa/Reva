@@ -26,7 +26,11 @@ import app.reva.voice.AndroidTtsSpeaker
 import app.reva.voice.NeutralMood
 import app.reva.language.PolicyReplies
 import app.reva.pcrequests.PcRequestTracker
+import app.reva.phone.AndroidIntentPort
+import app.reva.phone.ApprovedApps
+import app.reva.phone.PhoneActions
 import app.reva.pcrequests.SignedPcGateway
+import app.reva.pcrequests.SigningUnavailable
 import app.reva.policy.Registry
 import app.reva.voice.VoiceController
 import java.io.File
@@ -37,6 +41,7 @@ import uniffi.reva_kernel.openDomain
  * never backs up; the XML backup rule files exclude it explicitly as well.
  */
 class AppContainer(private val context: Context) {
+    private val noBackupRoot: File get() = context.noBackupFilesDir
     val domainRoot: File get() = File(context.noBackupFilesDir, "domains")
     val keyRoot: File get() = File(context.noBackupFilesDir, "keys")
 
@@ -58,11 +63,32 @@ class AppContainer(private val context: Context) {
     /** The paired PC (public data only), read by sync and by requests for the PC to act. */
     val pairedPcStore: PairedPcStore by lazy { PairedPcStore(File(syncRoot, "paired_pc.json")) }
 
+    val approvedApps: ApprovedApps by lazy { ApprovedApps(File(noBackupRoot, "phone/approved_apps.json")) }
+
+    val intentPort: AndroidIntentPort by lazy { AndroidIntentPort(context) }
+
+    /** The phone's own actions: open an approved app, hand an alarm, reminder, event or share to another app. */
+    val phoneActions: PhoneActions by lazy {
+        PhoneActions(registry, approvedApps, intentPort, onText = { voice.postReply(it) })
+    }
+
+    /** This phone's device key, shared by sync and by requests for the PC to act. */
+    private val deviceSigner: KeystoreDeviceSigner by lazy { KeystoreDeviceSigner() }
+
     /** Requests for the PC to open or close an app. Results come back as lines in Talk, from the PC's own report. */
     val pcRequests: PcRequestTracker by lazy {
         PcRequestTracker(
             pc = { pairedPcStore.load() },
-            gateway = SignedPcGateway(KeystoreDeviceSigner(), PinnedHttpsTransport()),
+            gateway = SignedPcGateway(
+                signer = { message ->
+                    try {
+                        deviceSigner.sign(message)
+                    } catch (e: uniffi.reva_kernel.SignerException) {
+                        throw SigningUnavailable("the device key could not be used")
+                    }
+                },
+                transport = PinnedHttpsTransport(),
+            ),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             onText = { voice.postReply(it) },
         )
@@ -72,7 +98,7 @@ class AppContainer(private val context: Context) {
     val syncService: SyncService by lazy {
         SyncEngine(
             kernel = { kernelRepository.kernelHandle() },
-            signer = KeystoreDeviceSigner(),
+            signer = deviceSigner,
             store = pairedPcStore,
             transport = PinnedHttpsTransport(),
             deviceName = android.os.Build.MODEL ?: "Android phone",
@@ -103,7 +129,7 @@ class AppContainer(private val context: Context) {
             permissions = micPermission,
             availability = { AndroidRecognizerAvailability.check(context) },
             recognizerFactory = { AndroidSpeechRecognizer(context) },
-            replies = PolicyReplies(registry, pc = pcRequests),
+            replies = PolicyReplies(registry, pc = pcRequests, phone = phoneActions),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),

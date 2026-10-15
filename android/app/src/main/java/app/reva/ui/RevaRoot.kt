@@ -59,6 +59,9 @@ import app.reva.ui.devices.MoreHost
 import app.reva.ui.more.TalkUnavailableScreen
 import app.reva.ui.talk.TalkScreen
 import app.reva.pcrequests.PcRequestTracker
+import app.reva.phone.ApprovedApps
+import app.reva.phone.LaunchableApps
+import app.reva.phone.PhoneActions
 import app.reva.voice.VoiceController
 import app.reva.ui.theme.RevaColors
 import app.reva.ui.today.TodayScreen
@@ -96,6 +99,8 @@ fun RevaRoot(
     autoSync: AutoSyncController? = null,
     voice: VoiceController? = null,
     pcRequests: PcRequestTracker? = null,
+    phoneActions: PhoneActions? = null,
+    phoneApps: Pair<ApprovedApps, LaunchableApps>? = null,
     onBeforeMicRequest: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
 ) {
@@ -178,12 +183,13 @@ fun RevaRoot(
                     syncStatus = syncStatus,
                 )
                 Tab.Talk ->
-                    if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests) else TalkUnavailableScreen()
+                    if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests, phoneActions) else TalkUnavailableScreen()
                 Tab.More -> MoreHost(
                     sync,
                     versionName,
                     onSynced = { finance.refresh(); today.refresh(); scope.launch { autoSync?.manualSyncSucceeded() } },
                     autoSync = autoSync,
+                    phoneApps = phoneApps,
                 )
             }
         }

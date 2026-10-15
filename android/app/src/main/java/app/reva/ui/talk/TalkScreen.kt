@@ -42,6 +42,7 @@ import app.reva.ui.RevaCard
 import app.reva.ui.SecondaryButton
 import app.reva.ui.theme.RevaColors
 import app.reva.pcrequests.PcPhase
+import app.reva.phone.PhoneActions
 import app.reva.pcrequests.PcRequestTracker
 import app.reva.voice.MicPermission
 import app.reva.voice.TalkEffect
@@ -60,6 +61,7 @@ fun TalkScreen(
     onBeforePermissionRequest: () -> Unit,
     onOpenAppSettings: () -> Unit,
     pcRequests: PcRequestTracker? = null,
+    phoneActions: PhoneActions? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -99,6 +101,7 @@ fun TalkScreen(
             )
             CaptionText("Show the avatar")
         }
+        phoneActions?.let { PhoneActionCard(it) }
         pcRequests?.let { PcRequestCard(it) }
         StatusLine(ui.state, ui.micOpen, ui.thinking, ui.partial)
         ui.voiceOffReason?.let { MutedText(it, Modifier.testTag("talk_voice_off")) }
@@ -163,6 +166,21 @@ private fun PcRequestCard(tracker: PcRequestTracker) {
             SecondaryButton("Dismiss", tracker::clearFinished, Modifier.testTag("talk_pc_dismiss"))
         } else {
             SecondaryButton("Stop waiting", tracker::cancel, Modifier.testTag("talk_pc_cancel"))
+        }
+    }
+}
+
+/** A phone action waiting for a tap. Only these two buttons approve it; saying "yes" does not. */
+@Composable
+private fun PhoneActionCard(actions: PhoneActions) {
+    val card by actions.card.collectAsState()
+    val waiting = card ?: return
+    RevaCard(modifier = Modifier.testTag("talk_phone_action").semantics { contentDescription = waiting.prompt }) {
+        CaptionText("On this phone: ${waiting.label}")
+        MutedText(waiting.prompt)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PrimaryButton("Confirm", { actions.approve(waiting.id) }, Modifier.testTag("talk_phone_confirm"))
+            SecondaryButton("Not now", { actions.deny(waiting.id) }, Modifier.testTag("talk_phone_deny"))
         }
     }
 }

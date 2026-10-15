@@ -1,5 +1,5 @@
 {
-  "registry_revision": 3,
+  "registry_revision": 4,
   "schema_version": "2.0",
   "note": "Shared by Windows Core and Android local brain. No payment, transfer, purchase, bank-login or medical-dosing capability may ever be added (ADR-033); CI absence test checks forbidden_capability_prefixes.",
   "forbidden_capability_prefixes": [
@@ -641,7 +641,96 @@
         ],
         "properties": {
           "time": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 100
+          }
+        }
+      }
+    },
+    {
+      "capability": "android.reminder.set",
+      "device": "android",
+      "tier": "T2",
+      "confirm_on": "target",
+      "idempotent": false,
+      "evidence_kind": "intent_result",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "due"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "due": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "capability": "android.calendar.insert",
+      "device": "android",
+      "tier": "T2",
+      "confirm_on": "target",
+      "idempotent": false,
+      "evidence_kind": "intent_result",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "start"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    {
+      "capability": "android.share",
+      "device": "android",
+      "tier": "T2",
+      "confirm_on": "target",
+      "idempotent": false,
+      "evidence_kind": "intent_result",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
           }
         }
       }

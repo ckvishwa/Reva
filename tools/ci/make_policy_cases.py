@@ -508,7 +508,10 @@ def main() -> int:
     files = build()
     stale = False
     for name, data in files.items():
-        text = json.dumps(data, separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n"
+        # Not sort_keys: "args" must keep the insertion order authorize() actually saw, so the
+        # "problems" list the Kotlin port reads back matches the order Python computed it in
+        # (dict iteration order is part of this fixture's behavior, not just cosmetics).
+        text = json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n"
         target = FIXTURES / name
         if "--check" in sys.argv:
             current = (

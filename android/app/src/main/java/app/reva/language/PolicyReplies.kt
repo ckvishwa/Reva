@@ -4,6 +4,7 @@ import app.reva.pcrequests.PcIntent
 import app.reva.pcrequests.PcPhrases
 import app.reva.pcrequests.PcRequestTracker
 import app.reva.pcrequests.PcStart
+import app.reva.phone.PhoneActions
 import app.reva.policy.AuthState
 import app.reva.policy.Proposal
 import app.reva.policy.Registry
@@ -27,9 +28,12 @@ class PolicyReplies(
     private val fallback: ReplySource = UnavailableReplies(),
     /** Where a request for the PC goes. Null: this build cannot ask the PC. */
     private val pc: PcRequestTracker? = null,
+    /** The phone's own actions (open an approved app, alarm, reminder, calendar, share). */
+    private val phone: PhoneActions? = null,
 ) : ReplySource {
     override suspend fun reply(text: String): ReplySource.Reply {
         PcPhrases.parse(text)?.let { return forPc(it) }
+        phone?.handle(text)?.let { return it }
         val hit = Rules.parse(text) ?: return fallback.reply(text)
         if (hit.capability == "assistant.undo") return ReplySource.Reply(Outcomes.NOTHING_TO_UNDO, "template")
         val decision = authorize(

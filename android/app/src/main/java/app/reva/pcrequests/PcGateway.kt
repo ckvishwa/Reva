@@ -8,8 +8,18 @@ import java.io.IOException
 import java.security.SecureRandom
 import org.json.JSONException
 import org.json.JSONObject
-import uniffi.reva_kernel.DeviceSigner
-import uniffi.reva_kernel.SignerException
+
+/**
+ * Signs a request to the PC. Only the signing operation, not the Kernel's `DeviceSigner` type itself: this
+ * package must not import the Kernel binding directly (`tests/security/test_import_graph.py`), so `RevaApp.kt`,
+ * which is already allowed to, adapts the phone's real `KeystoreDeviceSigner` to this. Throws [SigningUnavailable]
+ * when the key cannot be used.
+ */
+fun interface RequestSigner {
+    fun sign(message: ByteArray): ByteArray
+}
+
+class SigningUnavailable(message: String) : Exception(message)
 
 /** What the PC says about one request. Words in [speak] and [prompt] are the PC's templates. */
 data class PcReply(
@@ -70,7 +80,7 @@ interface PcGateway {
  * checked against the PC's signing key. An answer that is not signed by the paired PC is never believed.
  */
 class SignedPcGateway(
-    private val signer: DeviceSigner,
+    private val signer: RequestSigner,
     private val transport: GatewayTransport,
     private val clockSeconds: () -> Long = { System.currentTimeMillis() / 1000 },
 ) : PcGateway {
@@ -94,7 +104,7 @@ class SignedPcGateway(
         val timestamp = clockSeconds()
         val signature = try {
             signer.sign(GatewayProtocol.requestMessage("POST", path, timestamp, nonce, body, pc.tlsSha256))
-        } catch (e: SignerException) {
+        } catch (e: SigningUnavailable) {
             throw PcException(PcFailure.Other, "This phone's device key is not available.")
         }
         val headers = mapOf(

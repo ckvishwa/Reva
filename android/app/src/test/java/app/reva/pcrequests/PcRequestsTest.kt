@@ -31,7 +31,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import uniffi.reva_kernel.DeviceSigner
 
 private val PC = PairedPc("192.168.1.20", 47821, "ab".repeat(32), "device-1", ByteArray(65), "pc-kernel")
 
@@ -429,14 +428,12 @@ class SignedPcGatewayTest {
     private val pcKey = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
     private val pc = PairedPc("192.168.1.20", 47821, "ab".repeat(32), "device-1", pcKey.public.encoded, "pc-kernel")
 
-    private val signer = object : DeviceSigner {
-        override fun publicKey(): ByteArray = phoneKey.public.encoded
-        override fun sign(message: ByteArray): ByteArray =
-            Signature.getInstance("SHA256withECDSA").run {
-                initSign(phoneKey.private)
-                update(message)
-                sign()
-            }
+    private val signer = RequestSigner { message ->
+        Signature.getInstance("SHA256withECDSA").run {
+            initSign(phoneKey.private)
+            update(message)
+            sign()
+        }
     }
 
     private fun pcSign(message: ByteArray): ByteArray = Signature.getInstance("SHA256withECDSA").run {
@@ -554,10 +551,7 @@ class SignedPcGatewayTest {
         } catch (e: PcException) {
             assertEquals(PcFailure.Unreachable, e.failure)
         }
-        val broken = object : DeviceSigner {
-            override fun publicKey(): ByteArray = ByteArray(0)
-            override fun sign(message: ByteArray): ByteArray = throw uniffi.reva_kernel.SignerException.Unavailable("no key")
-        }
+        val broken = RequestSigner { throw SigningUnavailable("no key") }
         try {
             SignedPcGateway(broken, down).status(pc, "abcdefghijklmnop")
             throw AssertionError("must fail")
