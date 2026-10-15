@@ -31,6 +31,9 @@ _ACTION_LABELS = {
     "today.get": "Show today",
     "memory.remember": "Save a note",
     "memory.recall": "Look up a note",
+    "assistant.stop": "Stop",
+    "assistant.repeat": "Repeat",
+    "assistant.undo": "Undo the last expense",
 }
 
 _SOURCES = {"voice": "Voice", "ui": "Screen", "typed": "Typed", "phone": "Phone"}

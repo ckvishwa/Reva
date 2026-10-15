@@ -26,7 +26,7 @@ from reva_core.language import outcomes
 from reva_core.language.dialogue import DialogueTracker, Entity, Option
 from reva_core.language.entities import AppResolver
 from reva_core.language.normalizer import TypedValue, normalize
-from reva_core.language.rules import RuleHit, parse
+from reva_core.language.rules import RuleHit, control_capability, parse
 from reva_core.policy import authorize as policy
 from reva_core.policy.broker import ActionView
 from reva_core.policy.registry import DEFAULT_REGISTRY
@@ -34,7 +34,7 @@ from reva_core.shared.ids import new_id
 
 TurnKind = Literal[
     "proposed", "amended", "accepted", "dismissed", "clarify", "unresolved", "chat",
-    "action", "approval", "refused",
+    "action", "approval", "refused", "stop", "repeat",
 ]  # fmt: skip
 
 LOCAL = "local"
@@ -131,12 +131,15 @@ class IntentRouter:
         actions: ActionPort | None = None,
         resolver: Callable[[], AppResolver] | None = None,
         app_names: Callable[[], Mapping[str, str]] | None = None,
+        can_undo: Callable[[str], bool] | None = None,
     ) -> None:
         self._dialogue = dialogue
         self._actions = actions
         default = AppResolver(_app_keys())
         self._resolver = resolver or (lambda: default)
         self._names = app_names or (lambda: {})
+        # Whether the executor still holds the expense an undo would reverse.
+        self._can_undo = can_undo or (lambda _action_id: False)
         self._guess: RuleHit | None = None  # an app name we only guessed; waiting for yes/no
         self._pending: Proposal | None = None
         self._awaiting_amount: tuple[str, TypedValue, bool] | None = None
@@ -151,6 +154,12 @@ class IntentRouter:
             return RoutedTurn("chat")
         normalized = normalize(text, now=now)
         cleaned = normalized.cleaned.strip().strip(".!?,")
+
+        control = control_capability(cleaned)
+        if control == "assistant.stop":
+            return self._stop()
+        if control == "assistant.repeat":
+            return self._repeat()
 
         if self._awaiting_amount is not None:
             answered = self._answer_amount(cleaned)
@@ -171,6 +180,9 @@ class IntentRouter:
         amend = _AMEND.match(cleaned)
         if amend is not None:
             return self._amend(amend.group("ref"), normalized.values)
+
+        if control == "assistant.undo":
+            return self._undo()
 
         if self._actions is not None:
             hit = parse(cleaned, self._resolver())
@@ -263,6 +275,58 @@ class IntentRouter:
             return self._set(chosen, description, amended=amended)
         return None
 
+    # ------------------------------------------------------------ assistant controls
+
+    def _record(self, capability: str, args: dict[str, object]) -> ActionView | None:
+        """Put a control command through the broker so it is authorized and in the ledger. A T0
+        control only reads or silences; it never changes anything."""
+        if self._actions is None:
+            return None
+        return self._actions.propose(
+            policy.Proposal(
+                proposal_id=new_id(),
+                capability=capability,
+                args=args,
+                source="voice",
+                origin_device=LOCAL,
+                target_device=LOCAL,
+            )
+        )
+
+    def _stop(self) -> RoutedTurn:
+        """Silence now and drop anything half-said: a draft, a question, a guessed app. Nothing is
+        committed and nothing already granted or waiting for a click is touched."""
+        self._pending = None
+        self._awaiting_amount = None
+        self._guess = None
+        self._dialogue.answer_clarification()
+        return RoutedTurn("stop", None, action=self._record("assistant.stop", {}))
+
+    def _repeat(self) -> RoutedTurn:
+        """The turn pipeline fills in what was last said; this module cannot know."""
+        return RoutedTurn("repeat", None, action=self._record("assistant.repeat", {}))
+
+    def _undo(self) -> RoutedTurn:
+        """Propose reversing the newest committed expense. It is a T2 action: the broker waits for
+        a click on the confirm card, and the executor reverses only an expense it recorded."""
+        target = self._dialogue.undo_target()
+        if target is None or self._actions is None or not self._can_undo(target):
+            return RoutedTurn("unresolved", outcomes.NOTHING_TO_UNDO)
+        return self._propose_action(
+            "assistant.undo",
+            {"target_action_id": target},
+            (policy.Entity("action", target, policy.Resolution.EXACT),),
+        )
+
+    def note_outcome(self, view: ActionView) -> None:
+        """An executor reported. Only a verified undo moves the undo pointer back."""
+        if view.status != "verified":
+            return
+        if view.capability == INTENT:
+            self._dialogue.record_commit(view.action_id)
+        elif view.capability == "assistant.undo":
+            self._dialogue.undone()
+
     # ------------------------------------------------------------ the action path
 
     def _from_rule(self, hit: RuleHit) -> RoutedTurn:
@@ -327,6 +391,8 @@ class IntentRouter:
         self._dialogue.accept_proposal(
             proposal.action_id,
             [Entity(proposal.action_id, ENTITY_KIND, f"{proposal.label} {proposal.description}")],
+            # With an executor the expense is not done until it reports (note_outcome).
+            committed=self._actions is None,
         )
         if self._actions is not None:
             # A spoken yes is not an approval (T2): the broker waits for a tap on the screen.
