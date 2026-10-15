@@ -1,6 +1,6 @@
 # Android voice (C1)
 
-Status: C1a shipped the voice session, the permission flow, the on-device recognizer rule, the microphone service and the Talk screen. C1b adds speech out, the avatar and the mood engine. The shared registry, rules and `authorize()` port is C1c.
+Status: C1a shipped the voice session, the permission flow, the on-device recognizer rule, the microphone service and the Talk screen. C1b adds speech out, the avatar and the mood engine. C1c ports the registry, rule fast path and `authorize()`.
 
 ## Parts (`android/app/src/main/java/app/reva/voice/`)
 
@@ -45,6 +45,18 @@ Gradle copies `avatar/dist` and the mood rules into the APK (`stageRevaAssets`).
 Checked on an API 36 emulator (not a phone): the page loads offline from the APK and draws; Speak shows the system dialog only after the tap; the second refusal shows the blocked card; after granting, the voice service runs with the OS microphone indicator and Home stops it. The emulator run found two real bugs (a zero-height canvas inside the WebView, and avatar messages lost before the page loaded), both fixed.
 
 Speech is only spoken for a voice turn, not for typed text. If the phone has no offline voice the reply stays on screen.
+
+## Same policy as the PC (C1c)
+
+| File | What it does |
+|---|---|
+| `policy/Registry.kt` | Loads the same `contracts/capability-registry.v2.json` (copied into the APK); refuses forbidden capabilities and unsupported schema keywords; the strict schema validator |
+| `policy/Authorize.kt` | `authorize()` with the same nine checks in the same order, `args_hash` over the same canonical JSON |
+| `language/Rules.kt` | The rule fast path: refusals, stop/repeat/undo, today, spending, remember, recall. The app open/close rules are Windows-only |
+| `language/Outcomes.kt` | The refusal templates |
+| `language/PolicyReplies.kt` | Rules, then `authorize()`, then a template: refusals say no, anything the phone cannot do yet says nothing was changed |
+
+`tests/fixtures/authorize-cases.json` (1006 cases) and `rules-cases.json` are written by `tools/ci/make_policy_cases.py` from the Python code and replayed by `AuthorizeParityTest` and `RulesTest`; `tests/unit/test_policy_cases_fixture.py` fails when Python changes without the fixtures. Known edges of the port: float formatting in `args_hash` matches Python for ordinary numbers (whole numbers keep `.0`) but not for exponent forms such as `1e-07`; ISO date-time validation accepts the common spellings, not every one `fromisoformat` does.
 
 ## What is not here yet
 

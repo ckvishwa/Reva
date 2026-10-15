@@ -1,5 +1,7 @@
 package app.reva.voice
 
+import app.reva.language.Outcomes
+import app.reva.language.Rules
 import app.reva.mood.ExpressionEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -79,6 +81,7 @@ class VoiceController(
     /** Loudness of what is playing, only while this session is speaking and only for the current epoch. */
     val levels: SharedFlow<Level> = _levels.asSharedFlow()
 
+    private var lastAnswer: String? = null
     private var recognizer: Recognizer? = null
     private var turn: Job? = null
     private var nextLineId = 0
@@ -106,11 +109,15 @@ class VoiceController(
         endSession(null) // a typed sentence replaces whatever voice turn was running
         val epoch = session.beginTurn()
         addLine(Who.You, text)
+        if (isControl(text, "assistant.stop")) {
+            _ui.update { it.copy(epoch = session.epoch) }
+            return // stop: silence, nothing else
+        }
         _ui.update { it.copy(thinking = true, failed = false, epoch = epoch) }
         turn = scope.launch {
-            val reply = replies.reply(text)
+            val answer = answerFor(text)
             if (!session.isCurrent(epoch)) return@launch
-            addLine(Who.Reva, reply.text.take(MAX_REPLY))
+            addLine(Who.Reva, answer)
             _ui.update { it.copy(thinking = false) }
         }
     }
@@ -247,20 +254,37 @@ class VoiceController(
         session.go(VoiceState.Reasoning)
         publishState(micOpen = false, partial = "")
         addLine(Who.You, text)
+        if (isControl(text, "assistant.stop")) {
+            endSession(null) // stop: silence, nothing else
+            return
+        }
         val decision = mood.decide(text)
         turn = scope.launch {
-            val reply = replies.reply(text)
+            val answer = answerFor(text)
             if (!session.isCurrent(epoch)) return@launch
-            addLine(Who.Reva, reply.text.take(MAX_REPLY))
+            addLine(Who.Reva, answer)
             if (!session.go(VoiceState.Speaking)) return@launch
             _ui.update { it.copy(expression = decision.expression, expressionSeq = it.expressionSeq + 1) }
             publishState()
-            speaker.speak(reply.text.take(MAX_REPLY), epoch, decision.prosody) { e, rms, tMs ->
+            speaker.speak(answer, epoch, decision.prosody) { e, rms, tMs ->
                 if (session.isCurrent(e) && session.state == VoiceState.Speaking) _levels.tryEmit(Level(e, rms, tMs))
             }
             if (!session.isCurrent(epoch)) return@launch
             endSession(null)
         }
+    }
+
+    private fun isControl(text: String, capability: String) = Rules.controlCapability(Rules.clean(text)) == capability
+
+    /** The words for this sentence. "Repeat" replays only what was already said; nothing new is claimed. */
+    private suspend fun answerFor(text: String): String {
+        val answer = if (isControl(text, "assistant.repeat")) {
+            lastAnswer ?: Outcomes.NOTHING_TO_REPEAT
+        } else {
+            replies.reply(text).text.take(MAX_REPLY)
+        }
+        lastAnswer = answer.takeIf { it != Outcomes.NOTHING_TO_REPEAT } ?: lastAnswer
+        return answer
     }
 
     private fun recognizerFailed(epoch: Int, error: RecognizerError) {
