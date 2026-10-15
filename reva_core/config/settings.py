@@ -127,6 +127,10 @@ class Settings(BaseSettings):
     stt_vocabulary_extra: list[str] = []
     # One redacted line per voice turn, kept on this PC (no audio). Off switch for privacy.
     turn_recording_enabled: bool = True
+    # Opt-in hosted reasoning (Anthropic). The switch, per-domain consent and the key are not
+    # settings: see reva_core/providers/cloud.py. These two only tune the call.
+    cloud_model: str = "claude-opus-5-5"
+    cloud_timeout_seconds: float = 8.0
 
     @property
     def db_path(self) -> Path:
