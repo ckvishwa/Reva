@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,11 +13,12 @@ from reva_core.domains.keys import InMemoryKeyProvider
 from reva_core.models.tts import SynthesizedAudio
 from reva_core.policy.authorize import Proposal
 from reva_core.policy.broker import MAX_OPEN, Broker, BrokerFull
-from reva_core.policy.grants import ReplayCache, load_or_create_signer
-from reva_core.policy.ledger import MemoryLedger
+from reva_core.policy.grants import GRANT_TTL, ReplayCache, load_or_create_signer
+from reva_core.policy.ledger import MAX_PAYLOAD_CHARS, MemoryLedger, SqliteLedger
 from reva_core.session.coordinator import DeadlineConfig, SessionCoordinator
 from reva_core.session.events import EventSubscription, SessionEvent, SessionEventKind
 from reva_core.session.pipeline import AudioStore
+from reva_core.storage.bootstrap import initialize_database
 
 NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
 
@@ -158,3 +160,108 @@ def test_used_grant_keys_are_bounded() -> None:
 
     assert len(cache._seen) == 100
     assert cache.seen("key-999") and not cache.seen("key-0")
+
+
+def test_unreported_grants_release_capacity_after_expiry() -> None:
+    broker = make_broker()
+    ids = []
+    for n in range(MAX_OPEN):
+        view = broker.propose(
+            Proposal(f"grant-{n:08d}", "windows.app.open", {"app_key": "notepad"})
+        )
+        assert view.order is not None
+        ids.append(view.action_id)
+    with pytest.raises(BrokerFull):
+        broker.propose(Proposal("full", "windows.app.open", {"app_key": "notepad"}))
+
+    broker.clock = lambda: NOW + GRANT_TTL + timedelta(seconds=1)
+    fresh = broker.propose(Proposal("fresh", "windows.app.open", {"app_key": "notepad"}))
+
+    assert fresh.order is not None
+    assert all(broker.get(action_id).status == "unknown" for action_id in ids)
+    assert all(broker.get(action_id).order is None for action_id in ids)
+    assert broker.ledger.rows(ids[0])[-1].payload["reason"] == "GRANT_EXPIRED"
+
+
+@pytest.mark.parametrize("backend", ["memory", "sqlite"])
+def test_long_proposal_metadata_cannot_break_ledger_writes(tmp_path: Path, backend: str) -> None:
+    conn, _ = initialize_database(tmp_path / "ledger.db")
+    try:
+        ledger = SqliteLedger(conn) if backend == "sqlite" else MemoryLedger()
+        broker = make_broker()
+        broker.ledger = ledger
+        view = broker.propose(
+            Proposal("long-source", "windows.app.open", {"app_key": "notepad"}, source="x" * 10000)
+        )
+        assert view.order is not None
+        row = ledger.rows(view.action_id)[0]
+        assert (
+            len(json.dumps(row.payload, separators=(",", ":"), ensure_ascii=False))
+            <= MAX_PAYLOAD_CHARS
+        )
+        assert row.payload["capability"] == "windows.app.open"
+        assert row.payload["truncated"] is True
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("status", ["granted", "attempted", "observed"])
+def test_inflight_actions_count_toward_capacity_until_the_grant_expires(status: str) -> None:
+    broker = make_broker()
+    first = None
+    for n in range(MAX_OPEN):
+        view = broker.propose(
+            Proposal(f"inflight-{n:08d}", "windows.app.open", {"app_key": "notepad"})
+        )
+        assert view.order is not None
+        if first is None:
+            first = view.order
+        if status != "granted":
+            broker.report(view.action_id, view.order.grant.grant_id, status)
+    with pytest.raises(BrokerFull):
+        broker.propose(Proposal("overflow", "windows.app.open", {"app_key": "notepad"}))
+
+    broker.clock = lambda: NOW + GRANT_TTL
+    assert first is not None
+    late = broker.report(
+        first.grant.action_id,
+        first.grant.grant_id,
+        "verified",
+        {"kind": "process_started", "ref": "pid:42 window:0x1"},
+    )
+    assert late.status == "unknown" and late.order is None
+    assert late.reason == "GRANT_EXPIRED"
+    assert (
+        broker.propose(Proposal("after-expiry", "windows.app.open", {"app_key": "notepad"})).order
+        is not None
+    )
+
+
+@pytest.mark.parametrize("backend", ["memory", "sqlite"])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"source": '"\\\n' * 5000, "reason": "OK"},
+        {"args": {"nested": ["x" * 10000]}, "reason": "OK"},
+        {f"field-{n}": "x" for n in range(1000)},
+        {"x" * 10000: "value"},
+    ],
+)
+def test_oversized_ledger_payloads_stay_valid_and_do_not_mutate_input(
+    tmp_path: Path, backend: str, payload: dict
+) -> None:
+    conn, _ = initialize_database(tmp_path / "ledger.db")
+    original = json.dumps(payload)
+    try:
+        ledger = SqliteLedger(conn) if backend == "sqlite" else MemoryLedger()
+        row = ledger.append("large", "proposed", "now", payload)
+        stored = ledger.rows("large")[0]
+        assert stored == row
+        assert (
+            len(json.dumps(row.payload, separators=(",", ":"), ensure_ascii=False))
+            <= MAX_PAYLOAD_CHARS
+        )
+        assert row.payload["truncated"] is True
+        assert json.dumps(payload) == original
+    finally:
+        conn.close()

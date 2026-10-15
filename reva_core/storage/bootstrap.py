@@ -19,13 +19,12 @@ from pathlib import Path
 from reva_core.shared.errors import StorageError
 from reva_core.storage.connection import open_connection
 from reva_core.storage.migrations import (
+    SNAPSHOT_DIR_NAME,
     apply_migrations,
     current_version,
     pending_versions,
     snapshot,
 )
-
-SNAPSHOT_DIR_NAME = "snapshots"
 
 
 def initialize_database(db_path: Path) -> tuple[sqlite3.Connection, int]:

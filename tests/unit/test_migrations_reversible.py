@@ -150,6 +150,107 @@ def test_only_the_newest_snapshots_are_kept(conn: sqlite3.Connection, tmp_path: 
     assert sorted(p.name for p in (tmp_path / "snaps").iterdir()) == sorted(names[-2:])
 
 
+def test_snapshot_retention_uses_time_instead_of_schema_version(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    apply_migrations(conn)
+    directory = tmp_path / "snaps"
+    older = [snapshot(conn, directory) for _ in range(3)]
+    rollback_to(conn, 2)
+
+    latest = snapshot(conn, directory)
+
+    assert latest.exists()
+    assert not older[0].exists()
+    assert all(p.exists() for p in older[1:])
+    assert len(list(directory.glob("*.db"))) == 3
+
+
+def test_rollback_saves_data_before_dropping_tables(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    apply_migrations(conn)
+    conn.execute(
+        "INSERT INTO action_events (action_id, seq, at, kind, payload) "
+        "VALUES ('recover-me', 0, 't', 'proposed', '{}')"
+    )
+
+    rollback_to(conn, 3)
+
+    copies = list((tmp_path / SNAPSHOT_DIR_NAME).glob("reva-v0004-*.db"))
+    assert len(copies) == 1
+    with sqlite3.connect(copies[0]) as saved:
+        assert saved.execute("SELECT action_id FROM action_events").fetchone()[0] == "recover-me"
+        assert saved.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 4
+
+
+def test_failed_rollback_leaves_a_usable_pre_rollback_copy(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    migrations = [
+        Migration(1, "a", "CREATE TABLE a (x);", "DROP TABLE a;"),
+        Migration(2, "b", "CREATE TABLE b (x);", "DROP TABLE b; NOPE;"),
+    ]
+    apply_migrations(conn, migrations)
+    conn.execute("INSERT INTO b VALUES ('recover-me')")
+
+    with pytest.raises(StorageError, match="rolling back migration 2"):
+        rollback_to(conn, 0, migrations)
+
+    copies = list((tmp_path / SNAPSHOT_DIR_NAME).glob("reva-v0002-*.db"))
+    assert len(copies) == 1
+    with sqlite3.connect(copies[0]) as saved:
+        assert saved.execute("SELECT x FROM b").fetchone()[0] == "recover-me"
+        assert saved.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 2
+
+
+def test_snapshot_just_taken_survives_a_backwards_clock(
+    conn: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    apply_migrations(conn)
+    directory = tmp_path / "snaps"
+    for _ in range(3):
+        snapshot(conn, directory)
+    monkeypatch.setattr(
+        "reva_core.storage.migrations.utc_now", lambda: datetime(2000, 1, 1, tzinfo=UTC)
+    )
+
+    latest = snapshot(conn, directory, keep=1)
+
+    assert list(directory.glob("*.db")) == [latest]
+
+
+def test_rollback_does_not_change_data_if_backup_fails(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    apply_migrations(conn)
+
+    def fail(*args, **kwargs):
+        raise StorageError("backup unavailable")
+
+    monkeypatch.setattr("reva_core.storage.migrations.snapshot", fail)
+    with pytest.raises(StorageError, match="backup unavailable"):
+        rollback_to(conn, 3)
+    assert current_version(conn) == 4
+    assert "action_events" in tables(conn)
+
+
+def test_in_memory_rollback_requires_a_backup_destination(tmp_path: Path) -> None:
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    try:
+        apply_migrations(conn)
+        with pytest.raises(StorageError, match="snapshot directory"):
+            rollback_to(conn, 3)
+        assert current_version(conn) == 4
+        assert rollback_to(conn, 3, snapshot_directory=tmp_path / "saved") == 3
+        assert len(list((tmp_path / "saved").glob("reva-v0004-*.db"))) == 1
+    finally:
+        conn.close()
+
+
 def test_upgrading_an_existing_database_takes_a_snapshot_first(tmp_path: Path) -> None:
     db = tmp_path / "reva.db"
     old = open_connection(db)
@@ -179,6 +280,12 @@ def test_a_failed_upgrade_puts_the_database_back_exactly_as_it_was(
     db = tmp_path / "reva.db"
     old = open_connection(db)
     apply_migrations(old, MIGRATIONS[:2])
+    # Simulate snapshots left by a previous newer schema. The recovery copy for v2
+    # must survive retention even though its version sorts before those copies.
+    directory = tmp_path / SNAPSHOT_DIR_NAME
+    directory.mkdir()
+    for n in range(3):
+        (directory / f"reva-v0004-20200101T00000{n}000000Z.db").write_bytes(b"old snapshot")
     old.execute(
         "INSERT INTO schema_migrations (version, name, applied_at) VALUES (-1, 'marker', 'x')"
     )

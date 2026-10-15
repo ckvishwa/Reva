@@ -21,6 +21,7 @@ from reva_core.shared.time import utc_now
 
 _SQL_DIR = Path(__file__).parent / "migrations_sql"
 _DOWN_SUFFIX = ".down"
+SNAPSHOT_DIR_NAME = "snapshots"
 
 
 @dataclass(frozen=True)
@@ -115,12 +116,17 @@ def apply_migrations(conn: sqlite3.Connection, migrations: list[Migration] | Non
 
 
 def rollback_to(
-    conn: sqlite3.Connection, target: int, migrations: list[Migration] | None = None
+    conn: sqlite3.Connection,
+    target: int,
+    migrations: list[Migration] | None = None,
+    *,
+    snapshot_directory: Path | None = None,
 ) -> int:
     """Undo migrations newest-first until the database is at `target`. Returns the new version.
 
-    Every step to undo must have a down script, checked before anything is changed. Data held by
-    a dropped table is gone (that is what a rollback is); `snapshot` is how it is kept.
+    Every down script is checked first, then a safety snapshot is saved before any is run.
+    File databases save beside the database; in-memory databases require snapshot_directory.
+    If backup fails, no down script runs. A failed rollback's pre-rollback data stays in the copy.
     """
     known = {m.version: m for m in (migrations if migrations is not None else MIGRATIONS)}
     _ensure_table(conn)
@@ -135,6 +141,15 @@ def rollback_to(
         step = known.get(version)
         if step is None or step.down_sql is None:
             raise StorageError(f"migration {version} cannot be rolled back (no down script)")
+    if to_undo:
+        if snapshot_directory is None:
+            database = next(
+                row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main"
+            )
+            if not database:
+                raise StorageError("in-memory rollback requires a snapshot directory")
+            snapshot_directory = Path(database).parent / SNAPSHOT_DIR_NAME
+        snapshot(conn, snapshot_directory)
     for version in to_undo:
         step = known[version]
         assert step.down_sql is not None
@@ -152,6 +167,8 @@ def snapshot(conn: sqlite3.Connection, directory: Path, *, keep: int = 3) -> Pat
 
     Older snapshots beyond `keep` are removed. Returns the new file.
     """
+    if keep < 1:
+        raise ValueError("keep must be at least one")
     directory.mkdir(parents=True, exist_ok=True)
     version = current_version(conn)
     stamp = utc_now().strftime("%Y%m%dT%H%M%S%fZ")
@@ -164,7 +181,13 @@ def snapshot(conn: sqlite3.Connection, directory: Path, *, keep: int = 3) -> Pat
         raise StorageError(f"could not take a database snapshot: {exc}") from exc
     finally:
         copy.close()
-    for old in sorted(directory.glob("reva-v*.db"))[:-keep]:
+    # Schema versions go backwards after rollback. Retain by timestamp, and always protect
+    # the copy just taken, even if the system clock moved backwards.
+    older = sorted(
+        (p for p in directory.glob("reva-v*.db") if p != target),
+        key=lambda p: p.stem.partition("-")[2].partition("-")[2],
+    )
+    for old in older[: max(0, len(older) - (keep - 1))]:
         old.unlink(missing_ok=True)
     return target
 
