@@ -1,5 +1,12 @@
 # MASTER LOOP progress
 
+## Phase C recovery checkpoint (2026-10-15)
+
+- Clean integration worktree: `D:\Projects\Reva-c-phase`, branch `feat/c1b-phase-c-integration`, created at `origin/main` `f1ff301c73804ff936e587c2c79a37c8402a1790` (PR #21 C1a merge). `D:\Projects\Reva` on `fixing-things` has unrelated uncommitted work and must stay untouched.
+- Fetched remote refs. C1b `2f0dc23` is unmerged; C1c `2deb3e2` contains C1b and is unmerged. C2a `b569192` is PR #22, open and mergeable; its CI run `38817535253` passed at that head. C2b `1d55f1b` contains C2a and has no PR. C2c `6c76f93` contains C1c; PR #23 is open and conflicting. No C3 remote branch was found. All five source worktrees were clean at audit.
+- Minimum integration order: apply C1b to merged C1a, then C1c's unique change; reconcile C2a against the new main, then C2b; reconcile C2c's two commits against both lines; implement C3a/b/c. Retain valid ledger rows on both sides of each merge.
+- Next command: `git cherry-pick 2f0dc23c8bb2e2bc50b6cfba0df268beea772b9c` in the clean integration worktree, resolve only proven conflicts, then run C1b validation and review before PR/merge. No hardware test has been newly performed in this recovery pass.
+
 Resume command: "Resume MASTER LOOP from docs/loop/MASTER-LOOP-progress.md"
 
 Last updated 2026-10-15, main at d384df2. Current phase: B closeout, then C (phone) in order C1 → C2 → C3. Order after C: D → G → E → F → H. Stop point: after C3 software, Phase C report, before D1.
