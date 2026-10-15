@@ -46,6 +46,9 @@ _ALLOWED_PATHS = {
     "/v1/voice/sessions/{session_id}",
     "/v1/voice/sessions/{session_id}/events",
     "/v1/voice/sessions/{session_id}/audio/{audio_id}",
+    "/v1/actions/proposals",
+    "/v1/actions/{action_id}/approval",
+    "/v1/actions/{action_id}",
 }
 
 
