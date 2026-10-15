@@ -1,0 +1,80 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.LiveVoicePanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:views="using:Reva.Desktop.Views">
+
+    <StackPanel Spacing="8">
+        <TextBlock Text="Live voice" FontSize="16" FontWeight="SemiBold" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <ToggleButton
+                x:Name="VoiceToggle"
+                AutomationProperties.AutomationId="LiveVoiceToggle"
+                AutomationProperties.Name="Turn live voice on or off"
+                Content="Voice"
+                IsChecked="{x:Bind ViewModel.IsOn, Mode=OneWay}"
+                Click="VoiceToggle_Click" />
+            <Button
+                x:Name="TalkButton"
+                AutomationProperties.AutomationId="LiveVoiceTalkButton"
+                AutomationProperties.Name="Hold to talk. Shortcut Control plus Space"
+                Content="Hold to talk (Ctrl+Space)"
+                IsEnabled="{x:Bind ViewModel.CanTalk, Mode=OneWay}" />
+            <ToggleButton
+                x:Name="MicMuteToggle"
+                AutomationProperties.AutomationId="LiveVoiceMicMute"
+                AutomationProperties.Name="Mute microphone"
+                Content="Mute mic"
+                IsChecked="{x:Bind ViewModel.MicMuted, Mode=OneWay}"
+                Click="MicMute_Click" />
+            <ToggleButton
+                x:Name="SpeakerMuteToggle"
+                AutomationProperties.AutomationId="LiveVoiceSpeakerMute"
+                AutomationProperties.Name="Mute speaker"
+                Content="Mute speaker"
+                IsChecked="{x:Bind ViewModel.SpeakerMuted, Mode=OneWay}"
+                Click="SpeakerMute_Click" />
+            <Button
+                AutomationProperties.AutomationId="LiveVoiceStop"
+                Content="Stop speaking"
+                Click="Stop_Click" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Microphone" VerticalAlignment="Center" />
+            <ComboBox
+                x:Name="MicrophonePicker"
+                AutomationProperties.AutomationId="LiveVoiceMicrophone"
+                AutomationProperties.Name="Microphone"
+                Width="320"
+                PlaceholderText="Default microphone"
+                DisplayMemberPath="Name"
+                ItemsSource="{x:Bind ViewModel.Microphones, Mode=OneWay}"
+                DropDownOpened="MicrophonePicker_DropDownOpened"
+                SelectionChanged="MicrophonePicker_SelectionChanged" />
+            <Ellipse
+                x:Name="MicDot"
+                Width="10" Height="10"
+                AutomationProperties.AutomationId="LiveVoiceMicOpenDot"
+                AutomationProperties.Name="Microphone open indicator" />
+        </StackPanel>
+
+        <TextBlock
+            AutomationProperties.AutomationId="LiveVoiceStateText"
+            Text="{x:Bind ViewModel.StateText, Mode=OneWay}" />
+        <TextBlock
+            AutomationProperties.AutomationId="LiveVoiceMessage"
+            Text="{x:Bind ViewModel.Message, Mode=OneWay}"
+            Foreground="IndianRed" TextWrapping="Wrap"
+            Visibility="{x:Bind views:Vis.ShowText(ViewModel.Message), Mode=OneWay}" />
+        <TextBlock
+            AutomationProperties.AutomationId="LiveVoiceTranscript"
+            Text="{x:Bind ViewModel.Transcript, Mode=OneWay}" TextWrapping="Wrap"
+            Visibility="{x:Bind views:Vis.ShowText(ViewModel.Transcript), Mode=OneWay}" />
+        <TextBlock
+            AutomationProperties.AutomationId="LiveVoiceReply"
+            Text="{x:Bind ViewModel.Reply, Mode=OneWay}" TextWrapping="Wrap"
+            Visibility="{x:Bind views:Vis.ShowText(ViewModel.Reply), Mode=OneWay}" />
+    </StackPanel>
+</UserControl>
