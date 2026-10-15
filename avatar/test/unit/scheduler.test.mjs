@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_FPS, paused, pixelRatioFor, QUALITY, shouldRender } from '../../src/scheduler.js';
+import { advanceSchedule, MAX_FPS, paused, pixelRatioFor, QUALITY, shouldRender } from '../../src/scheduler.js';
 import { estimateOffset, percentile } from '../../src/lipsyncOffset.js';
 
 function framesOver(seconds, quality, refreshHz) {
@@ -8,7 +8,7 @@ function framesOver(seconds, quality, refreshHz) {
   let drawn = 0;
   for (let t = 0; t < seconds * 1000; t += 1000 / refreshHz) {
     if (shouldRender(t, last, quality)) {
-      last = t;
+      last = advanceSchedule(t, last, quality);
       drawn += 1;
     }
   }
@@ -19,8 +19,15 @@ test('the page never draws faster than 60 fps, even on a 144 Hz display', () => 
   for (const hz of [60, 75, 120, 144, 240]) {
     const drawn = framesOver(10, 'high', hz);
     assert.ok(drawn <= 10 * MAX_FPS + 2, `${hz} Hz drew ${drawn}`);
-    assert.ok(drawn >= 10 * 40, `${hz} Hz drew only ${drawn}`);
+    assert.ok(drawn >= 10 * 58, `${hz} Hz drew only ${drawn}`); // the average stays at the target
   }
+});
+
+test('a long stall does not cause a burst of catch-up frames', () => {
+  let last = 0;
+  last = advanceSchedule(5000, last, 'high'); // the page was hidden for 5 s
+  assert.equal(last, 5000);
+  assert.equal(shouldRender(5005, last, 'high'), false);
 });
 
 test('low quality caps at 30 fps and draws at a smaller pixel ratio', () => {

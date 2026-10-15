@@ -8,10 +8,21 @@ export const QUALITY = {
 
 export const MAX_FPS = 60;
 
-/** Whether enough time has passed to draw another frame at this quality's rate. */
-export function shouldRender(nowMs, lastRenderMs, quality = 'medium') {
-  const fps = Math.min(MAX_FPS, (QUALITY[quality] ?? QUALITY.medium).fps);
-  return nowMs - lastRenderMs >= 1000 / fps - 1; // 1 ms of slack for timer jitter
+const intervalFor = (quality) => 1000 / Math.min(MAX_FPS, (QUALITY[quality] ?? QUALITY.medium).fps);
+
+/** Whether the next frame is due. `scheduledMs` is the time the previous frame was scheduled for. */
+export function shouldRender(nowMs, scheduledMs, quality = 'medium') {
+  return nowMs - scheduledMs >= intervalFor(quality) - 1; // 1 ms of slack for timer jitter
+}
+
+/**
+ * The schedule slot of the frame just drawn. Stepping by whole intervals (not "now") keeps the average at
+ * the target rate on displays whose refresh is not a multiple of it (144 Hz gives 60 fps, not 48),
+ * and a long stall resets the schedule instead of drawing a burst to catch up.
+ */
+export function advanceSchedule(nowMs, scheduledMs, quality = 'medium') {
+  const interval = intervalFor(quality);
+  return nowMs - scheduledMs > 2 * interval ? nowMs : scheduledMs + interval;
 }
 
 /** True when the page should not draw at all. */
