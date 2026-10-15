@@ -223,7 +223,9 @@ jobs:
 
       - name: Unit tests
         working-directory: android
-        run: ./gradlew :app:testDebugUnitTest --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon
 
   avatar:
     # three.js + three-vrm page: unit tests (events, mood faces, stale epochs, frame cap, lip-sync offset)
