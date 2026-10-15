@@ -43,8 +43,8 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-001 | R2 | S12 | PARTIAL | C1 | C1a: deny, deny-forever, revoke-mid-session and background tests with fakes (VoiceControllerTest); real dialog on a phone is NEEDS_HARDWARE (C1-hw-*) |
 | AR-AND-002 | R2 | S12 | PARTIAL | C1 | C1a: microphone foreground service, private, started only from the tap, Stop action (ManifestTest); API 31-36 emulators and a phone not run |
 | AR-AND-003 | R2 | S12 | PARTIAL | C1 | C1a: availability policy and disclosed fallback tested with a capability mock; on-device recognition on a phone not run |
-| AR-AND-004 | R2 | S12 | PARTIAL | C1 | C1a: recognizer, service, speaker released on every session ending (fake leak tests); TTS and WebView arrive in C1b |
-| AR-AND-005 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
+| AR-AND-004 | R2 | S12 | PARTIAL | C1 | C1a/b: recognizer, service, speaker released on every ending (fake leak tests); WebView destroyed on leaving Talk; real TTS/WebView leak profile on a phone is NEEDS_HARDWARE |
+| AR-AND-005 | R2 | S12 | PARTIAL | C1 | C1b: avatar loads offline in a locked-down WebView (verified on an API 36 emulator: ready report, rendered pose, no network); mouth from played-audio envelope tested on the JVM; interrupt timing and airplane-mode launch on a phone are NEEDS_HARDWARE |
 | AR-AND-006 | R2 | S12 | PARTIAL | C2 | AND-1-manifest PASS for current manifest; re-verify after C2 intents |
 | AR-AND-007 | R2 | S13 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-008 | R2 | S15 | NOT STARTED | C2 | phone->PC actions |
@@ -107,7 +107,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-LANG-012 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): templates + number check folded into B3 |
 | AR-LANG-013 | R1 | S10 | NOT STARTED | B1 | gap (spec S10): spoken rewrite + chunking with turn_epoch folded into B1.2 |
 | AR-LANG-014 | R1 | S07 | DONE | - | redacted TurnEvent recording + failed-turn fixtures |
-| AR-LANG-015 | R2 | S12 | NOT STARTED | C1/C3 | shared artifacts on Android |
+| AR-LANG-015 | R2 | S12 | PARTIAL | C1c | C1b: mood engine and flags ported with 664 shared fixture cases; registry, authorize() and rules parity in C1c |
 | AR-LANG-016 | R3 | S24 | NOT STARTED | E2 |  |
 | AR-LANG-017 | R3 | S24 | NOT STARTED | E4 |  |
 | AR-LANG-018 | R1 | S09 | DONE | - | B3b-forbidden-refusals |
@@ -184,7 +184,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | FR-AV-004 | R1 | S08 | DONE | - | interrupt closes mouth and audio together |
 | FR-AV-005 | R1 | S08 | DONE | - | verified_outcome rule |
 | FR-AV-006 | R1 | S08 | DONE | - | off / reduced motion |
-| FR-AV-007 | R2 | S12 | NOT STARTED | C1 |  |
+| FR-AV-007 | R2 | S12 | PARTIAL | C1 | C1b: same avatar package and mood rules on Android; emulator shows the pose; phone airplane-mode launch is NEEDS_HARDWARE |
 | FR-AV-008 | R3 | S24 | NOT STARTED | E4 |  |
 | FR-DOM-001 | R1 (Win) / R2 (Android) | S10 | PARTIAL | D1-D6 | Finance PASS on both devices; other 7 domains pending |
 | FR-DOM-002 | R1/R2 | S10 | PARTIAL | D1-D6 | Finance PASS on both devices; other 7 domains pending |

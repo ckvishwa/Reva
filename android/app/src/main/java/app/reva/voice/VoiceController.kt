@@ -1,5 +1,6 @@
 package app.reva.voice
 
+import app.reva.mood.ExpressionEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,7 +28,17 @@ data class TalkUi(
     val micOpen: Boolean = false,
     /** A typed turn is waiting for its reply. */
     val thinking: Boolean = false,
+    /** The current turn epoch; the avatar tags everything it is told with it. */
+    val epoch: Int = 0,
+    /** The last recognizer or service failure is still on screen; the avatar shows its error pose. */
+    val failed: Boolean = false,
+    /** The face the mood engine allows for the newest reply, and a counter so each one is shown once. */
+    val expression: ExpressionEvent? = null,
+    val expressionSeq: Int = 0,
 )
+
+/** One loudness reading of the audio being played, for the avatar's mouth. */
+data class Level(val epoch: Int, val rms: Double, val tMs: Int)
 
 sealed interface TalkEffect {
     /** Show the system microphone dialog. Only ever emitted in answer to a tap. */
@@ -55,12 +66,18 @@ class VoiceController(
     private val speaker: Speaker,
     private val service: ServiceLauncher,
     private val scope: CoroutineScope,
+    private val mood: VoiceMood = NeutralMood,
 ) {
     private val session = VoiceSession()
     private val _ui = MutableStateFlow(TalkUi(permission = permissions.current(), voiceOffReason = reason()))
     val ui: StateFlow<TalkUi> = _ui.asStateFlow()
     private val _effects = MutableSharedFlow<TalkEffect>(extraBufferCapacity = 4)
     val effects: SharedFlow<TalkEffect> = _effects.asSharedFlow()
+
+    private val _levels = MutableSharedFlow<Level>(extraBufferCapacity = 64)
+
+    /** Loudness of what is playing, only while this session is speaking and only for the current epoch. */
+    val levels: SharedFlow<Level> = _levels.asSharedFlow()
 
     private var recognizer: Recognizer? = null
     private var turn: Job? = null
@@ -89,7 +106,7 @@ class VoiceController(
         endSession(null) // a typed sentence replaces whatever voice turn was running
         val epoch = session.beginTurn()
         addLine(Who.You, text)
-        _ui.update { it.copy(thinking = true) }
+        _ui.update { it.copy(thinking = true, failed = false, epoch = epoch) }
         turn = scope.launch {
             val reply = replies.reply(text)
             if (!session.isCurrent(epoch)) return@launch
@@ -151,6 +168,7 @@ class VoiceController(
         }
         session.beginTurn()
         session.go(VoiceState.AcquiringPermission)
+        _ui.update { it.copy(failed = false) }
         publishState()
         val now = permissions.current()
         _ui.update { it.copy(permission = now) }
@@ -181,6 +199,7 @@ class VoiceController(
     private fun openMic() {
         if (!service.start()) {
             endSession("Android would not start the microphone service, so I can't listen. Typing still works.")
+            markFailed()
             return
         }
         val epoch = session.epoch
@@ -228,13 +247,17 @@ class VoiceController(
         session.go(VoiceState.Reasoning)
         publishState(micOpen = false, partial = "")
         addLine(Who.You, text)
+        val decision = mood.decide(text)
         turn = scope.launch {
             val reply = replies.reply(text)
             if (!session.isCurrent(epoch)) return@launch
             addLine(Who.Reva, reply.text.take(MAX_REPLY))
             if (!session.go(VoiceState.Speaking)) return@launch
+            _ui.update { it.copy(expression = decision.expression, expressionSeq = it.expressionSeq + 1) }
             publishState()
-            speaker.speak(reply.text.take(MAX_REPLY), epoch)
+            speaker.speak(reply.text.take(MAX_REPLY), epoch, decision.prosody) { e, rms, tMs ->
+                if (session.isCurrent(e) && session.state == VoiceState.Speaking) _levels.tryEmit(Level(e, rms, tMs))
+            }
             if (!session.isCurrent(epoch)) return@launch
             endSession(null)
         }
@@ -248,8 +271,14 @@ class VoiceController(
                 endSession("The microphone permission was turned off, so I stopped listening. Typing still works.")
                 _ui.update { it.copy(permission = permissions.current()) }
             }
-            RecognizerError.Unavailable -> endSession("The speech recognizer is busy. Try the mic again in a moment.")
-            RecognizerError.Failed -> endSession("Speech recognition failed. Typing still works.")
+            RecognizerError.Unavailable -> {
+                endSession("The speech recognizer is busy. Try the mic again in a moment.")
+                markFailed()
+            }
+            RecognizerError.Failed -> {
+                endSession("Speech recognition failed. Typing still works.")
+                markFailed()
+            }
         }
     }
 
@@ -263,7 +292,9 @@ class VoiceController(
         releaseMic()
         session.cancel()
         speaker.release()
-        _ui.update { it.copy(state = VoiceState.Idle, micOpen = false, partial = "", thinking = false) }
+        _ui.update {
+            it.copy(state = VoiceState.Idle, micOpen = false, partial = "", thinking = false, epoch = session.epoch)
+        }
         if (notice != null) addLine(Who.Notice, notice)
     }
 
@@ -275,7 +306,11 @@ class VoiceController(
     }
 
     private fun publishState(micOpen: Boolean = _ui.value.micOpen, partial: String = _ui.value.partial) {
-        _ui.update { it.copy(state = session.state, micOpen = micOpen, partial = partial) }
+        _ui.update { it.copy(state = session.state, micOpen = micOpen, partial = partial, epoch = session.epoch) }
+    }
+
+    private fun markFailed() {
+        _ui.update { it.copy(failed = true) }
     }
 
     private fun addLine(who: Who, text: String) {
