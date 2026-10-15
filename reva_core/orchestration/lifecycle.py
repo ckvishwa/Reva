@@ -24,8 +24,10 @@ from reva_core.models.embedding_providers import OllamaEmbeddingProvider
 from reva_core.models.faster_whisper_stt import FasterWhisperSTTProvider
 from reva_core.models.stt import SpeechToTextProvider
 from reva_core.models.tts import TextToSpeechProvider
+from reva_core.providers.cloud import KEY_ENTRY, CloudReasoner, CloudSettingsStore
 from reva_core.providers.registry import ProviderKind
 from reva_core.providers.tts import RegistryTTS, build_tts_registry
+from reva_core.security.credential_store import SecretStore, default_secret_store
 from reva_core.security.local_token import ensure_local_token
 from reva_core.shared.contracts.health import CoreStatus, HealthStatus
 from reva_core.shared.errors import StorageError
@@ -47,6 +49,7 @@ class CoreLifecycle:
         speech_to_text_provider: SpeechToTextProvider | None = None,
         domain_key_provider: DomainKeyProvider | None = None,
         gateway_key_provider: DomainKeyProvider | None = None,
+        anthropic_secret_store: SecretStore | None = None,
     ) -> None:
         self._settings = settings
         self._conn: sqlite3.Connection | None = None
@@ -65,6 +68,8 @@ class CoreLifecycle:
         self._domain_privacy = DomainPrivacyStore(settings.data_dir)
         self._gateway_key_provider = gateway_key_provider
         self._gateway: GatewayManager | None = None
+        self._anthropic_secret_store = anthropic_secret_store
+        self._cloud_settings_store = CloudSettingsStore(settings.data_dir / "cloud_settings.json")
 
     def startup(self) -> HealthStatus:
         self._status = CoreStatus.STARTING
@@ -273,6 +278,24 @@ class CoreLifecycle:
     @property
     def speech_to_text_provider(self) -> SpeechToTextProvider | None:
         return self._speech_to_text_provider
+
+    @property
+    def anthropic_secret_store(self) -> SecretStore:
+        if self._anthropic_secret_store is None:
+            self._anthropic_secret_store = default_secret_store(KEY_ENTRY)
+        return self._anthropic_secret_store
+
+    @property
+    def cloud_settings_store(self) -> CloudSettingsStore:
+        return self._cloud_settings_store
+
+    def cloud_reasoner(self) -> CloudReasoner:
+        return CloudReasoner(
+            self._cloud_settings_store,
+            self.anthropic_secret_store,
+            model=self._settings.cloud_model,
+            timeout_seconds=self._settings.cloud_timeout_seconds,
+        )
 
     @property
     def settings(self) -> Settings:

@@ -25,6 +25,8 @@ dependencies = [
     "google-adk==2.6.3",
     "litellm==1.96.0",
     "faster-whisper==1.2.1",
+    # Opt-in hosted reasoning (B1.7). Exact pin like the other model clients.
+    "anthropic==1.14.0",
 ]
 
 [project.optional-dependencies]
