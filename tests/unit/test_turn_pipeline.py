@@ -151,12 +151,12 @@ async def test_a_push_to_talk_turn_runs_stt_router_and_tts(tmp_path: Path) -> No
     final = next(e for e in events if e.kind == SessionEventKind.TRANSCRIPT_FINAL)
     assert final.payload["text"] == "add twelve dollars for lunch"
     reply = next(e for e in events if e.kind == SessionEventKind.ASSISTANT_TEXT_FINAL)
-    assert reply.payload == {
-        "text": "Add $12.00 for lunch? Say yes to confirm.",
-        "source": "template",
-        "provider": "template",
-        "timings_ms": reply.payload["timings_ms"],
-    }
+    assert reply.payload["text"] == "Add $12.00 for lunch? Say yes to confirm."
+    assert reply.payload["source"] == "template" and reply.payload["provider"] == "template"
+    # A draft waiting for approval: calm voice, approval pose, neutral face, no expression event.
+    assert reply.payload["mood"]["name"] == "calm"
+    assert reply.payload["mood"]["avatar"] == {"expression": "neutral", "clip": "approval"}
+    assert "avatar_event" not in reply.payload
     started = next(e for e in events if e.kind == SessionEventKind.TTS_STARTED)
     assert started.payload["audio_path"].startswith(f"/v1/voice/sessions/{rig.session.id}/audio/")
     assert rig.asked == []  # a rule turn never reaches the model
@@ -504,3 +504,52 @@ async def test_template_replies_carry_provider_template_and_no_notice(tmp_path: 
 
     final = next(e for e in events if e.kind == SessionEventKind.ASSISTANT_TEXT_FINAL)
     assert final.payload["provider"] == "template" and "notice" not in final.payload
+
+
+async def test_the_mood_rate_is_passed_to_a_voice_that_accepts_it(tmp_path: Path) -> None:
+    seen: list[float | None] = []
+
+    class SpeedTTS(FakeTTS):
+        async def synthesize(  # type: ignore[override]
+            self, text: str, language: str, *, speed: float | None = None
+        ):
+            seen.append(speed)
+            return await super().synthesize(text, language)
+
+    rig = Rig(tmp_path, "what time is it")
+    rig.pipeline._tts = SpeedTTS(tmp_path)
+    await rig.listening()
+
+    await rig.talk()
+
+    assert seen == [0.95]  # calm
+
+
+async def test_a_late_night_turn_sounds_tired_and_slower(tmp_path: Path) -> None:
+    from datetime import datetime
+
+    seen: list[float | None] = []
+
+    class SpeedTTS(FakeTTS):
+        async def synthesize(  # type: ignore[override]
+            self, text: str, language: str, *, speed: float | None = None
+        ):
+            seen.append(speed)
+            return await super().synthesize(text, language)
+
+    rig = Rig(tmp_path, "what time is it")
+    rig.pipeline._tts = SpeedTTS(tmp_path)
+    rig.pipeline._now = lambda: datetime(2026, 10, 15, 2, 30).astimezone()
+    await rig.listening()
+
+    await rig.talk()
+    events = await collect(rig)
+
+    final = next(e for e in events if e.kind == SessionEventKind.ASSISTANT_TEXT_FINAL)
+    assert final.payload["mood"]["name"] == "tired"
+    assert seen == [0.9]
+    assert final.payload["avatar_event"] == {
+        "type": "avatar.expression",
+        "name": "relaxed",
+        "cause": "mood",
+    }
