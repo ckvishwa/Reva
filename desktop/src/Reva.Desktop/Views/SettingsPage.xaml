@@ -8,6 +8,28 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Padding="24" Spacing="14" MaxWidth="760" HorizontalAlignment="Left">
             <TextBlock Text="Settings" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="Avatar" FontSize="18" FontWeight="SemiBold" />
+            <ToggleSwitch
+                AutomationProperties.AutomationId="AvatarShow"
+                AutomationProperties.Name="Show the avatar"
+                Header="Show the avatar"
+                OnContent="On"
+                OffContent="Off"
+                IsOn="{x:Bind AvatarViewModel.Enabled, Mode=TwoWay}" />
+            <ComboBox
+                AutomationProperties.AutomationId="AvatarMotion"
+                AutomationProperties.Name="Avatar motion"
+                Header="Motion"
+                Width="240"
+                ItemsSource="{x:Bind vm:AvatarSettingsViewModel.MotionChoices}"
+                SelectedIndex="{x:Bind AvatarViewModel.MotionIndex, Mode=TwoWay}" />
+            <ComboBox
+                AutomationProperties.AutomationId="AvatarQuality"
+                AutomationProperties.Name="Avatar quality"
+                Header="Quality (low draws at 30 frames per second)"
+                Width="240"
+                ItemsSource="{x:Bind vm:AvatarSettingsViewModel.Qualities}"
+                SelectedIndex="{x:Bind AvatarViewModel.QualityIndex, Mode=TwoWay}" />
             <TextBlock Text="Cloud model" FontSize="18" FontWeight="SemiBold" />
             <TextBlock
                 TextWrapping="Wrap"

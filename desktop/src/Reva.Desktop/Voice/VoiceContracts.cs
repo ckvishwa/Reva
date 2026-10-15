@@ -42,9 +42,15 @@ public interface IAudioCapture : IDisposable
     void Stop();
 }
 
+/// <summary>Loudness of the audio being played, one window (~16 ms) at a time, stamped with the epoch of the reply.</summary>
+public readonly record struct PlaybackLevel(int Epoch, int PositionMs, double Rms);
+
 /// <summary>Plays one reply at a time and can cut it off at once.</summary>
 public interface IAudioPlayback : IDisposable
 {
+    /// <summary>Raised on the audio thread as the device pulls audio. Subscribers must return quickly.</summary>
+    event Action<PlaybackLevel>? Level;
+
     bool IsPlaying { get; }
 
     /// <summary>Raised with the <c>turnEpoch</c> given to <see cref="Play"/> when it played to the end.</summary>

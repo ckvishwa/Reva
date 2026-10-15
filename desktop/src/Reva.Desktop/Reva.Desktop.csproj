@@ -25,6 +25,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The avatar page (npm run build in avatar/). Copied next to the app when it has been built; the app
+         shows "Avatar files are missing" and carries on when it has not. -->
+    <Content Include="..\..\..\avatar\dist\**" Condition="Exists('..\..\..\avatar\dist\index.html')"
+             Link="avatar\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- IBM Plex (OFL), bundled so the app never fetches fonts. See Assets/Fonts/FONTS.md. -->
     <Content Include="Assets\Fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

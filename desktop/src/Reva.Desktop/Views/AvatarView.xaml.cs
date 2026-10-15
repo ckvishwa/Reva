@@ -1,0 +1,158 @@
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.Web.WebView2.Core;
+using Reva.Desktop.Avatar;
+using Reva.Desktop.Services;
+
+namespace Reva.Desktop.Views;
+
+/// <summary>
+/// The avatar in a WebView2, locked down (AR-WIN-006): the page is served from one virtual host that
+/// maps to the local <c>avatar</c> folder, every request to anywhere else is answered with 403,
+/// navigation and new windows are refused, and the browser's own menus, dev tools, dialogs and
+/// shortcuts are off. If the files are missing or WebView2 is not installed the rest of the app
+/// carries on and this view says so.
+/// </summary>
+public sealed partial class AvatarView : UserControl, IAvatarSink
+{
+    private readonly DispatcherQueue _ui = DispatcherQueue.GetForCurrentThread();
+    private DispatcherQueueTimer? _pump;
+    private bool _loaded;
+    private bool _started;
+
+    public AvatarView()
+    {
+        InitializeComponent();
+    }
+
+    public event Action<PageMessage>? PageMessageReceived;
+
+    public AvatarDirector? Director { get; set; }
+
+    public string Status => StatusText.Text;
+
+    public static string AvatarFolder => Path.Combine(AppContext.BaseDirectory, "avatar");
+
+    public async Task StartAsync()
+    {
+        if (_started)
+        {
+            return;
+        }
+
+        _started = true;
+        if (!File.Exists(Path.Combine(AvatarFolder, "index.html")))
+        {
+            Fail("Avatar files are missing.");
+            return;
+        }
+
+        try
+        {
+            Environment.SetEnvironmentVariable(
+                "WEBVIEW2_USER_DATA_FOLDER", Path.Combine(RuntimePaths.GetDefaultDataDirectory(), "webview2"));
+            await Web.EnsureCoreWebView2Async();
+            Harden(Web.CoreWebView2);
+            Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                AvatarNavigationPolicy.VirtualHost, AvatarFolder, CoreWebView2HostResourceAccessKind.Deny);
+            Web.CoreWebView2.Navigate(AvatarNavigationPolicy.StartUrl);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException
+            or ArgumentException)
+        {
+            Fail("The avatar can't start: Microsoft Edge WebView2 isn't available.");
+            return;
+        }
+
+        _pump = _ui.CreateTimer();
+        _pump.Interval = TimeSpan.FromMilliseconds(8);
+        _pump.Tick += (_, _) => Director?.Pump();
+        _pump.Start();
+    }
+
+    public void Post(string json)
+    {
+        _ui.TryEnqueue(() =>
+        {
+            if (Web.CoreWebView2 is { } core && _loaded)
+            {
+                core.PostWebMessageAsJson(json);
+            }
+        });
+    }
+
+    private void Harden(CoreWebView2 core)
+    {
+        var settings = core.Settings;
+        settings.AreDevToolsEnabled = false;
+        settings.AreDefaultContextMenusEnabled = false;
+        settings.AreDefaultScriptDialogsEnabled = false;
+        settings.AreBrowserAcceleratorKeysEnabled = false;
+        settings.IsStatusBarEnabled = false;
+        settings.IsZoomControlEnabled = false;
+        settings.IsGeneralAutofillEnabled = false;
+        settings.IsPasswordAutosaveEnabled = false;
+        settings.IsPinchZoomEnabled = false;
+        settings.IsSwipeNavigationEnabled = false;
+
+        core.NavigationStarting += (_, args) =>
+        {
+            if (!AvatarNavigationPolicy.IsAllowedNavigation(args.Uri, _loaded))
+            {
+                args.Cancel = true;
+            }
+        };
+        core.NewWindowRequested += (_, args) => args.Handled = true;
+        core.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
+        core.DownloadStarting += (_, args) => args.Cancel = true;
+
+        // Network blocked: only the avatar's own virtual host may be requested.
+        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += (_, args) =>
+        {
+            if (!AvatarNavigationPolicy.IsAllowed(args.Request.Uri))
+            {
+                args.Response = core.Environment.CreateWebResourceResponse(null, 403, "Blocked", string.Empty);
+            }
+        };
+
+        core.NavigationCompleted += (_, args) =>
+        {
+            if (args.IsSuccess)
+            {
+                _loaded = true;
+            }
+            else
+            {
+                Fail("The avatar page didn't load.");
+            }
+        };
+        core.WebMessageReceived += (_, args) =>
+        {
+            var message = AvatarProtocol.ParsePageMessage(args.WebMessageAsJson);
+            _ui.TryEnqueue(() =>
+            {
+                StatusText.Text = message.Kind switch
+                {
+                    PageMessageKind.Ready => "Avatar ready",
+                    PageMessageKind.Error => "Avatar unavailable: " + (message.Detail ?? "it couldn't load"),
+                    _ => StatusText.Text,
+                };
+                if (message.Kind == PageMessageKind.Ready)
+                {
+                    StatusText.Visibility = Visibility.Collapsed;
+                }
+
+                PageMessageReceived?.Invoke(message);
+            });
+        };
+        core.ProcessFailed += (_, _) => _ui.TryEnqueue(() => Fail("The avatar stopped. Restart REVA to bring it back."));
+    }
+
+    private void Fail(string text)
+    {
+        StatusText.Text = text;
+        StatusText.Visibility = Visibility.Visible;
+    }
+}

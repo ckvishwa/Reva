@@ -10,11 +10,21 @@ public sealed partial class SettingsPage : UserControl
         nameof(ViewModel), typeof(CloudSettingsViewModel), typeof(SettingsPage),
         new PropertyMetadata(null, (d, _) => ((SettingsPage)d).Bindings.Update()));
 
+    public static readonly DependencyProperty AvatarViewModelProperty = DependencyProperty.Register(
+        nameof(AvatarViewModel), typeof(AvatarSettingsViewModel), typeof(SettingsPage),
+        new PropertyMetadata(null, (d, _) => ((SettingsPage)d).Bindings.Update()));
+
     private bool _syncing;
 
     public SettingsPage()
     {
         InitializeComponent();
+    }
+
+    public AvatarSettingsViewModel? AvatarViewModel
+    {
+        get => (AvatarSettingsViewModel?)GetValue(AvatarViewModelProperty);
+        set => SetValue(AvatarViewModelProperty, value);
     }
 
     public CloudSettingsViewModel? ViewModel

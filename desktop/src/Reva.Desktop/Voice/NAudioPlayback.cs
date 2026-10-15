@@ -1,5 +1,6 @@
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace Reva.Desktop.Voice;
 
@@ -13,6 +14,8 @@ public sealed class NAudioPlayback : IAudioPlayback
     private Instance? _current;
 
     public event Action<int>? Finished;
+
+    public event Action<PlaybackLevel>? Level;
 
     public bool IsPlaying
     {
@@ -33,7 +36,16 @@ public sealed class NAudioPlayback : IAudioPlayback
         var instance = new Instance(output, reader, turnEpoch);
         try
         {
-            output.Init(reader);
+            var metered = new MeteringSampleProvider(
+                reader.ToSampleProvider(),
+                (positionMs, rms) =>
+                {
+                    if (!instance.Cancelled)
+                    {
+                        Level?.Invoke(new PlaybackLevel(turnEpoch, positionMs, rms));
+                    }
+                });
+            output.Init(new SampleToWaveProvider(metered));
             output.PlaybackStopped += (_, _) => OnStopped(instance);
             lock (_lock)
             {

@@ -129,6 +129,10 @@ internal sealed class FakePlayback : IAudioPlayback
 
     public event Action<int>? Finished;
 
+    public event Action<PlaybackLevel>? Level;
+
+    public void EmitLevel(PlaybackLevel level) => Level?.Invoke(level);
+
     public void Play(byte[] wav, int turnEpoch)
     {
         Played.Add(turnEpoch);
