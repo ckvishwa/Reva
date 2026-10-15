@@ -31,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
+from reva_core.security.dpapi import DpapiProtector, ProtectionError, Protector
 from reva_core.shared.logging import get_logger
 
 logger = get_logger("dialogue")
@@ -121,45 +122,80 @@ class MemoryDialogueStore:
 
 
 class FileDialogueStore:
-    """One small JSON file per device under `directory`, written atomically.
+    """One small file per device under `directory`, protected with DPAPI and written atomically.
 
-    The file name is a hash of the device id, so no device id can name a path. A file that is
-    unreadable, oversized or not valid state is ignored (the conversation starts fresh) and never
-    stops the app.
+    The file name is a hash of the device id, so no device id can name a path. The content is
+    encrypted for the current Windows user: the state holds the names of recent transactions. A
+    file that is unreadable, oversized, not decryptable or not valid state is ignored (the
+    conversation starts fresh) and never stops the app.
+
+    Earlier builds wrote plain `<hash>.json` files. `migrate_legacy` re-saves each valid one in
+    the protected format and removes the plain copy; one that cannot be migrated is left as it is.
     """
 
-    def __init__(self, directory: Path) -> None:
+    _MAGIC = b"RVDLG1\n"
+
+    def __init__(self, directory: Path, protector: Protector | None = None) -> None:
         self._directory = Path(directory)
+        self._protector = protector or DpapiProtector(b"reva.dialogue.v1")
 
     def _path(self, device_id: str) -> Path:
         digest = hashlib.sha256(device_id.encode("utf-8")).hexdigest()[:32]
-        return self._directory / f"{digest}.json"
+        return self._directory / f"{digest}.dat"
 
     def load(self, device_id: str) -> DialogueState | None:
         path = self._path(device_id)
         try:
             if not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
                 return None
-            return _decode(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, KeyError, TypeError):
+            raw = path.read_bytes()
+            if not raw.startswith(self._MAGIC):
+                raise ValueError("not a protected dialogue file")
+            return _decode(self._protector.unprotect(raw[len(self._MAGIC) :]).decode("utf-8"))
+        except (OSError, ValueError, KeyError, TypeError, ProtectionError):
             logger.warning("dialogue state could not be read; starting fresh")
             return None
 
     def save(self, device_id: str, state: DialogueState) -> None:
-        text = _encode(state)
         try:
-            self._directory.mkdir(parents=True, exist_ok=True)
-            handle, temp_name = tempfile.mkstemp(dir=self._directory, suffix=".tmp")
-            try:
-                with os.fdopen(handle, "w", encoding="utf-8") as stream:
-                    stream.write(text)
-                os.replace(temp_name, self._path(device_id))
-            except BaseException:
-                with contextlib.suppress(OSError):
-                    os.unlink(temp_name)
-                raise
-        except OSError:
+            self._write(self._path(device_id), _encode(state))
+        except (OSError, ProtectionError):
             logger.warning("dialogue state could not be saved")
+
+    def migrate_legacy(self) -> int:
+        """Protect every valid plain `*.json` file in the directory. Returns how many moved."""
+        moved = 0
+        try:
+            legacy = sorted(self._directory.glob("*.json")) if self._directory.is_dir() else []
+        except OSError:
+            return 0
+        for old in legacy:
+            try:
+                if old.stat().st_size > MAX_FILE_BYTES:
+                    continue
+                text = old.read_text(encoding="utf-8")
+                _decode(text)  # only valid state is migrated
+                target = old.with_suffix(".dat")
+                if not target.exists():  # a protected file is newer than any plain one
+                    self._write(target, text)
+                old.unlink()
+                moved += 1
+            except (OSError, ValueError, KeyError, TypeError, ProtectionError):
+                logger.warning("a plain dialogue file could not be migrated and was left in place")
+        return moved
+
+    def _write(self, target: Path, text: str) -> None:
+        payload = self._MAGIC + self._protector.protect(text.encode("utf-8"))
+        self._directory.mkdir(parents=True, exist_ok=True)
+        handle, temp_name = tempfile.mkstemp(dir=self._directory, suffix=".tmp")
+        try:
+            with os.fdopen(handle, "wb") as stream:
+                stream.write(payload)
+            os.replace(temp_name, target)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(temp_name)
+            raise
 
 
 def _encode(state: DialogueState) -> str:

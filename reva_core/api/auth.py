@@ -34,6 +34,25 @@ logger = get_logger("api.auth")
 _BEARER_PREFIX = "Bearer "
 
 
+def bearer_token_matches(authorization: str | None, expected: str) -> bool:
+    """True only when `authorization` is `Bearer <expected>`. Fails closed on anything else.
+
+    Shared by the HTTP dependency and the WebSocket handshake. Compares bytes in constant time:
+    `hmac.compare_digest` raises TypeError for a str with non-ASCII characters, and a client
+    controls the header, so a str comparison would turn a hostile header into a skipped audit
+    record or a 500.
+    """
+    if not authorization or not expected or not authorization.startswith(_BEARER_PREFIX):
+        return False
+    provided = authorization[len(_BEARER_PREFIX) :].strip()
+    if not provided:
+        return False
+    try:
+        return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+    except (UnicodeError, TypeError):
+        return False
+
+
 def build_auth_dependency(lifecycle: CoreLifecycle) -> Callable[..., Awaitable[str]]:
     async def require_local_token(
         request: Request,
@@ -43,11 +62,7 @@ def build_auth_dependency(lifecycle: CoreLifecycle) -> Callable[..., Awaitable[s
         correlation_id = resolve_correlation_id(x_correlation_id)
         request.state.correlation_id = correlation_id
 
-        provided = None
-        if authorization and authorization.startswith(_BEARER_PREFIX):
-            provided = authorization[len(_BEARER_PREFIX) :].strip()
-
-        if not provided or not hmac.compare_digest(provided, lifecycle.local_token):
+        if not bearer_token_matches(authorization, lifecycle.local_token):
             _record_auth_failure(lifecycle, correlation_id, path=request.url.path)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
