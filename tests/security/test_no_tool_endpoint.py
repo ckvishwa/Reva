@@ -47,6 +47,12 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/actions/{action_id}/approval"),
     ("GET", "/v1/actions/{action_id}"),
     ("PUT", "/v1/actions/{action_id}"),
+    # B3c: the allowlist the owner controls, and the read-only Activity list.
+    ("GET", "/v1/apps"),
+    ("PUT", "/v1/apps/discovered"),
+    ("PUT", "/v1/apps/{key}"),
+    ("DELETE", "/v1/apps/{key}"),
+    ("GET", "/v1/activity"),
 }
 
 _ALLOWED_ACTION_PATHS = {

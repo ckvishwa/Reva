@@ -49,6 +49,10 @@ _ALLOWED_PATHS = {
     "/v1/actions/proposals",
     "/v1/actions/{action_id}/approval",
     "/v1/actions/{action_id}",
+    "/v1/apps",
+    "/v1/apps/discovered",
+    "/v1/apps/{key}",
+    "/v1/activity",
 }
 
 
