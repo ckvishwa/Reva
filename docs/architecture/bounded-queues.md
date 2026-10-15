@@ -17,6 +17,8 @@ Nothing in the Core grows without a limit. Each buffer below has a number, a doc
 | Action ledger payload | 4000 characters | Largest fields replaced with `<truncated>` and `truncated: true`; if keys alone exceed the bound, retain only the truncation marker. JSON stays valid and execution arguments are unchanged | saturation test, `test_policy_broker.py` |
 | Domain change long-polls | 8 | `429` `too_many_watchers` | `test_domain_changes.py` |
 | Dialogue references / undo | 10 / 5 | Oldest dropped | `test_dialogue.py` |
+| Free-text fields at the API edge | proposal args: 32 keys, 64-character names, 20000-character text, depth 4, 64 KiB total; capability 100; ids 64; app names 60, aliases 40 x 8 | `422` `DOMAIN.VALIDATION` with the field name, nothing recorded, value never echoed | `test_free_text_limits.py` |
+| JSON request body | 1 MiB (audio uploads and domain imports have their own limits) | `413` `CORE.VALIDATION` | `test_free_text_limits.py` |
 | Gateway request body | 9 MiB (16 KiB before pairing) | Request refused | `tests/gateway/` |
 | Gateway events per pull | 500 | Returns a page and a cursor | `tests/gateway/` |
 | Turn log files | rotated and pruned | Oldest file deleted | `test_turn_log.py` |
