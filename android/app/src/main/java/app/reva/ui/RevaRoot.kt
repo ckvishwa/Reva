@@ -56,7 +56,9 @@ import app.reva.ui.finance.ImportViewModel
 import app.reva.sync.AutoSyncController
 import app.reva.sync.SyncService
 import app.reva.ui.devices.MoreHost
-import app.reva.ui.more.TalkScreen
+import app.reva.ui.more.TalkUnavailableScreen
+import app.reva.ui.talk.TalkScreen
+import app.reva.voice.VoiceController
 import app.reva.ui.theme.RevaColors
 import app.reva.ui.today.TodayScreen
 import app.reva.ui.today.TodayViewModel
@@ -91,6 +93,9 @@ fun RevaRoot(
     onShare: (format: String, bytes: ByteArray) -> Unit,
     sync: SyncService? = null,
     autoSync: AutoSyncController? = null,
+    voice: VoiceController? = null,
+    onBeforeMicRequest: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
 ) {
     val factory = remember(repository) { RootViewModels(repository) }
     val today: TodayViewModel = viewModel(factory = factory)
@@ -170,7 +175,8 @@ fun RevaRoot(
                     onExport = { pendingExport = it },
                     syncStatus = syncStatus,
                 )
-                Tab.Talk -> TalkScreen()
+                Tab.Talk ->
+                    if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings) else TalkUnavailableScreen()
                 Tab.More -> MoreHost(
                     sync,
                     versionName,

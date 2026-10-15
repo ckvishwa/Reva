@@ -40,10 +40,10 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-WIN-014 | R4 | S25 | NOT STARTED | F1 | installer |
 | AR-WIN-015 | R1 | S07 | DONE | - | mic/speaker mute, device select, device loss -> idle; unplug test open (hardware) |
 | AR-WIN-016 | R2 | S23 | NOT STARTED | E3 | UIA |
-| AR-AND-001 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
-| AR-AND-002 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
-| AR-AND-003 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
-| AR-AND-004 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
+| AR-AND-001 | R2 | S12 | PARTIAL | C1 | C1a: deny, deny-forever, revoke-mid-session and background tests with fakes (VoiceControllerTest); real dialog on a phone is NEEDS_HARDWARE (C1-hw-*) |
+| AR-AND-002 | R2 | S12 | PARTIAL | C1 | C1a: microphone foreground service, private, started only from the tap, Stop action (ManifestTest); API 31-36 emulators and a phone not run |
+| AR-AND-003 | R2 | S12 | PARTIAL | C1 | C1a: availability policy and disclosed fallback tested with a capability mock; on-device recognition on a phone not run |
+| AR-AND-004 | R2 | S12 | PARTIAL | C1 | C1a: recognizer, service, speaker released on every session ending (fake leak tests); TTS and WebView arrive in C1b |
 | AR-AND-005 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
 | AR-AND-006 | R2 | S12 | PARTIAL | C2 | AND-1-manifest PASS for current manifest; re-verify after C2 intents |
 | AR-AND-007 | R2 | S13 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
@@ -57,7 +57,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-015 | R3 | S24 | NOT STARTED | C3/E4 | battery/thermal |
 | AR-AND-016 | R4 | S26 | PARTIAL | F2 | debug APK only; signed APK/AAB in F2 |
 | AR-AND-017 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
-| AR-AND-018 | R2 | S11 | PARTIAL | C1 | AR-DOM-015-android PASS for Kernel; capture/recognition lands C1 |
+| AR-AND-018 | R2 | S11 | PARTIAL | C1 | C1a: StrictMode (debug) and no blocking in the controller; jank trace on a phone is NEEDS_HARDWARE |
 | AR-CORE-001 | R1 | S06 | PARTIAL | B1 | TTS and STT/model stages cancelled by epoch in the pipeline; tool stage arrives with S09 |
 | AR-CORE-002 | R1 | S06 | PARTIAL | B1 | stage timings exist; separate deadlines per stage to confirm in B1 |
 | AR-CORE-003 | R1 | S05 | PARTIAL | B1 | registry + Kokoro + opt-in Anthropic provider; selection by capability for all kinds continues |
