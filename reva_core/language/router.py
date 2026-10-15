@@ -16,6 +16,7 @@ Safety:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -46,6 +47,26 @@ class ActionPort(Protocol):
 
 
 ENTITY_KIND = "proposal"
+UNCATEGORISED = "Uncategorised"
+
+# Words that say what an expense was for. The suggestion only labels the confirm card and picks a
+# category if the owner already has one by that name; it never creates one.
+_CATEGORY_WORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Food · Dining", ("lunch", "dinner", "breakfast", "coffee", "cafe", "restaurant", "pizza",
+                            "takeout", "snack", "drinks", "brunch")),
+    ("Food · Groceries", ("groceries", "grocery", "supermarket", "market")),
+    ("Transport", ("uber", "taxi", "cab", "bus", "train", "fuel", "gas", "parking", "metro")),
+)  # fmt: skip
+
+
+def suggest_category(description: str) -> str:
+    words = set(re.findall(r"[a-z]+", description.lower()))
+    for category, keywords in _CATEGORY_WORDS:
+        if words & set(keywords):
+            return category
+    return UNCATEGORISED
+
+
 MAX_DESCRIPTION = 40
 INTENT = "finance.add_transaction"
 
@@ -108,11 +129,14 @@ class IntentRouter:
         self,
         dialogue: DialogueTracker,
         actions: ActionPort | None = None,
-        resolver: AppResolver | None = None,
+        resolver: Callable[[], AppResolver] | None = None,
+        app_names: Callable[[], Mapping[str, str]] | None = None,
     ) -> None:
         self._dialogue = dialogue
         self._actions = actions
-        self._resolver = resolver or AppResolver(_app_keys())
+        default = AppResolver(_app_keys())
+        self._resolver = resolver or (lambda: default)
+        self._names = app_names or (lambda: {})
         self._guess: RuleHit | None = None  # an app name we only guessed; waiting for yes/no
         self._pending: Proposal | None = None
         self._awaiting_amount: tuple[str, TypedValue, bool] | None = None
@@ -149,7 +173,7 @@ class IntentRouter:
             return self._amend(amend.group("ref"), normalized.values)
 
         if self._actions is not None:
-            hit = parse(cleaned, self._resolver)
+            hit = parse(cleaned, self._resolver())
             if hit is not None:
                 return self._from_rule(hit)
 
@@ -248,7 +272,7 @@ class IntentRouter:
             # Only a guess ("notepad?" for "note pad"): never act on it, ask first.
             options = list(hit.guess.entity.candidates) or [str(hit.args["app_key"])]
             self._guess = hit
-            return RoutedTurn("clarify", outcomes.which_app_question(options[:3]))
+            return RoutedTurn("clarify", outcomes.which_app_question(options[:3], self._names()))
         return self._propose_action(hit.capability, hit.args, hit.entities, hit.unresolved_terms)
 
     def _propose_action(
@@ -274,10 +298,12 @@ class IntentRouter:
         if view.status == "allowed":
             return RoutedTurn("chat", action=view)  # read-only: the assistant answers from data
         if view.status == "awaiting_approval":
-            reply = outcomes.approval_prompt(capability, args)
+            reply = outcomes.approval_prompt(capability, args, self._names())
             return RoutedTurn("approval", reply, action=view)
         if view.status == "granted":
-            return RoutedTurn("action", outcomes.requested_text(capability, args), action=view)
+            return RoutedTurn(
+                "action", outcomes.requested_text(capability, args, self._names()), action=view
+            )
         reply = view.speak or outcomes.REFUSED_GENERIC
         return RoutedTurn("refused", reply, action=view)
 
@@ -309,7 +335,7 @@ class IntentRouter:
                 {
                     "amount": float(Decimal(proposal.amount_minor) / 100),
                     "currency": proposal.currency,
-                    "category": proposal.description or "uncategorised",
+                    "category": suggest_category(proposal.description),
                     "note": proposal.description,
                 },
                 (policy.Entity("amount", proposal.label, policy.Resolution.TYPED_VALUE),),

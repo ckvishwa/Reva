@@ -81,6 +81,11 @@ public partial class App : Application
             new Voice.GlobalPushToTalkHotkey());
         var liveVoice = new ViewModels.LiveVoiceViewModel(voiceLoop, action => uiQueue.TryEnqueue(() => action()));
         var devicesApi = new Devices.DevicesApiClient(httpClient, tokenProvider, configuration.RequestTimeout);
+        var actionsApi = new Actions.ActionsApi(httpClient, tokenProvider, configuration.RequestTimeout);
+        var appTargets = new Actions.AppTargetStore(
+            System.IO.Path.Combine(configuration.CoreDataDirectory, "app-targets.json"));
+        var actionCoordinator = new Actions.ActionCoordinator(actionsApi, () => CreateExecutor(configuration, appTargets));
+        voiceLoop.CoreEvent += actionCoordinator.OnCoreEvent;
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),
             assistant,
@@ -92,6 +97,9 @@ public partial class App : Application
             liveVoice,
             new ViewModels.CloudSettingsViewModel(new Settings.CloudSettingsApi(httpClient, tokenProvider, configuration.RequestTimeout)),
             new ViewModels.AvatarSettingsViewModel(new Avatar.AvatarSettingsStore(configuration.CoreDataDirectory)),
+            new ViewModels.AppsViewModel(actionsApi, appTargets),
+            new ViewModels.ActivityViewModel(actionsApi),
+            new ViewModels.ApprovalCardViewModel(actionCoordinator, action => uiQueue.TryEnqueue(() => action())),
             wakeWord);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)
@@ -107,5 +115,24 @@ public partial class App : Application
         await lifecycle.StartAsync();
         await today.RefreshAsync();
         ((MainWindow)_window).StartRefreshOnChanges(financeApi);
+    }
+
+    /// <summary>The executor needs the public half of the Core's grant key (written next to the
+    /// database when Core starts). Without it nothing can be verified, so there is no executor and
+    /// every order is reported as failed; REVA never acts on a grant it cannot check.</summary>
+    private static Actions.AppActionExecutor? CreateExecutor(DesktopConfiguration configuration, Actions.AppTargetStore targets)
+    {
+        var keyPath = System.IO.Path.Combine(configuration.CoreDataDirectory, "grant_public_key.pem");
+        try
+        {
+            var verifier = new Actions.GrantVerifier(System.IO.File.ReadAllText(keyPath));
+            return new Actions.AppActionExecutor(verifier, targets, new Actions.SystemWindowProbe(), new Actions.SystemAppLauncher());
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
+                                       or System.Security.Cryptography.CryptographicException or ArgumentException)
+        {
+            DesktopLogger.Info("executor.unavailable reason=grant_key");
+            return null;
+        }
     }
 }

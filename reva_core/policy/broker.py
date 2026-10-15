@@ -2,8 +2,7 @@
 
 A model may *propose*. The broker is the only place a proposal becomes permission, and it does that
 only through the pure `authorize()`. Executors *act*, and only on a signed grant. REVA *speaks*
-about
-an action only from the outcome an executor reported with evidence, through templates
+about an action only from the outcome an executor reported with evidence, through templates
 (`language/outcomes.py`): a status of `verified` needs evidence of the kind the registry expects for
 that capability, otherwise it is recorded as `unknown`. Nothing a model writes can reach the
 outcome.
@@ -13,6 +12,8 @@ Every step is appended to the action ledger.
 
 from __future__ import annotations
 
+import logging
+import re
 import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -32,6 +33,8 @@ from reva_core.policy.grants import GRANT_TTL, Grant, GrantSigner, utc_iso
 from reva_core.policy.ledger import ActionLedger, redact_args
 from reva_core.policy.registry import DEFAULT_REGISTRY, Registry, Tier
 from reva_core.shared.ids import new_id
+
+logger = logging.getLogger(__name__)
 
 APPROVAL_TTL = timedelta(minutes=2)
 MAX_OPEN = 64
@@ -105,6 +108,12 @@ class ActionView:
     order: ExecutionOrder | None = None
     deadline: str | None = None
     evidence_kind: str | None = None
+    prompt: str | None = None  # the confirm-card sentence while the action awaits a click
+
+
+# Runs a granted order inside Core (the Kernel executor). Returns (status, evidence).
+CoreExecutor = Callable[["ExecutionOrder"], tuple[str, Mapping[str, Any] | None]]
+Listener = Callable[["ActionView"], None]
 
 
 @dataclass
@@ -114,8 +123,35 @@ class Broker:
     registry: Registry = DEFAULT_REGISTRY
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     approval_ttl: timedelta = APPROVAL_TTL
+    # The app keys currently allowed (built-in plus owner-approved), and their display names.
+    app_keys: Callable[[], tuple[str, ...]] | None = None
+    app_names: Callable[[], Mapping[str, str]] | None = None
+    # Capabilities Core carries out itself (the Kernel), keyed by capability name.
+    core_executors: dict[str, CoreExecutor] = field(default_factory=dict)
     _records: dict[str, ActionRecord] = field(default_factory=dict)
     _decisions: dict[str, AuthorizationDecision] = field(default_factory=dict)
+    _listeners: list[Listener] = field(default_factory=list)
+    _registry_cache: tuple[tuple[str, ...], Registry] | None = None
+
+    def subscribe(self, listener: Listener) -> None:
+        """Called with the new view after an action changes outside the request that made it
+        (an executor's report, a timeout). A listener must never raise or block."""
+        self._listeners.append(listener)
+
+    def _reg(self) -> Registry:
+        if self.app_keys is None:
+            return self.registry
+        keys = tuple(self.app_keys())
+        if self._registry_cache is None or self._registry_cache[0] != keys:
+            self._registry_cache = (keys, self.registry.with_app_keys(keys))
+        return self._registry_cache[1]
+
+    def _notify(self, view: ActionView) -> None:
+        for listener in list(self._listeners):
+            try:
+                listener(view)
+            except Exception:  # noqa: BLE001 - one broken listener must not undo an outcome
+                logger.warning("action listener failed", exc_info=True)
 
     # ---------------------------------------------------------------------- propose
 
@@ -147,9 +183,9 @@ class Broker:
         decision = authorize(
             proposal,
             AuthState(now=now, user=user, consent=consent or {}, device_scopes=device_scopes),
-            self.registry,
+            self._reg(),
         )
-        capability = self.registry.get(proposal.capability)
+        capability = self._reg().get(proposal.capability)
         tier = (
             Tier(decision.tier) if decision.tier else (capability.tier if capability else Tier.T3)
         )
@@ -213,14 +249,16 @@ class Broker:
         decision = authorize(
             record.proposal,
             AuthState(now=now, approval=approval, user=record.user),
-            self.registry,
+            self._reg(),
         )
         if not decision.allowed:
             self._log(record, "approval_rejected", {"reason": decision.reason, "via": via})
             return self._view(record, decision)
         self._log(record, "approved", {"via": via, "device": device})
         self._issue_grant(record, now)
-        return self._view(record, decision)
+        view = self._view(record, decision)
+        self._notify(view)
+        return view
 
     def deny(self, action_id: str, *, via: str = "click") -> ActionView:
         record = self._get(action_id)
@@ -228,6 +266,7 @@ class Broker:
             record.status = "denied"
             record.reason = "DENIED_BY_USER"
             self._log(record, "denied", {"via": via})
+            self._notify(self._view(record))
         return self._view(record)
 
     # ---------------------------------------------------------------------- outcome
@@ -250,11 +289,17 @@ class Broker:
         current = OUTCOME_ORDER.get(record.status, -1)
         if OUTCOME_ORDER[status] < current:
             return self._view(record)  # a late "attempted" after "observed" is ignored
+        view = self._apply_outcome(record, status, evidence)
+        self._notify(view)
+        return view
 
+    def _apply_outcome(
+        self, record: ActionRecord, status: str, evidence: Mapping[str, Any] | None
+    ) -> ActionView:
         final = status
         note = None
         if status == "verified":
-            capability = self.registry.get(record.proposal.capability)
+            capability = self._reg().get(record.proposal.capability)
             if capability is None or not _evidence_ok(capability.evidence_kind, evidence):
                 final = "unknown"
                 note = "verified was reported without evidence of the expected kind"
@@ -308,6 +353,27 @@ class Broker:
         record.status = "granted"
         record.deadline = None
         self._log(record, "granted", {"grant_id": grant.grant_id, "expires_at": grant.expires_at})
+        executor = self.core_executors.get(proposal.capability)
+        if executor is not None:
+            self._run_in_core(record, executor)
+
+    def _run_in_core(self, record: ActionRecord, executor: CoreExecutor) -> None:
+        """The Kernel executor. It acts only on the grant the broker just signed, and what REVA says
+        afterwards comes from the evidence it returns, exactly like a Windows executor's report."""
+        assert record.grant is not None and record.signature is not None
+        order = ExecutionOrder(
+            record.grant,
+            record.signature,
+            record.proposal.capability,
+            dict(record.proposal.args),
+            record.proposal.target_device,
+        )
+        try:
+            status, evidence = executor(order)
+        except Exception:  # noqa: BLE001 - any failure is "failed", never a success claim
+            logger.warning("core executor failed", exc_info=True)
+            status, evidence = "failed", None
+        self._apply_outcome(record, status, evidence)
 
     def _forget_old(self) -> None:
         if len(self._records) <= MAX_KEPT:
@@ -327,6 +393,7 @@ class Broker:
                 record.status = "expired"
                 record.reason = "APPROVAL_EXPIRED"
                 self._log(record, "expired", {})
+                self._notify(self._view(record))
 
     def _refuse_collision(self, proposal: Proposal, now: datetime) -> ActionView:
         decision = AuthorizationDecision(proposal.proposal_id, False, "STATE_MISMATCH")
@@ -356,7 +423,7 @@ class Broker:
             if decision and status in ("refused", "awaiting_approval")
             else record.reason
         )
-        capability = self.registry.get(record.proposal.capability)
+        capability = self._reg().get(record.proposal.capability)
         order = None
         if status == "granted" and record.grant is not None and record.signature is not None:
             order = ExecutionOrder(
@@ -379,14 +446,23 @@ class Broker:
             order=order,
             deadline=utc_iso(record.deadline) if record.deadline else None,
             evidence_kind=capability.evidence_kind if capability else None,
+            prompt=(
+                outcomes.approval_prompt(
+                    record.proposal.capability,
+                    record.proposal.args,
+                    self.app_names() if self.app_names is not None else None,
+                )
+                if status == "awaiting_approval"
+                else None
+            ),
         )
 
-    @staticmethod
-    def _speak(record: ActionRecord, status: str, reason: str) -> str | None:
+    def _speak(self, record: ActionRecord, status: str, reason: str) -> str | None:
         args = record.proposal.args
         capability = record.proposal.capability
+        names = self.app_names() if self.app_names is not None else None
         if status in outcomes_statuses():
-            return outcomes.outcome_text(status, capability, args)
+            return outcomes.outcome_text(status, capability, args, names=names)
         if status == "refused":
             return outcomes.refusal_text(reason, capability)
         if status == "awaiting_approval":
@@ -406,11 +482,21 @@ def _evidence_ok(expected_kind: str, evidence: Mapping[str, Any] | None) -> bool
     if not isinstance(evidence, Mapping):
         return False
     ref = evidence.get("ref")
-    return (
-        evidence.get("kind") == expected_kind
-        and isinstance(ref, str)
-        and 0 < len(ref) <= MAX_EVIDENCE_REF
-    )
+    if evidence.get("kind") != expected_kind or not isinstance(ref, str):
+        return False
+    if not 0 < len(ref) <= MAX_EVIDENCE_REF:
+        return False
+    shape = _REF_SHAPES.get(expected_kind)
+    return shape is None or shape.fullmatch(ref) is not None
+
+
+# What the reference must look like, so a bare "ok" is not evidence. An app open needs both the
+# process and a top-level window; a close needs the process to be gone.
+_REF_SHAPES = {
+    "process_started": re.compile(r"pid:[0-9]{1,10} window:0x[0-9a-fA-F]{1,16}"),
+    "process_exited": re.compile(r"pids?:[0-9]{1,10}(?:,[0-9]{1,10}){0,15} exited"),
+    "kernel_event": re.compile(r"[A-Za-z0-9_-]{8,64}"),
+}
 
 
 def _clean_evidence(evidence: Mapping[str, Any] | None) -> dict[str, Any] | None:

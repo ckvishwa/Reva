@@ -1,0 +1,45 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.ApprovalCardView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views">
+
+    <!-- A click here is the only approval a sensitive action accepts. Saying "yes" out loud never reaches it. -->
+    <Border
+        Style="{StaticResource RevaCard}"
+        BorderBrush="{StaticResource RevaAccentBrush}"
+        Margin="24"
+        MaxWidth="520"
+        HorizontalAlignment="Right"
+        VerticalAlignment="Bottom"
+        Visibility="{x:Bind local:Vis.Show(ViewModel.IsVisible), Mode=OneWay}"
+        AutomationProperties.AutomationId="ApprovalCard"
+        AutomationProperties.Name="Approval needed"
+        AutomationProperties.LiveSetting="Assertive">
+        <StackPanel Spacing="12">
+            <TextBlock Text="Approval needed" Style="{StaticResource RevaCaptionText}" />
+            <TextBlock
+                Text="{x:Bind ViewModel.Prompt, Mode=OneWay}"
+                Style="{StaticResource RevaSectionTitleText}"
+                TextWrapping="Wrap"
+                AutomationProperties.AutomationId="ApprovalPrompt" />
+            <TextBlock
+                Text="{x:Bind ViewModel.Waiting, Mode=OneWay}"
+                Style="{StaticResource RevaCaptionText}"
+                Visibility="{x:Bind local:Vis.ShowText(ViewModel.Waiting), Mode=OneWay}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button
+                    Content="Confirm"
+                    Style="{StaticResource AccentButtonStyle}"
+                    IsEnabled="{x:Bind ViewModel.CanDecide, Mode=OneWay}"
+                    AutomationProperties.AutomationId="ApprovalConfirm"
+                    Click="Confirm_Click" />
+                <Button
+                    Content="Not now"
+                    IsEnabled="{x:Bind ViewModel.CanDecide, Mode=OneWay}"
+                    AutomationProperties.AutomationId="ApprovalDeny"
+                    Click="Deny_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

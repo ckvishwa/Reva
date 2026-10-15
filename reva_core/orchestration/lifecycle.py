@@ -16,6 +16,7 @@ from reva_core.config.settings import Settings
 from reva_core.domains.keys import DomainKeyProvider, KeyStoreError, default_key_provider
 from reva_core.domains.privacy import DomainPrivacyStore
 from reva_core.domains.service import DomainService
+from reva_core.domains.voice_expense import FinanceExpenseExecutor
 from reva_core.gateway.manager import GatewayManager
 from reva_core.memory.embedding_backfill import backfill_missing_embeddings
 from reva_core.memory.ranking import DEFAULT_HYBRID_RANKING_CONFIG, HybridRankingConfig
@@ -24,6 +25,7 @@ from reva_core.models.embedding_providers import OllamaEmbeddingProvider
 from reva_core.models.faster_whisper_stt import FasterWhisperSTTProvider
 from reva_core.models.stt import SpeechToTextProvider
 from reva_core.models.tts import TextToSpeechProvider
+from reva_core.policy.apps import AppCatalog
 from reva_core.policy.broker import Broker
 from reva_core.policy.grants import grant_key_provider, load_or_create_signer
 from reva_core.policy.ledger import SqliteLedger
@@ -75,6 +77,7 @@ class CoreLifecycle:
         self._anthropic_secret_store = anthropic_secret_store
         self._grant_key_provider = grant_key_provider
         self._broker: Broker | None = None
+        self._apps = AppCatalog(None)
         self._cloud_settings_store = CloudSettingsStore(settings.data_dir / "cloud_settings.json")
 
     def startup(self) -> HealthStatus:
@@ -144,7 +147,16 @@ class CoreLifecycle:
             )
             signer = load_or_create_signer(provider)
             signer.write_public_key(self._settings.data_dir)
-            self._broker = Broker(signer=signer, ledger=SqliteLedger(self._conn))
+            self._apps = AppCatalog(self._settings.data_dir / "apps.json")
+            self._broker = Broker(
+                signer=signer,
+                ledger=SqliteLedger(self._conn),
+                app_keys=self._apps.allowed_keys,
+                app_names=self._apps.display_names,
+                core_executors={
+                    "finance.add_transaction": FinanceExpenseExecutor(lambda: self.domain_service)
+                },
+            )
         except (KeyStoreError, OSError):
             logger.warning("action broker unavailable: the grant key could not be used")
             self._broker = None
@@ -152,6 +164,10 @@ class CoreLifecycle:
     @property
     def broker(self) -> Broker | None:
         return self._broker
+
+    @property
+    def apps(self) -> AppCatalog:
+        return self._apps
 
     def _run_startup_backfill(self) -> None:
         # asyncio.run is safe here: startup() runs before uvicorn creates

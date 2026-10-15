@@ -35,6 +35,8 @@ from reva_core.language.mood_flags import utterance_flags
 from reva_core.language.router import IntentRouter
 from reva_core.models.stt import SpeechToTextProvider, TranscriptionInput, TranscriptionResult
 from reva_core.models.tts import SynthesizedAudio
+from reva_core.policy.broker import ActionView
+from reva_core.policy.wire import FINAL, view_to_dict
 from reva_core.providers.cloud import AssistantReply
 from reva_core.session.coordinator import Stage, VoiceSession
 from reva_core.session.events import SessionEventKind
@@ -151,6 +153,56 @@ class TurnPipeline:
         self._mood = moods.MoodState()
         self.mood_settings = moods.MoodSettings()
         self._watchdog: asyncio.Task[None] | None = None
+        self._owned_actions: set[str] = set()
+
+    # ------------------------------------------------------------------ actions
+
+    def _announce_proposal(self, view: ActionView) -> None:
+        """Tell the app an action exists: a grant to carry out, or a card to approve."""
+        self._owned_actions.add(view.action_id)
+        if view.status == "awaiting_approval":
+            self.session.emit(
+                SessionEventKind.ACTION_APPROVAL_REQUIRED, view_to_dict(view, with_order=False)
+            )
+        elif view.status == "granted":
+            self.session.emit(SessionEventKind.ACTION_PROPOSED, view_to_dict(view, with_order=True))
+
+    def on_action_update(self, view: ActionView) -> None:
+        """Called by the broker when an action changed outside this session's own turn (an
+        executor reported, a click approved it, a timeout). Only this session's actions count."""
+        if view.action_id not in self._owned_actions or view.status not in FINAL:
+            return
+        self._owned_actions.discard(view.action_id)
+        self.session.emit(SessionEventKind.ACTION_OUTCOME, view_to_dict(view, with_order=False))
+        self._spawn(self._speak_outcome(view))
+
+    async def _speak_outcome(self, view: ActionView) -> None:
+        text = view.speak
+        if not text:
+            return
+        session = self.session
+        final: dict[str, object] = {"text": text, "source": "template", "provider": "template"}
+        self._decide_mood(
+            "",
+            "outcome",
+            final,
+            verified_action_id=view.action_id if view.status == "verified" else None,
+            failed=view.status == "failed",
+        )
+        session.emit(SessionEventKind.ASSISTANT_TEXT_FINAL, final)
+        idle = (
+            session.state == SessionState.LISTENING
+            and self._ptt is None
+            and not self._segmenter.in_speech
+        )
+        if idle:  # never talk over the owner; the text above is still shown
+            for step in (
+                SessionState.ENDPOINTING,
+                SessionState.TRANSCRIBING,
+                SessionState.REASONING,
+            ):
+                await session.transition(step, reason="action_outcome")
+            await self._speak(text, "en", session.turn_epoch)
 
     # ------------------------------------------------------------------ inputs
 
@@ -353,6 +405,8 @@ class TurnPipeline:
         )
         await session.transition(SessionState.REASONING)
         routed = self._router.route(transcript.text, now=self._now())
+        if routed.action is not None:
+            self._announce_proposal(routed.action)
         if routed.kind == "chat":
             answer = await self._ask_assistant(transcript.text, epoch)
             if answer is None:
@@ -430,9 +484,17 @@ class TurnPipeline:
             return None
         return result.value
 
-    def _decide_mood(self, transcript: str, route: str, final: dict[str, object]) -> moods.Voice:
-        """Next mood for this turn. Nothing here can be verified yet (no executor), so no event is
-        marked verified_outcome and the avatar never gets a result expression from this path."""
+    def _decide_mood(
+        self,
+        transcript: str,
+        route: str,
+        final: dict[str, object],
+        *,
+        verified_action_id: str | None = None,
+        failed: bool = False,
+    ) -> moods.Voice:
+        """Next mood. A turn's own reply is never a verified result; only an executor's report
+        (`on_action_update`) passes `verified_action_id`, and only then may the avatar show one."""
         now = self._now()
         domain = "finance" if route in ("proposed", "amended", "accepted", "clarify") else None
         inputs = moods.MoodInputs(
@@ -440,10 +502,9 @@ class TurnPipeline:
             flags=utterance_flags(transcript),
             domain=domain,
             settings=self.mood_settings,
-            events=frozenset({moods.APPROVAL_PENDING})
-            if route in ("proposed", "amended", "approval")
-            else frozenset(),
+            events=_mood_events(route, verified_action_id, failed),
             action_in_flight=route in ("proposed", "amended", "approval", "action"),
+            verified_action_id=verified_action_id,
         )
         result = moods.next_mood(self._mood, inputs)
         self._mood = result.state
@@ -524,6 +585,16 @@ class TurnPipeline:
         if self._watchdog is not None and not self._watchdog.done():
             self._watchdog.cancel()
         self._watchdog = None
+
+
+def _mood_events(route: str, verified_action_id: str | None, failed: bool) -> frozenset[str]:
+    if route == "outcome":
+        if verified_action_id is not None:
+            return frozenset({moods.VERIFIED_OUTCOME})
+        return frozenset({moods.FAILURE}) if failed else frozenset()
+    if route in ("proposed", "amended", "approval"):
+        return frozenset({moods.APPROVAL_PENDING})
+    return frozenset()
 
 
 async def _guard(coro: Awaitable[None]) -> None:

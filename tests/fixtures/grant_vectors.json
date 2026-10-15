@@ -1,0 +1,343 @@
+{
+  "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEy4bBjyfbwdCG+e25hTNpW1sqPrl5\nk08vJ14mV7/BhelNBltGX7ysD9KwdN1/TfiZcJD1B+v/SThdHzhZboZZEQ==\n-----END PUBLIC KEY-----\n",
+  "note": "Shared by the Python grant tests and the Windows executor tests.",
+  "cases": [
+    {
+      "name": "valid",
+      "grant": {
+        "grant_id": "grant-valid",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "MZFZkgZQl1xH8ijmuo4u_qodaWLNmGr7kKuISORL074UquKlxsj6GnTQYj2tTQSMU9jW480RkOj9ctG59xIfQA",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "OK"
+    },
+    {
+      "name": "valid_unicode_args",
+      "grant": {
+        "grant_id": "grant-valid_unicode_args",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "d47a015fc0353e606746017268b4fedfb1bb75778c76eefb9c747a519e7cd91e",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-uni",
+        "version": "1"
+      },
+      "signature": "PGnIOuytAzOQrXJ9pAht3wtjhK1gDVIogBqY7Y8wL2laRMcv1nCxoiSLt0UXPce1ZJhCRr-LAcwLF4f54K7Jbg",
+      "args": {
+        "app_key": "caf\u00e9 \"quoted\" \\ slash",
+        "note": "line\nbreak\ttab \u2603"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "OK"
+    },
+    {
+      "name": "valid_close",
+      "grant": {
+        "grant_id": "grant-valid_close",
+        "action_id": "act-0001",
+        "capability": "windows.app.close",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-close",
+        "version": "1"
+      },
+      "signature": "egkgZiH4xiUsb2BDO_023zQkQ8ICuKLbr7U_HDUNuVW-QgAB02uRuNoFvkVx_UVjV7fDDE__thBkX7D46Gb5iQ",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.close",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "OK"
+    },
+    {
+      "name": "valid_obsidian",
+      "grant": {
+        "grant_id": "grant-valid_obsidian",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "5bd190c2fcd6870b043ae51fd64f53211222357c2feaac6abc07b6030baa477f",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-obsidian",
+        "version": "1"
+      },
+      "signature": "_uer6M0phqPb1rRprwq20wBo3lG5Njv0IFWmtqFxY1DM8Y7tEf07RqCSfct_HbmSdwb11gt-QR0dAjH7IapKTA",
+      "args": {
+        "app_key": "obsidian"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "OK"
+    },
+    {
+      "name": "expired",
+      "grant": {
+        "grant_id": "grant-expired",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "ToE9uKa1YfIS-ImWrFuh-jiTQPqRoyeI9LArGEAicB_8mkjQfvlNG9qr5dx7BY7FSpnrtgMbMQhC25MJ7h4C4Q",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:01:01+00:00",
+      "expect": "EXPIRED"
+    },
+    {
+      "name": "from_the_future",
+      "grant": {
+        "grant_id": "grant-from_the_future",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "vmAk2bONsvZF_5xJ74M3-5zoM1z7gbiVAqdGNIxfIyMbWiCYawPD9ilkWVNcemM20KQOATLnZAYjwS6rLPL_lw",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T11:59:30+00:00",
+      "expect": "NOT_YET_VALID"
+    },
+    {
+      "name": "wrong_signer",
+      "grant": {
+        "grant_id": "grant-wrong_signer",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "HBtPmrhaSjtXGjQ7J-W6UIgXahSdDjkZUpUqHzQEKQtwgP2EB6ZXzDGIrypFzU9uXWr0SgGJUgqAy1Ns-wM3CQ",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "BAD_SIGNATURE"
+    },
+    {
+      "name": "tampered_args_hash",
+      "grant": {
+        "grant_id": "grant-tampered_args_hash",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "tZ9evsmElTuZYJCRxfE4vLCwaHwgrhq5gqHWeV1AuWl7ilRSn8ZcSgLRJReLoFWOkfOhSgGkMLH7P2-qc4twsA",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "BAD_SIGNATURE"
+    },
+    {
+      "name": "substituted_args",
+      "grant": {
+        "grant_id": "grant-substituted_args",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "NcdaOzxzPKJ5W--bZmNAay8RZJFmzdsfB6LyglCSPKNr-uM3jpUgdoF-vgaII_WzXCVwbUhYol_hDxSjW1z2zg",
+      "args": {
+        "app_key": "chrome"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "ARGS_MISMATCH"
+    },
+    {
+      "name": "substituted_capability",
+      "grant": {
+        "grant_id": "grant-substituted_capability",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "aI4EwHU0hUL2ansRU3E7X0eC3y2DkXmBzYqUjO5O4eAcnGHbr67-R61IDCz8AvzMUggJoHhiHXTCMPaPpeYuhA",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.close",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "CAPABILITY_MISMATCH"
+    },
+    {
+      "name": "wrong_target",
+      "grant": {
+        "grant_id": "grant-wrong_target",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "q5k0w_Ii9os7djLVbuiK2kn5BLlc02OB5wgR6KimGOnfh7f4eRKgO9FYNtoea0YYBOshLhJyxPP-A7TdIsZGzA",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "phone-0001",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "WRONG_TARGET"
+    },
+    {
+      "name": "wrong_actor",
+      "grant": {
+        "grant_id": "grant-wrong_actor",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "xB5qSbe8alfFg_fUjjvUeqDPZCPHI-7gXGaZNjoqHRcRiBdb4WhaPtBNlVfvzlcDlna3gDtbU-b-y7vJ-s6JxA",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "someone",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "WRONG_ACTOR"
+    },
+    {
+      "name": "malformed_signature",
+      "grant": {
+        "grant_id": "grant-malformed_signature",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "AAAA",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "MALFORMED"
+    },
+    {
+      "name": "not_base64",
+      "grant": {
+        "grant_id": "grant-not_base64",
+        "action_id": "act-0001",
+        "capability": "windows.app.open",
+        "args_hash": "8e08d07609805e25691745d0af3318113591b4507f4be1e777d4a520b4f17968",
+        "target_device": "local",
+        "actor": "owner",
+        "issued_at": "2026-10-15T11:59:55+00:00",
+        "expires_at": "2026-10-15T12:00:55+00:00",
+        "idempotency_key": "idem-0001",
+        "version": "1"
+      },
+      "signature": "not base64 !!",
+      "args": {
+        "app_key": "notepad"
+      },
+      "capability": "windows.app.open",
+      "target_device": "local",
+      "actor": "owner",
+      "now": "2026-10-15T12:00:00+00:00",
+      "expect": "MALFORMED"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.AppsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Reva.Desktop.Views"
+    xmlns:vm="using:Reva.Desktop.ViewModels">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="24" Spacing="16" MaxWidth="820" HorizontalAlignment="Left">
+            <TextBlock Text="Apps &amp; Actions" Style="{StaticResource RevaTitleText}" AutomationProperties.AutomationId="AppsTitle" />
+            <TextBlock
+                Style="{StaticResource RevaMutedText}"
+                TextWrapping="Wrap"
+                Text="REVA can only open or close the apps listed here. Closing always asks you to approve on screen first. Apps found on this PC wait below until you allow them." />
+
+            <Border
+                Visibility="{x:Bind local:Vis.ShowText(ViewModel.Error), Mode=OneWay}"
+                Style="{StaticResource RevaSmallCard}"
+                BorderBrush="{StaticResource RevaErrorBrush}"
+                AutomationProperties.AutomationId="AppsError"
+                AutomationProperties.LiveSetting="Assertive">
+                <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="{StaticResource RevaErrorBrush}" TextWrapping="Wrap" />
+            </Border>
+            <TextBlock
+                Visibility="{x:Bind local:Vis.ShowText(ViewModel.Message), Mode=OneWay}"
+                Text="{x:Bind ViewModel.Message, Mode=OneWay}"
+                Foreground="{StaticResource RevaSuccessBrush}"
+                AutomationProperties.AutomationId="AppsMessage"
+                AutomationProperties.LiveSetting="Polite" />
+
+            <Border Style="{StaticResource RevaCard}" AutomationProperties.Name="Allowed apps">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Allowed apps" Style="{StaticResource RevaSectionTitleText}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Allowed, Mode=OneWay}" AutomationProperties.AutomationId="AllowedApps">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AllowedAppRow">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+                                        <TextBlock
+                                            Style="{StaticResource RevaCaptionText}"
+                                            TextWrapping="Wrap"
+                                            Text="{x:Bind Aliases}" />
+                                        <TextBlock Style="{StaticResource RevaCaptionText}" Text="{x:Bind Kind}" />
+                                    </StackPanel>
+                                    <Button
+                                        Grid.Column="1"
+                                        Content="Remove"
+                                        Visibility="{x:Bind local:Vis.Show(CanRemove)}"
+                                        AutomationProperties.Name="{x:Bind DisplayName}"
+                                        Tag="{x:Bind}"
+                                        Click="Remove_Click" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource RevaCard}" AutomationProperties.Name="Waiting for you">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Waiting for you" Style="{StaticResource RevaSectionTitleText}" />
+                    <TextBlock
+                        Style="{StaticResource RevaCaptionText}"
+                        Visibility="{x:Bind local:Vis.Hide(ViewModel.HasWaiting), Mode=OneWay}"
+                        Text="Nothing found yet. Apps from your Start Menu appear here." />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Waiting, Mode=OneWay}" AutomationProperties.AutomationId="WaitingApps">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WaitingAppRow">
+                                <Grid ColumnDefinitions="*,260,Auto" ColumnSpacing="12" Padding="0,6">
+                                    <TextBlock Text="{x:Bind DisplayName}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <TextBox
+                                        Grid.Column="1"
+                                        PlaceholderText="Names to say, e.g. my notes, second brain"
+                                        AutomationProperties.Name="Spoken names"
+                                        Text="{x:Bind Aliases, Mode=TwoWay}" />
+                                    <Button
+                                        Grid.Column="2"
+                                        Content="Allow"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Tag="{x:Bind}"
+                                        AutomationProperties.Name="{x:Bind DisplayName}"
+                                        Click="Allow_Click" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

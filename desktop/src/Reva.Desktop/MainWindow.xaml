@@ -176,6 +176,20 @@
         AvatarViewModel="{x:Bind AvatarSettingsModel}"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsSettings), Mode=OneWay}" />
 
+    <views:AppsPage
+        x:Name="AppsPanel"
+        ViewModel="{x:Bind AppsModel}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsApps), Mode=OneWay}" />
+
+    <views:ActivityPage
+        x:Name="ActivityPanel"
+        ViewModel="{x:Bind ActivityModel}"
+        Visibility="{x:Bind views:Vis.Show(Navigation.ShowsActivity), Mode=OneWay}" />
+
+    <views:ApprovalCardView
+        x:Name="ApprovalPanel"
+        ViewModel="{x:Bind ApprovalModel}" />
+
     <views:ComingSoonPage
         x:Name="ComingSoonPanel"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsComingSoon), Mode=OneWay}" />

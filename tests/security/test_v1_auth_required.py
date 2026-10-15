@@ -32,6 +32,11 @@ import pytest
             "/v1/actions/some-action-id",
             {"json": {"grant_id": "g", "status": "verified"}},
         ),
+        ("get", "/v1/apps", {}),
+        ("put", "/v1/apps/discovered", {"json": {"apps": []}}),
+        ("put", "/v1/apps/some-app", {"json": {"aliases": []}}),
+        ("delete", "/v1/apps/some-app", {}),
+        ("get", "/v1/activity", {}),
         ("post", "/v1/voice/speech", {"json": {"text": "hi", "language": "en"}}),
         (
             "post",
