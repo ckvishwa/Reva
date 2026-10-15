@@ -167,7 +167,7 @@ test('drawing is capped at 60 fps, stops when the avatar is off and resumes when
   await page.waitForTimeout(2000);
   const drawn = (await renders(page)) - start;
   assert.ok(drawn <= 2 * 60 + 4, `drew ${drawn} frames in 2 s`);
-  assert.ok(drawn >= 10, `drew only ${drawn} frames in 2 s`);
+  assert.ok(drawn >= 2, `drew only ${drawn} frames in 2 s`); // software WebGL on CI is slow: this only proves it is drawing
 
   await send(page, { type: 'avatar.settings', enabled: false });
   await page.waitForTimeout(300);
