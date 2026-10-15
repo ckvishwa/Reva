@@ -333,6 +333,8 @@ class GatewayService:
     def _sync_ready(self, grant: Grant, payload: dict[str, Any]) -> tuple[Any, Any]:
         if payload.get("domain") != DOMAIN or DOMAIN not in grant.scopes:
             raise GatewayError("out_of_scope", 403)
+        if not self._privacy.devices_allowed(DOMAIN):
+            raise GatewayError("devices_disabled", 403)
         if not self._privacy.get(DOMAIN)["sync"]:
             raise GatewayError("sync_disabled", 403)
         handle, module = self._finance()

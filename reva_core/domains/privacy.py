@@ -46,6 +46,26 @@ class DomainPrivacyStore:
                 current[key] = value
         return current
 
+    def devices_allowed(self, domain: str) -> bool:
+        """May a paired device reach this domain at all? Default yes; off beats `sync`."""
+        if domain not in DEFAULTS:
+            return False
+        with self._lock:
+            stored = self._read().get(domain, {})
+        value = stored.get("devices") if isinstance(stored, dict) else None
+        return value if isinstance(value, bool) else True
+
+    def set_devices(self, domain: str, allowed: bool) -> None:
+        if domain not in DEFAULTS:
+            raise DomainRequestError("not_found", 404, f"unknown domain {domain!r}")
+        with self._lock:
+            data = self._read()
+            stored = data.get(domain)
+            entry: dict[str, Any] = stored if isinstance(stored, dict) else {}
+            entry["devices"] = allowed
+            data[domain] = entry
+            self._write(data)
+
     def update(self, domain: str, patch: dict[str, Any]) -> dict[str, bool]:
         current = self.get(domain)
         if not patch:
@@ -58,16 +78,25 @@ class DomainPrivacyStore:
         current.update(patch)
         with self._lock:
             data = self._read()
-            data[domain] = current
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            handle, temp_name = tempfile.mkstemp(
-                dir=self._path.parent, prefix=".privacy-", suffix=".tmp"
+            previous = data.get(domain)
+            kept = (
+                {k: v for k, v in previous.items() if k == "devices"}
+                if isinstance(previous, dict)
+                else {}
             )
-            try:
-                with os.fdopen(handle, "w", encoding="utf-8") as out:
-                    json.dump(data, out, indent=1, sort_keys=True)
-                os.replace(temp_name, self._path)
-            except BaseException:
-                Path(temp_name).unlink(missing_ok=True)
-                raise
+            data[domain] = {**current, **kept}
+            self._write(data)
         return current
+
+    def _write(self, data: dict[str, Any]) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        handle, temp_name = tempfile.mkstemp(
+            dir=self._path.parent, prefix=".privacy-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as out:
+                json.dump(data, out, indent=1, sort_keys=True)
+            os.replace(temp_name, self._path)
+        except BaseException:
+            Path(temp_name).unlink(missing_ok=True)
+            raise

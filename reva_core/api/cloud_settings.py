@@ -127,6 +127,8 @@ def build_cloud_settings_router(lifecycle: CoreLifecycle) -> APIRouter:
         for name, allowed in (payload.domains or {}).items():
             settings.domains[name] = allowed
         store.save(settings)
+        for name, allowed in (payload.domains or {}).items():
+            lifecycle.privacy_settings.set_hosted_model(name, allowed)  # mirror into the domain
         _audit(
             header_correlation_id,
             "cloud_settings_changed",

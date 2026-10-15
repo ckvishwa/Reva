@@ -15,6 +15,7 @@ from reva_core.agent.orchestrator import AssistantOrchestrator
 from reva_core.config.settings import Settings
 from reva_core.domains.keys import DomainKeyProvider, KeyStoreError, default_key_provider
 from reva_core.domains.privacy import DomainPrivacyStore
+from reva_core.domains.privacy_settings import PrivacySettings
 from reva_core.domains.service import DomainService
 from reva_core.domains.voice_expense import FinanceExpenseExecutor
 from reva_core.gateway.manager import GatewayManager
@@ -330,6 +331,10 @@ class CoreLifecycle:
     @property
     def cloud_settings_store(self) -> CloudSettingsStore:
         return self._cloud_settings_store
+
+    @property
+    def privacy_settings(self) -> PrivacySettings:
+        return PrivacySettings(self._domain_privacy, self._cloud_settings_store)
 
     def cloud_reasoner(self) -> CloudReasoner:
         return CloudReasoner(
