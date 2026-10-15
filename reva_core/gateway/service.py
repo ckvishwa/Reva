@@ -318,6 +318,14 @@ class GatewayService:
             raise _map(module, exc) from exc
         return {"acknowledged": cursor}
 
+    # -------------------------------------------------------------------------- actions
+
+    def act_propose(self, grant: Grant, payload: dict[str, Any]) -> dict[str, Any]:
+        raise GatewayError("actions_unavailable", 503)
+
+    def act_status(self, grant: Grant, payload: dict[str, Any]) -> dict[str, Any]:
+        raise GatewayError("actions_unavailable", 503)
+
     # ---------------------------------------------------------------------------- helpers
 
     def _finance(self) -> tuple[Any, Any]:

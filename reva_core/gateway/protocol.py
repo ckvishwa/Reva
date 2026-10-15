@@ -45,6 +45,8 @@ ALLOWED_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/sync/push"),
     ("POST", "/sync/pull"),
     ("POST", "/sync/ack"),
+    ("POST", "/actions/propose"),
+    ("POST", "/actions/status"),
 )
 
 
