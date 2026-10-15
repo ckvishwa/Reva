@@ -15,6 +15,8 @@ public sealed partial class LiveVoicePanel : UserControl
 
     private bool _keyHeld;
 
+    public AvatarView AvatarSurface => Avatar;
+
     public LiveVoicePanel()
     {
         InitializeComponent();

@@ -173,6 +173,7 @@
     <views:SettingsPage
         x:Name="SettingsPanel"
         ViewModel="{x:Bind CloudSettings}"
+        AvatarViewModel="{x:Bind AvatarSettingsModel}"
         Visibility="{x:Bind views:Vis.Show(Navigation.ShowsSettings), Mode=OneWay}" />
 
     <views:ComingSoonPage

@@ -91,6 +91,7 @@ public partial class App : Application
             new ViewModels.DevicesViewModel(devicesApi, new Devices.QrCoderEncoder()),
             liveVoice,
             new ViewModels.CloudSettingsViewModel(new Settings.CloudSettingsApi(httpClient, tokenProvider, configuration.RequestTimeout)),
+            new ViewModels.AvatarSettingsViewModel(new Avatar.AvatarSettingsStore(configuration.CoreDataDirectory)),
             wakeWord);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)

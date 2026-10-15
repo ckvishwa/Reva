@@ -2,6 +2,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Reva.Desktop.Avatar;
 using Reva.Desktop.Finance;
 using Reva.Desktop.Services;
 using Reva.Desktop.ViewModels;
@@ -31,6 +32,10 @@ public sealed partial class MainWindow : Window
 
     public CloudSettingsViewModel CloudSettings { get; }
 
+    public AvatarSettingsViewModel AvatarSettingsModel { get; }
+
+    private AvatarDirector? _avatarDirector;
+
     public MainWindow(
         ShellViewModel shell,
         AssistantViewModel assistant,
@@ -41,6 +46,7 @@ public sealed partial class MainWindow : Window
         DevicesViewModel devices,
         LiveVoiceViewModel liveVoice,
         CloudSettingsViewModel cloudSettings,
+        AvatarSettingsViewModel avatarSettings,
         WakeWordCoordinator? wakeWord = null)
     {
         // Set before InitializeComponent: x:Bind reads these while the tree is built.
@@ -53,6 +59,7 @@ public sealed partial class MainWindow : Window
         Devices = devices;
         LiveVoiceModel = liveVoice;
         CloudSettings = cloudSettings;
+        AvatarSettingsModel = avatarSettings;
         WakeWord = wakeWord;
         InitializeComponent();
         Title = "REVA";
@@ -65,6 +72,25 @@ public sealed partial class MainWindow : Window
         ApplyStatusDotColor();
         RegisterVoicePointerHandlers();
         Closed += MainWindow_Closed;
+        SetUpAvatar();
+    }
+
+    private void SetUpAvatar()
+    {
+        var view = LiveVoice.AvatarSurface;
+        _avatarDirector = new AvatarDirector(LiveVoiceModel.Loop, view);
+        view.Director = _avatarDirector;
+        var ui = new Windows.UI.ViewManagement.UISettings();
+        void Apply(AvatarSettings settings) => _avatarDirector.ApplySettings(settings, ui.AnimationsEnabled);
+        AvatarSettingsModel.Applied += Apply;
+        Apply(AvatarSettingsModel.Current);
+        AppWindow.Changed += (_, args) =>
+        {
+            if (args.DidPresenterChange && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+            {
+                _avatarDirector.SetWindowVisible(presenter.State != Microsoft.UI.Windowing.OverlappedPresenterState.Minimized);
+            }
+        };
     }
 
     private void ApplyDarkTitleBar()

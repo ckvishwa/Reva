@@ -15,6 +15,8 @@ public sealed class LiveVoiceViewModel : ObservableObject
     private IReadOnlyList<AudioDeviceInfo> _microphones = Array.Empty<AudioDeviceInfo>();
     private AudioDeviceInfo? _selectedMicrophone;
 
+    public VoiceLoopController Loop => _loop;
+
     public LiveVoiceViewModel(VoiceLoopController loop, Action<Action>? post = null)
     {
         _loop = loop;
@@ -25,7 +27,7 @@ public sealed class LiveVoiceViewModel : ObservableObject
     public bool IsOn => _loop.State is not (LiveVoiceState.Off or LiveVoiceState.Error);
 
     public bool CanTalk => _loop.State is LiveVoiceState.Ready or LiveVoiceState.Listening
-        or LiveVoiceState.Thinking or LiveVoiceState.Speaking;
+        or LiveVoiceState.Thinking or LiveVoiceState.Approval or LiveVoiceState.Speaking;
 
     public string StateText => _loop.State switch
     {
@@ -34,6 +36,7 @@ public sealed class LiveVoiceViewModel : ObservableObject
         LiveVoiceState.Ready => _loop.MicMuted ? "Microphone muted." : "Hold Ctrl+Space or the button to talk.",
         LiveVoiceState.Listening => "Listening…",
         LiveVoiceState.Thinking => "Thinking…",
+        LiveVoiceState.Approval => "Waiting for your approval.",
         LiveVoiceState.Speaking => _loop.SpeakerMuted ? "Reply ready (speaker muted)." : "Speaking…",
         _ => "Voice stopped.",
     };
