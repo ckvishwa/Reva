@@ -1,5 +1,6 @@
 {
   "body": {
+    "code": "CORE.NOT_FOUND",
     "correlation_id": "CORRELATION",
     "error": "unknown_device"
   },

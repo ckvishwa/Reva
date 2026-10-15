@@ -1,5 +1,6 @@
 {
   "body": {
+    "code": "DOMAIN.LOCKED",
     "correlation_id": "CORRELATION",
     "error": "domain_locked"
   },

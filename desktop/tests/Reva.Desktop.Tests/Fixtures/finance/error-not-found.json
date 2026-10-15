@@ -1,5 +1,6 @@
 {
   "body": {
+    "code": "DOMAIN.NOT_FOUND",
     "correlation_id": "CORRELATION",
     "detail": "transaction tx-nope-0001",
     "error": "not_found"
