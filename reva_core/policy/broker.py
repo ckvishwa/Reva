@@ -35,6 +35,7 @@ from reva_core.shared.ids import new_id
 
 APPROVAL_TTL = timedelta(minutes=2)
 MAX_OPEN = 64
+MAX_KEPT = 1000  # finished actions kept in memory; the ledger keeps them all
 MAX_EVIDENCE_REF = 200
 
 # Statuses an executor may report, in the order an action moves through them.
@@ -128,6 +129,7 @@ class Broker:
     ) -> ActionView:
         now = self.clock()
         self._expire(now)
+        self._forget_old()
         existing = self._records.get(proposal.proposal_id)
         if existing is not None:
             # The same id again changes nothing; a different request under that id is refused.
@@ -306,6 +308,18 @@ class Broker:
         record.status = "granted"
         record.deadline = None
         self._log(record, "granted", {"grant_id": grant.grant_id, "expires_at": grant.expires_at})
+
+    def _forget_old(self) -> None:
+        if len(self._records) <= MAX_KEPT:
+            return
+        finished = [
+            k
+            for k, r in self._records.items()
+            if r.status in TERMINAL | {"refused", "expired", "allowed"}
+        ]
+        for key in finished[: len(self._records) - MAX_KEPT]:
+            self._records.pop(key, None)
+            self._decisions.pop(key, None)
 
     def _expire(self, now: datetime) -> None:
         for record in self._records.values():
