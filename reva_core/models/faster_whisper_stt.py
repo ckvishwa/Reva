@@ -21,11 +21,13 @@ class FasterWhisperSTTProvider:
         device: str,
         compute_type: str,
         timeout_seconds: float,
+        initial_prompt: str | None = None,
     ) -> None:
         self._model_name = model
         self._device = device
         self._compute_type = compute_type
         self._timeout_seconds = timeout_seconds
+        self._initial_prompt = initial_prompt or None
         self._model: Any | None = None
         self._load_lock = asyncio.Lock()
 
@@ -73,6 +75,7 @@ class FasterWhisperSTTProvider:
                 beam_size=5,
                 vad_filter=False,
                 condition_on_previous_text=False,
+                initial_prompt=self._initial_prompt,
             )
             text = " ".join(segment.text.strip() for segment in segments).strip()
             language = str(getattr(info, "language", "") or "en")

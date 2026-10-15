@@ -34,6 +34,7 @@ from reva_core.shared.logging import get_logger
 from reva_core.shared.time import utc_now
 from reva_core.storage.bootstrap import initialize_database
 from reva_core.storage.repositories.device_repository import DeviceRepository
+from reva_core.voice.vocabulary import build_vocabulary_prompt
 
 logger = get_logger("orchestration")
 
@@ -173,6 +174,7 @@ class CoreLifecycle:
             device=self._settings.stt_device,
             compute_type=self._settings.stt_compute_type,
             timeout_seconds=self._settings.stt_timeout_seconds,
+            initial_prompt=build_vocabulary_prompt(self._settings.stt_vocabulary_extra),
         )
 
     def shutdown(self) -> None:
