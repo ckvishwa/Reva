@@ -20,7 +20,6 @@ note at the top of `routes.py` about FastAPI and closure dependencies.
 
 import asyncio
 import contextlib
-import hmac
 import json
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
@@ -29,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, stat
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.websockets import WebSocketDisconnect
 
-from reva_core.api.auth import build_auth_dependency, record_auth_failure
+from reva_core.api.auth import bearer_token_matches, build_auth_dependency, record_auth_failure
 from reva_core.api.correlation import resolve_correlation_id
 from reva_core.language.dialogue import FileDialogueStore
 from reva_core.orchestration.lifecycle import CoreLifecycle
@@ -40,7 +39,6 @@ from reva_core.shared.logging import get_logger
 
 logger = get_logger("api.voice_sessions")
 
-_BEARER_PREFIX = "Bearer "
 _WS_POLICY_VIOLATION = 1008
 # Control messages are tiny JSON objects; anything bigger is refused before it is parsed.
 _MAX_CONTROL_CHARS = 4096
@@ -79,9 +77,11 @@ def build_voice_session_router(
 ) -> tuple[APIRouter, SessionCoordinator]:
     router = APIRouter(prefix="/v1")
     require_token = build_auth_dependency(lifecycle)
+    dialogue_store = FileDialogueStore(lifecycle.settings.data_dir / "dialogue")
+    dialogue_store.migrate_legacy()
     coordinator = SessionCoordinator(
         stop_speaking=make_stop_speaking(lifecycle),
-        dialogue_store=FileDialogueStore(lifecycle.settings.data_dir / "dialogue"),
+        dialogue_store=dialogue_store,
     )
 
     @router.post(
@@ -151,15 +151,7 @@ def build_voice_session_router(
 
 
 def _authenticated(lifecycle: CoreLifecycle, websocket: WebSocket) -> bool:
-    header = websocket.headers.get("authorization")
-    if not header or not header.startswith(_BEARER_PREFIX):
-        return False
-    provided = header[len(_BEARER_PREFIX) :].strip()
-    # Compare bytes: `hmac.compare_digest` raises TypeError for a str with non-ASCII characters,
-    # which a client controls through the header, and that would skip the audit record.
-    return bool(provided) and hmac.compare_digest(
-        provided.encode("utf-8"), lifecycle.local_token.encode("utf-8")
-    )
+    return bearer_token_matches(websocket.headers.get("authorization"), lifecycle.local_token)
 
 
 async def _forward_events(websocket: WebSocket, subscription: Any) -> None:

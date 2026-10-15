@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -17,7 +16,9 @@ from reva_core.language.dialogue import (
     FileDialogueStore,
     MemoryDialogueStore,
     Option,
+    _encode,
 )
+from reva_core.security.dpapi import DpapiProtector, ProtectionError
 
 T0 = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
 
@@ -257,17 +258,91 @@ def test_a_device_id_cannot_name_a_path(tmp_path: Path) -> None:
 
     tracker(store, device="../../escape\\..\\x").accept_proposal("act-1")
 
-    written = list((tmp_path / "dialogue").glob("*.json"))
+    written = list((tmp_path / "dialogue").glob("*.dat"))
     assert len(written) == 1 and written[0].parent == tmp_path / "dialogue"
     assert not (tmp_path / "escape").exists()
     assert len(written[0].stem) == 32 and written[0].stem.isalnum()
 
 
+def test_the_file_on_disk_is_encrypted_not_plain_json(tmp_path: Path) -> None:
+    store = FileDialogueStore(tmp_path / "dialogue")
+    tracker(store).accept_proposal("act-1", [tx("tx-1", "Therapy session 4500")])
+
+    (path,) = list((tmp_path / "dialogue").iterdir())
+    raw = path.read_bytes()
+
+    assert path.suffix == ".dat"
+    assert b"Therapy" not in raw and b"tx-1" not in raw and b"act-1" not in raw
+
+
+def test_a_file_protected_for_another_purpose_is_ignored(tmp_path: Path) -> None:
+    store = FileDialogueStore(tmp_path / "dialogue")
+    tracker(store).accept_proposal("act-1")
+    (path,) = list((tmp_path / "dialogue").glob("*.dat"))
+    other = DpapiProtector(b"some.other.purpose").protect(b"{}")
+    path.write_bytes(FileDialogueStore._MAGIC + other)
+
+    assert tracker(store).undo_target() is None
+
+
+def _plain_state_text() -> str:
+    memory = MemoryDialogueStore()
+    tracker(memory).accept_proposal("act-1", [tx("tx-1", "Lunch")])
+    return _encode(memory.load("device-0001"))  # type: ignore[arg-type]
+
+
+def test_a_plain_json_file_from_an_earlier_build_is_migrated_and_removed(tmp_path: Path) -> None:
+    directory = tmp_path / "dialogue"
+    directory.mkdir()
+    store = FileDialogueStore(directory)
+    legacy = directory / (store._path("device-0001").stem + ".json")
+    legacy.write_text(_plain_state_text(), encoding="utf-8")
+
+    assert store.migrate_legacy() == 1
+
+    assert not legacy.exists()
+    resumed = tracker(store)
+    assert resumed.undo_target() == "act-1"
+    assert resumed.resolve_reference("it").entity == tx("tx-1", "Lunch")  # type: ignore[union-attr]
+    assert store.migrate_legacy() == 0
+
+
+def test_a_plain_file_that_is_not_valid_state_is_left_alone_not_deleted(tmp_path: Path) -> None:
+    directory = tmp_path / "dialogue"
+    directory.mkdir()
+    junk = directory / "ab12.json"
+    junk.write_text("{not json", encoding="utf-8")
+    oversized = directory / "cd34.json"
+    oversized.write_text("x" * (MAX_FILE_BYTES + 1), encoding="utf-8")
+
+    assert FileDialogueStore(directory).migrate_legacy() == 0
+
+    assert junk.read_text(encoding="utf-8") == "{not json" and oversized.exists()
+
+
+def test_a_failed_protection_keeps_the_plain_file(tmp_path: Path) -> None:
+    class Broken:
+        def protect(self, data: bytes) -> bytes:
+            raise ProtectionError("no")
+
+        def unprotect(self, data: bytes) -> bytes:
+            raise ProtectionError("no")
+
+    directory = tmp_path / "dialogue"
+    directory.mkdir()
+    legacy = directory / "ab12.json"
+    legacy.write_text(_plain_state_text(), encoding="utf-8")
+
+    assert FileDialogueStore(directory, protector=Broken()).migrate_legacy() == 0
+
+    assert legacy.exists() and not list(directory.glob("*.dat"))
+
+
 def test_a_corrupt_file_starts_fresh_instead_of_failing(tmp_path: Path) -> None:
     store = FileDialogueStore(tmp_path / "dialogue")
     tracker(store).accept_proposal("act-1")
-    (path,) = list((tmp_path / "dialogue").glob("*.json"))
-    path.write_text("{not json", encoding="utf-8")
+    (path,) = list((tmp_path / "dialogue").glob("*.dat"))
+    path.write_bytes(b"{not json")
 
     assert tracker(store).undo_target() is None
 
@@ -275,18 +350,18 @@ def test_a_corrupt_file_starts_fresh_instead_of_failing(tmp_path: Path) -> None:
 def test_a_file_that_is_not_dialogue_state_is_ignored(tmp_path: Path) -> None:
     store = FileDialogueStore(tmp_path / "dialogue")
     tracker(store).accept_proposal("act-1")
-    (path,) = list((tmp_path / "dialogue").glob("*.json"))
+    (path,) = list((tmp_path / "dialogue").glob("*.dat"))
 
     for junk in ("[]", '"text"', "123", '{"committed": [{"nope": 1}]}'):
-        path.write_text(junk, encoding="utf-8")
+        path.write_bytes(junk.encode())
         assert tracker(store).undo_target() is None, junk
 
 
 def test_an_oversized_file_is_ignored(tmp_path: Path) -> None:
     store = FileDialogueStore(tmp_path / "dialogue")
     tracker(store).accept_proposal("act-1")
-    (path,) = list((tmp_path / "dialogue").glob("*.json"))
-    path.write_text(json.dumps({"filler": "x" * (MAX_FILE_BYTES + 10)}), encoding="utf-8")
+    (path,) = list((tmp_path / "dialogue").glob("*.dat"))
+    path.write_bytes(b"x" * (MAX_FILE_BYTES + 10))
 
     assert tracker(store).undo_target() is None
 
@@ -307,7 +382,7 @@ def test_no_temp_files_are_left_behind(tmp_path: Path) -> None:
     for index in range(5):
         dialogue.accept_proposal(f"act-{index}")
 
-    assert [p.suffix for p in (tmp_path / "dialogue").iterdir()] == [".json"]
+    assert [p.suffix for p in (tmp_path / "dialogue").iterdir()] == [".dat"]
 
 
 def test_what_expired_is_removed_from_disk_when_the_state_is_resumed(tmp_path: Path) -> None:
@@ -318,5 +393,18 @@ def test_what_expired_is_removed_from_disk_when_the_state_is_resumed(tmp_path: P
     clock.advance(minutes=45)
     tracker(store, clock)  # resuming drops the stale reference and rewrites the file
 
-    (path,) = list((tmp_path / "dialogue").glob("*.json"))
-    assert "Dentist" not in path.read_text(encoding="utf-8")
+    saved = store.load("device-0001")
+    assert saved is not None and saved.last_referenced == []
+
+
+def test_migration_never_overwrites_a_newer_protected_file(tmp_path: Path) -> None:
+    directory = tmp_path / "dialogue"
+    store = FileDialogueStore(directory)
+    tracker(store).accept_proposal("act-new")
+    legacy = directory / (store._path("device-0001").stem + ".json")
+    legacy.write_text(_plain_state_text(), encoding="utf-8")  # holds act-1
+
+    store.migrate_legacy()
+
+    assert not legacy.exists()
+    assert tracker(store).undo_target() == "act-new"
