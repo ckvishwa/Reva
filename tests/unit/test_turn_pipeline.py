@@ -154,6 +154,7 @@ async def test_a_push_to_talk_turn_runs_stt_router_and_tts(tmp_path: Path) -> No
     assert reply.payload == {
         "text": "Add $12.00 for lunch? Say yes to confirm.",
         "source": "template",
+        "provider": "template",
         "timings_ms": reply.payload["timings_ms"],
     }
     started = next(e for e in events if e.kind == SessionEventKind.TTS_STARTED)
@@ -467,3 +468,39 @@ async def test_ptt_cancel_drops_the_utterance_without_transcribing_it(tmp_path: 
     await rig.pipeline.wait_idle()
 
     assert rig.stt.paths == [] and rig.session.state == SessionState.LISTENING
+
+
+async def test_a_cloud_fallback_is_reported_in_the_reply_event_and_still_spoken(
+    tmp_path: Path,
+) -> None:
+    from reva_core.providers.cloud import AssistantReply
+
+    async def fell_back(text: str, correlation_id: str) -> AssistantReply:
+        return AssistantReply(
+            "Local answer.",
+            "local",
+            "The cloud model was too slow, so I answered with the local model.",
+        )
+
+    rig = Rig(tmp_path, "what is the capital of France", respond=fell_back)
+    await rig.listening()
+
+    await rig.talk()
+    events = await collect(rig)
+
+    final = next(e for e in events if e.kind == SessionEventKind.ASSISTANT_TEXT_FINAL)
+    assert final.payload["text"] == "Local answer."
+    assert final.payload["provider"] == "local"
+    assert "too slow" in final.payload["notice"]
+    assert rig.tts.spoken == ["Local answer."]  # the notice is shown, not spoken over the answer
+
+
+async def test_template_replies_carry_provider_template_and_no_notice(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, "add twelve dollars for lunch")
+    await rig.listening()
+
+    await rig.talk()
+    events = await collect(rig)
+
+    final = next(e for e in events if e.kind == SessionEventKind.ASSISTANT_TEXT_FINAL)
+    assert final.payload["provider"] == "template" and "notice" not in final.payload

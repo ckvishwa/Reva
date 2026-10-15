@@ -1,0 +1,52 @@
+# 50 sentences for the speech-to-text benchmark. Read each aloud at your normal pace.
+# Mix: app commands, finance phrases (amounts, categories), memory, questions, numbers, names.
+open calculator
+close notepad
+open spotify and play something relaxing
+launch visual studio code
+close spotify
+add twelve dollars for lunch
+add forty five fifty for groceries
+I spent eighteen dollars on coffee yesterday
+log two thousand dollars income from freelance work
+make it fifteen
+change that to twenty five dollars
+how much did I spend on dining this month
+what is my budget for transport
+show me my spending on subscriptions this week
+how much have I saved this year
+add a hundred and twenty dollars for rent
+add nine ninety nine for a movie ticket
+record a refund of thirty dollars
+what did I spend today
+undo that
+remember that my locker code is four four seven one
+remember that mum's birthday is on the third of March
+what do you know about my gym schedule
+remind me to call the dentist at seven
+what is on today
+read me my summary
+what is the capital of Australia
+how tall is Mount Everest
+who wrote Pride and Prejudice
+what is fifteen percent of two hundred
+convert ten kilometres to miles
+how many days until Christmas
+tell me a joke
+stop
+repeat that
+open the calculator and the notepad
+what time is it in Tokyo
+is it going to rain tomorrow
+add five dollars for parking and ten dollars for lunch
+set the budget for groceries to four hundred dollars
+transfer five hundred dollars to savings
+pay my electricity bill
+open chrome
+close discord
+open outlook
+log a forty minute run
+how did I sleep this week
+Hey Reva
+cancel that
+no wait make it twenty

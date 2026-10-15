@@ -32,6 +32,7 @@ from typing import Protocol
 from reva_core.language.router import IntentRouter
 from reva_core.models.stt import SpeechToTextProvider, TranscriptionInput, TranscriptionResult
 from reva_core.models.tts import SynthesizedAudio
+from reva_core.providers.cloud import AssistantReply
 from reva_core.session.coordinator import Stage, VoiceSession
 from reva_core.session.events import SessionEventKind
 from reva_core.session.state import INTERRUPTIBLE, SessionState
@@ -63,8 +64,8 @@ class SpeechSynthesizer(Protocol):
     async def synthesize(self, text: str, language: str) -> SynthesizedAudio: ...
 
 
-Responder = Callable[[str, str], Awaitable[str]]
-"""(transcript, correlation_id) -> the assistant's reply text."""
+Responder = Callable[[str, str], Awaitable[str | AssistantReply]]
+"""(transcript, correlation_id) -> the assistant's reply (plain text or an AssistantReply)."""
 
 
 @dataclass(frozen=True)
@@ -341,16 +342,19 @@ class TurnPipeline:
         await session.transition(SessionState.REASONING)
         routed = self._router.route(transcript.text, now=self._now())
         if routed.kind == "chat":
-            reply = await self._ask_assistant(transcript.text, epoch)
-            if reply is None:
+            answer = await self._ask_assistant(transcript.text, epoch)
+            if answer is None:
                 if session.turn_epoch != epoch:
                     record("superseded", transcript=transcript.text, route="chat")
                     return
                 reply, source, outcome = REPLY_FAILED, "template", "model_failed"
+                provider, notice = "template", None
             else:
-                source, outcome = "model", "ok"
+                reply, source, outcome = answer.text, "model", "ok"
+                provider, notice = answer.provider, answer.notice
         else:
             reply, source, outcome = routed.reply or "", "template", "ok"
+            provider, notice = "template", None
         if session.turn_epoch != epoch:
             record("superseded", transcript=transcript.text, route=routed.kind)
             return
@@ -360,7 +364,10 @@ class TurnPipeline:
             route=routed.kind,
             language=transcript.language,
         )
-        session.emit(SessionEventKind.ASSISTANT_TEXT_FINAL, {"text": reply, "source": source})
+        final: dict[str, object] = {"text": reply, "source": source, "provider": provider}
+        if notice is not None:
+            final["notice"] = notice
+        session.emit(SessionEventKind.ASSISTANT_TEXT_FINAL, final)
         await self._speak(reply, transcript.language, epoch)
 
     async def _transcribe(self, pcm: bytes) -> TranscriptionResult | ProviderError | None:
@@ -394,12 +401,13 @@ class TurnPipeline:
             handle.writeframes(pcm)
         return path
 
-    async def _ask_assistant(self, text: str, epoch: int) -> str | None:
+    async def _ask_assistant(self, text: str, epoch: int) -> AssistantReply | None:
         session = self.session
 
-        async def call() -> str | None:
+        async def call() -> AssistantReply | None:
             try:
-                return await self._respond(text, session.correlation_id)
+                answer = await self._respond(text, session.correlation_id)
+                return answer if isinstance(answer, AssistantReply) else AssistantReply(answer)
             except Exception:
                 logger.warning("assistant reply failed", exc_info=True)
                 return None
