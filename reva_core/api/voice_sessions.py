@@ -202,7 +202,10 @@ def build_voice_session_router(
     async def session_events(websocket: WebSocket, session_id: str) -> None:
         if not _authenticated(lifecycle, websocket):
             record_auth_failure(
-                lifecycle, resolve_correlation_id(None), path="/v1/voice/sessions/*/events"
+                lifecycle,
+                resolve_correlation_id(None),
+                path="/v1/voice/sessions/*/events",
+                client=websocket.client.host if websocket.client else None,
             )
             await websocket.close(code=_WS_POLICY_VIOLATION)
             return
