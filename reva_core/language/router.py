@@ -19,13 +19,30 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
+from reva_core.language import outcomes
 from reva_core.language.dialogue import DialogueTracker, Entity, Option
+from reva_core.language.entities import AppResolver
 from reva_core.language.normalizer import TypedValue, normalize
+from reva_core.language.rules import RuleHit, parse
+from reva_core.policy import authorize as policy
+from reva_core.policy.broker import ActionView
+from reva_core.policy.registry import DEFAULT_REGISTRY
 from reva_core.shared.ids import new_id
 
-TurnKind = Literal["proposed", "amended", "accepted", "dismissed", "clarify", "unresolved", "chat"]
+TurnKind = Literal[
+    "proposed", "amended", "accepted", "dismissed", "clarify", "unresolved", "chat",
+    "action", "approval", "refused",
+]  # fmt: skip
+
+LOCAL = "local"
+
+
+class ActionPort(Protocol):
+    """What the router needs from the broker. The router proposes; it never grants."""
+
+    def propose(self, proposal: policy.Proposal) -> ActionView: ...
 
 ENTITY_KIND = "proposal"
 MAX_DESCRIPTION = 40
@@ -69,6 +86,7 @@ class RoutedTurn:
     kind: TurnKind
     reply: str | None = None
     proposal: Proposal | None = None
+    action: ActionView | None = None
 
 
 def money_label(amount_minor: int, currency: str) -> str:
@@ -85,8 +103,16 @@ def _clean_description(text: str) -> str:
 class IntentRouter:
     """One per voice session: remembers the draft being talked about."""
 
-    def __init__(self, dialogue: DialogueTracker) -> None:
+    def __init__(
+        self,
+        dialogue: DialogueTracker,
+        actions: ActionPort | None = None,
+        resolver: AppResolver | None = None,
+    ) -> None:
         self._dialogue = dialogue
+        self._actions = actions
+        self._resolver = resolver or AppResolver(_app_keys())
+        self._guess: RuleHit | None = None  # an app name we only guessed; waiting for yes/no
         self._pending: Proposal | None = None
         self._awaiting_amount: tuple[str, TypedValue, bool] | None = None
 
@@ -106,6 +132,11 @@ class IntentRouter:
             if answered is not None:
                 return answered
 
+        if self._guess is not None:
+            answered = self._answer_guess(cleaned)
+            if answered is not None:
+                return answered
+
         if self._pending is not None:
             if _YES.match(cleaned):
                 return self._accept()
@@ -115,6 +146,11 @@ class IntentRouter:
         amend = _AMEND.match(cleaned)
         if amend is not None:
             return self._amend(amend.group("ref"), normalized.values)
+
+        if self._actions is not None:
+            hit = parse(cleaned, self._resolver)
+            if hit is not None:
+                return self._from_rule(hit)
 
         add = _ADD.match(cleaned)
         if add is not None:
@@ -202,6 +238,62 @@ class IntentRouter:
             return self._set(chosen, description, amended=amended)
         return None
 
+    # ------------------------------------------------------------ the action path
+
+    def _from_rule(self, hit: RuleHit) -> RoutedTurn:
+        if hit.unknown_app is not None:
+            return RoutedTurn("refused", outcomes.UNKNOWN_APP)
+        if hit.guess is not None:
+            # Only a guess ("notepad?" for "note pad"): never act on it, ask first.
+            options = list(hit.guess.entity.candidates) or [str(hit.args["app_key"])]
+            self._guess = hit
+            return RoutedTurn("clarify", outcomes.which_app_question(options[:3]))
+        return self._propose_action(hit.capability, hit.args, hit.entities, hit.unresolved_terms)
+
+    def _propose_action(
+        self,
+        capability: str,
+        args: dict[str, object],
+        entities: tuple[policy.Entity, ...] = (),
+        unresolved: tuple[str, ...] = (),
+    ) -> RoutedTurn:
+        assert self._actions is not None
+        view = self._actions.propose(
+            policy.Proposal(
+                proposal_id=new_id(),
+                capability=capability,
+                args=args,
+                entities=entities,
+                unresolved_terms=unresolved,
+                source="voice",
+                origin_device=LOCAL,
+                target_device=LOCAL,
+            )
+        )
+        if view.status == "allowed":
+            return RoutedTurn("chat", action=view)  # read-only: the assistant answers from data
+        if view.status == "awaiting_approval":
+            reply = outcomes.approval_prompt(capability, args)
+            return RoutedTurn("approval", reply, action=view)
+        if view.status == "granted":
+            return RoutedTurn("action", outcomes.requested_text(capability, args), action=view)
+        reply = view.speak or outcomes.REFUSED_GENERIC
+        return RoutedTurn("refused", reply, action=view)
+
+    def _answer_guess(self, cleaned: str) -> RoutedTurn | None:
+        guess = self._guess
+        assert guess is not None and guess.guess is not None
+        if _NO.match(cleaned):
+            self._guess = None
+            return RoutedTurn("dismissed", "Okay, dropped it.")
+        if not _YES.match(cleaned):
+            self._guess = None  # they said something else; treat it as a new request
+            return None
+        self._guess = None
+        key = str(guess.args["app_key"])
+        confirmed = policy.Entity("app", guess.guess.entity.phrase, policy.Resolution.CONFIRMED)
+        return self._propose_action(guess.capability, {"app_key": key}, (confirmed,))
+
     def _accept(self) -> RoutedTurn:
         assert self._pending is not None
         proposal, self._pending = self._pending, None
@@ -209,6 +301,18 @@ class IntentRouter:
             proposal.action_id,
             [Entity(proposal.action_id, ENTITY_KIND, f"{proposal.label} {proposal.description}")],
         )
+        if self._actions is not None:
+            # A spoken yes is not an approval (T2): the broker waits for a tap on the screen.
+            return self._propose_action(
+                INTENT,
+                {
+                    "amount": float(Decimal(proposal.amount_minor) / 100),
+                    "currency": proposal.currency,
+                    "category": proposal.description or "uncategorised",
+                    "note": proposal.description,
+                },
+                (policy.Entity("amount", proposal.label, policy.Resolution.TYPED_VALUE),),
+            )
         # No executor exists yet (S09): accepting a draft must not sound like a saved transaction.
         return RoutedTurn(
             "accepted",
@@ -233,3 +337,9 @@ def _as_money(number: TypedValue, amount: Decimal, currency: str) -> TypedValue:
         1.0,
     )
     return TypedValue("money", number.phrase, (reading,))
+
+
+def _app_keys() -> tuple[str, ...]:
+    capability = DEFAULT_REGISTRY.get("windows.app.open")
+    assert capability is not None
+    return tuple(capability.args_schema["properties"]["app_key"]["enum"])

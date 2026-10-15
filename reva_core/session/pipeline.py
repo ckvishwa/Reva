@@ -441,9 +441,9 @@ class TurnPipeline:
             domain=domain,
             settings=self.mood_settings,
             events=frozenset({moods.APPROVAL_PENDING})
-            if route in ("proposed", "amended")
+            if route in ("proposed", "amended", "approval")
             else frozenset(),
-            action_in_flight=route in ("proposed", "amended"),
+            action_in_flight=route in ("proposed", "amended", "approval", "action"),
         )
         result = moods.next_mood(self._mood, inputs)
         self._mood = result.state

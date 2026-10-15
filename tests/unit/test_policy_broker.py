@@ -450,7 +450,9 @@ def test_forbidden_capabilities_get_the_refusal_template_and_never_a_grant(name:
     view = broker.propose(proposal(name, {"amount": 500}))
 
     assert view.status == "refused" and view.reason == "FORBIDDEN_CAPABILITY" and view.order is None
-    expected = outcomes.REFUSED_MONEY if name.startswith("finance.") else outcomes.REFUSED_GENERIC
+    expected = {"finance": outcomes.REFUSED_MONEY, "health": outcomes.REFUSED_MEDICAL}.get(
+        name.split(".")[0], outcomes.REFUSED_GENERIC
+    )
     assert view.speak == expected
 
 
