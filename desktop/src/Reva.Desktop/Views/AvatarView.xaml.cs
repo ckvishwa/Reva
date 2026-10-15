@@ -43,6 +43,14 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
         }
 
         _started = true;
+        if (string.Equals(Environment.GetEnvironmentVariable("REVA_DESKTOP_AVATAR"), "off", StringComparison.OrdinalIgnoreCase))
+        {
+            // UI-automation test runs switch the web view off: walking a browser's accessibility tree
+            // makes every UI automation search crawl. The avatar is checked separately (docs/avatar).
+            Fail("Avatar is off for this run.");
+            return;
+        }
+
         DesktopLogger.Info("avatar.webview.starting");
         if (!File.Exists(Path.Combine(AvatarFolder, "index.html")))
         {
@@ -54,7 +62,11 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
         {
             var userData = Path.Combine(RuntimePaths.GetDefaultDataDirectory(), "webview2");
             Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", userData);
-            await Web.EnsureCoreWebView2Async();
+            // The page is one canvas with nothing to read out, so the browser's accessibility tree is switched off:
+            // it would otherwise be walked by every UI automation client that searches this window.
+            var options = new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-renderer-accessibility" };
+            var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, userData, options);
+            await Web.EnsureCoreWebView2Async(environment);
             DesktopLogger.Info("avatar.webview.core_ready");
             Harden(Web.CoreWebView2);
             Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
@@ -137,6 +149,7 @@ public sealed partial class AvatarView : UserControl, IAvatarSink
         core.WebMessageReceived += (_, args) =>
         {
             var message = AvatarProtocol.ParsePageMessage(args.WebMessageAsJson);
+            DesktopLogger.Info("avatar.webview.page_message " + message.Kind + (message.Detail is null ? string.Empty : " " + message.Detail));
             _ui.TryEnqueue(() =>
             {
                 StatusText.Text = message.Kind switch

@@ -52,6 +52,7 @@ public sealed class AppHarness : IDisposable
         start.Environment["REVA_GATEWAY_HOST"] = "127.0.0.1";
         start.Environment["REVA_GATEWAY_PORT"] = FreePort().ToString();
         start.Environment["REVA_CORE_PYTHON_EXE"] = FindPython(repoRoot);
+        start.Environment["REVA_DESKTOP_AVATAR"] = "off"; // see AvatarView: a web view makes UI automation searches crawl
         // This checkout's reva_core must win over any editable install of another checkout.
         start.Environment["PYTHONPATH"] = repoRoot;
 
