@@ -47,7 +47,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-005 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
 | AR-AND-006 | R2 | S12 | PARTIAL | C2 | AND-1-manifest PASS for current manifest; re-verify after C2 intents |
 | AR-AND-007 | R2 | S13 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
-| AR-AND-008 | R2 | S15 | NOT STARTED | C2 | phone->PC actions |
+| AR-AND-008 | R2 | S15 | PARTIAL | C2 | C2a: PC side done (gateway routes, scopes, PC-click approval, evidence-only status); desktop pickup (C2b) and Android sender (C2c) pending; hardware rows NEEDS_HARDWARE |
 | AR-AND-009 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-010 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-011 | R3 | S21 | NOT STARTED | C3 | standalone/offline-lite |
@@ -137,7 +137,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AGT-004 | R1 | S09 | DONE | - | B3a-signed-grants, B3a-t2-click-only: replay and substitution refused |
 | AR-AGT-005 | R1 | S09 | DONE | - | B3c-open-needs-window, B3c-close-verified-when-gone, B3c-expense-confirm-card (kernel_event) |
 | AR-AGT-006 | R1 | S09 | DONE | - | B3a-t2-click-only: speech-only, stale and substituted approvals refused |
-| AR-AGT-007 | R2 | S15 | NOT STARTED | C2 |  |
+| AR-AGT-007 | R2 | S15 | PARTIAL | C2 | C2a: phone requests authorized by the PC broker against sender scope AND target policy; substitution/replay/duplicate/revoke tests (tests/gateway/test_phone_actions.py); Android sender and phone-only-approval-fails on a device in C2c |
 | AR-AGT-008 | R2 | S21 | NOT STARTED | C2 |  |
 | AR-AGT-009 | R1 | S09 | NOT STARTED | planner | planner loop exists only on wip/planner-reasoning, not on main |
 | AR-AGT-010 | R4 | S27 | PARTIAL | F3 | B3a-ledger-append-only + B3c-activity-page; reconciliation hardening in F3 |

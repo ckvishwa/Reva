@@ -133,6 +133,16 @@ class GrantStore:
             )
             return cur.rowcount == 1
 
+    def set_scopes(self, device_id: str, scopes: tuple[str, ...]) -> bool:
+        """Replace the scopes of an ACTIVE grant (the owner's choice, made on this PC). A revoked
+        grant is never changed: re-pairing makes a new one."""
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE device_grants SET scopes = ? WHERE device_id = ? AND status = 'active'",
+                (json.dumps(list(scopes)), device_id),
+            )
+            return cur.rowcount == 1
+
     def touch(self, device_id: str) -> None:
         with self._lock:
             self._conn.execute(

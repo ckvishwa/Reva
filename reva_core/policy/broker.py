@@ -12,9 +12,11 @@ Every step is appended to the action ledger.
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
 import secrets
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -54,6 +56,18 @@ OUTCOME_ORDER = {
 TERMINAL = frozenset({"verified", "failed", "unknown", "denied"})
 
 
+def _synchronized(method: Callable[..., Any]) -> Callable[..., Any]:
+    """One request at a time through the broker: the gateway (a phone asking) and the Core API (this
+    PC's app) run on different threads and must not interleave on the same records."""
+
+    @functools.wraps(method)
+    def wrapper(self: Broker, *args: Any, **kwargs: Any) -> Any:
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class BrokerFull(Exception):
     """Too many actions are waiting; the caller should retry later."""
 
@@ -82,6 +96,8 @@ class ActionRecord:
     signature: str | None = None
     evidence: dict[str, Any] | None = None
     note: str | None = None
+    # A signed order handed to the executor through the remote inbox; never handed out twice.
+    delivered: bool = False
 
 
 @dataclass(frozen=True)
@@ -133,7 +149,14 @@ class Broker:
     _decisions: dict[str, AuthorizationDecision] = field(default_factory=dict)
     _listeners: list[Listener] = field(default_factory=list)
     _registry_cache: tuple[tuple[str, ...], Registry] | None = None
+    _lock: threading.RLock = field(default_factory=threading.RLock)
+    _remote_seq: int = 0
+    _remote_changed: threading.Condition = field(init=False)
 
+    def __post_init__(self) -> None:
+        self._remote_changed = threading.Condition(self._lock)
+
+    @_synchronized
     def subscribe(self, listener: Listener) -> None:
         """Called with the new view after an action changes outside the request that made it
         (an executor's report, a timeout). A listener must never raise or block."""
@@ -148,6 +171,9 @@ class Broker:
         return self._registry_cache[1]
 
     def _notify(self, view: ActionView) -> None:
+        record = self._records.get(view.action_id)
+        if record is not None and record.proposal.source == "phone":
+            self._bump_remote()
         for listener in list(self._listeners):
             try:
                 listener(view)
@@ -156,6 +182,7 @@ class Broker:
 
     # ---------------------------------------------------------------------- propose
 
+    @_synchronized
     def propose(
         self,
         proposal: Proposal,
@@ -224,10 +251,13 @@ class Broker:
         else:
             record.status = "refused"
             self._log(record, "refused", {"reason": decision.reason})
+        if proposal.source == "phone":
+            self._bump_remote()  # the PC's app is waiting on this: a card or an order
         return self._view(record, decision)
 
     # ---------------------------------------------------------------------- approval
 
+    @_synchronized
     def approve(self, action_id: str, *, via: str, device: str, user: str = "owner") -> ActionView:
         """A click or tap on `device`. A spoken yes or the wrong screen is rejected."""
         now = self.clock()
@@ -258,6 +288,7 @@ class Broker:
         self._notify(view)
         return view
 
+    @_synchronized
     def deny(self, action_id: str, *, via: str = "click") -> ActionView:
         record = self._get(action_id)
         if record.status == "awaiting_approval":
@@ -269,6 +300,7 @@ class Broker:
 
     # ---------------------------------------------------------------------- outcome
 
+    @_synchronized
     def report(
         self,
         action_id: str,
@@ -319,16 +351,98 @@ class Broker:
 
     # ---------------------------------------------------------------------- reading
 
+    @_synchronized
     def expire(self) -> None:
         """Refresh expired actions before serving views built directly from the ledger."""
         self._expire(self.clock())
 
+    @_synchronized
     def get(self, action_id: str) -> ActionView:
         self._expire(self.clock())
         return self._view(self._get(action_id))
 
+    @_synchronized
     def decision(self, action_id: str) -> AuthorizationDecision | None:
         return self._decisions.get(action_id)
+
+    # ---------------------------------------------------------------- requests from other devices
+
+    def _bump_remote(self) -> None:
+        self._remote_seq += 1
+        self._remote_changed.notify_all()
+
+    @_synchronized
+    def knows(self, action_id: str) -> bool:
+        return action_id in self._records
+
+    @_synchronized
+    def open_for_origin(self, origin_device: str) -> int:
+        """How many requests from this device are still waiting or in flight."""
+        return sum(
+            1
+            for r in self._records.values()
+            if r.proposal.origin_device == origin_device
+            and r.proposal.source == "phone"
+            and r.status in OPEN
+        )
+
+    @_synchronized
+    def remote_seq(self) -> int:
+        return self._remote_seq
+
+    def wait_remote(self, after: int, timeout: float) -> int:
+        """Block until a phone's request changed after `after`, or `timeout` seconds pass."""
+        with self._lock:
+            self._remote_changed.wait_for(lambda: self._remote_seq > after, timeout)
+            return self._remote_seq
+
+    @_synchronized
+    def remote_inbox(self, *, active_origins: Callable[[str], bool]) -> list[ActionView]:
+        """What this PC's app has to do for requests from phones: cards to show (awaiting a click
+        on this PC) and signed orders to run. An order is handed out once; a request from a device
+        that is no longer active is dropped, never handed to the executor."""
+        now = self.clock()
+        self._expire(now)
+        out: list[ActionView] = []
+        for record in self._records.values():
+            if record.proposal.source != "phone":
+                continue
+            if record.status == "awaiting_approval":
+                if not active_origins(record.proposal.origin_device):
+                    self._withdraw(record, "DEVICE_REVOKED")
+                    continue
+                out.append(self._view(record))
+            elif record.status == "granted" and not record.delivered:
+                if not active_origins(record.proposal.origin_device):
+                    self._withdraw(record, "DEVICE_REVOKED")
+                    continue
+                record.delivered = True  # in memory only; the ledger has no "delivered" kind
+                out.append(self._view(record))
+        return out
+
+    @_synchronized
+    def cancel_for_origin(self, origin_device: str) -> int:
+        """The device was revoked: its waiting requests and orders nobody has picked up are
+        withdrawn. An order the executor already holds cannot be recalled; it still reports."""
+        cancelled = 0
+        for record in self._records.values():
+            if record.proposal.origin_device != origin_device or record.proposal.source != "phone":
+                continue
+            if record.status == "awaiting_approval" or (
+                record.status == "granted" and not record.delivered
+            ):
+                self._withdraw(record, "DEVICE_REVOKED")
+                cancelled += 1
+        return cancelled
+
+    def _withdraw(self, record: ActionRecord, reason: str) -> None:
+        record.status = "denied"
+        record.reason = reason
+        record.grant = None
+        record.signature = None
+        record.deadline = None
+        self._log(record, "denied", {"via": "system", "reason": reason})
+        self._notify(self._view(record))
 
     # ---------------------------------------------------------------------- internals
 
