@@ -79,7 +79,7 @@ def verify(verifier: GrantVerifier, order, clock: Clock, **overrides):
 
 GOOD_EVIDENCE = {
     "windows.app.open": {"kind": "process_started", "ref": "pid:4242 window:0x1"},
-    "windows.app.close": {"kind": "process_exited", "ref": "pid:4242"},
+    "windows.app.close": {"kind": "process_exited", "ref": "pid:4242 exited"},
     "finance.add_transaction": {"kind": "kernel_event", "ref": "evt-12345678"},
 }
 
@@ -266,7 +266,7 @@ def test_verified_without_proper_evidence_is_recorded_as_unknown(evidence) -> No
 
     done = broker.report(view.action_id, view.order.grant.grant_id, "verified", evidence)
 
-    assert done.status == "unknown" and done.speak == outcomes.UNKNOWN
+    assert done.status == "unknown" and done.speak == outcomes.OPEN_UNKNOWN
     assert "opened" not in (done.speak or "").lower()
 
 
@@ -274,7 +274,7 @@ def test_failed_and_denied_never_sound_like_success() -> None:
     for status, text in (
         ("failed", outcomes.FAILED),
         ("denied", outcomes.DENIED),
-        ("unknown", outcomes.UNKNOWN),
+        ("unknown", outcomes.OPEN_UNKNOWN),
     ):
         broker, _, _, _ = make()
         view = broker.propose(proposal())

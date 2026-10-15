@@ -272,7 +272,10 @@ def test_the_voice_expense_goes_to_the_broker_on_yes_and_waits_for_a_tap() -> No
     accepted = router.route("yes", now=NOW)
 
     assert drafted.kind == "proposed"
-    assert accepted.kind == "approval" and accepted.reply == outcomes.ASK_ON_SCREEN
+    assert (
+        accepted.kind == "approval"
+        and accepted.reply == "Add $12.00 for Food · Dining? Confirm on screen."
+    )
     assert accepted.action is not None and accepted.action.capability == "finance.add_transaction"
     assert accepted.action.status == "awaiting_approval" and accepted.action.order is None
     approved = broker.approve(accepted.action.action_id, via="tap", device="local")

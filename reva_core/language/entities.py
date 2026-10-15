@@ -60,10 +60,17 @@ class AppMatch:
 
 
 class AppResolver:
-    def __init__(self, keys: tuple[str, ...], *, shadow: Shadow | None = None) -> None:
+    def __init__(
+        self,
+        keys: tuple[str, ...],
+        *,
+        shadow: Shadow | None = None,
+        aliases: Mapping[str, tuple[str, ...]] | None = None,
+    ) -> None:
         self._keys = keys
+        table = ALIASES if aliases is None else aliases
         self._aliases = {
-            alias: key for key, names in ALIASES.items() if key in keys for alias in names
+            alias: key for key, names in table.items() if key in keys for alias in names
         }
         self._shadow = shadow
 

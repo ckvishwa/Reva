@@ -44,6 +44,7 @@ from reva_core.language.dialogue import FileDialogueStore
 from reva_core.language.router import IntentRouter
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.orchestration.typed_interaction import TypedInteractionService
+from reva_core.policy.broker import ActionView
 from reva_core.providers.cloud import HybridResponder
 from reva_core.session.coordinator import SessionCoordinator, VoiceSession
 from reva_core.session.events import SessionErrorCode, SessionEventKind
@@ -99,6 +100,14 @@ def build_voice_session_router(
         dialogue_store=dialogue_store,
     )
     pipelines: dict[str, TurnPipeline] = {}
+
+    if lifecycle.broker is not None:
+
+        def relay_action(view: ActionView) -> None:
+            for running in list(pipelines.values()):
+                running.on_action_update(view)
+
+        lifecycle.broker.subscribe(relay_action)
     scratch = lifecycle.settings.data_dir / "tmp" / "voice"
     recorder = TurnRecorder(
         lifecycle.settings.data_dir / "turns", enabled=lifecycle.settings.turn_recording_enabled
@@ -125,7 +134,12 @@ def build_voice_session_router(
             stt=lifecycle.speech_to_text_provider,
             tts=lifecycle.text_to_speech_provider,
             respond=reply_text,
-            router=IntentRouter(session.dialogue, lifecycle.broker),
+            router=IntentRouter(
+                session.dialogue,
+                lifecycle.broker,
+                resolver=lifecycle.apps.resolver,
+                app_names=lifecycle.apps.display_names,
+            ),
             recorder=recorder,
             scratch_dir=scratch,
         )

@@ -73,6 +73,7 @@ class ActionResponse(BaseModel):
     speak: str | None = None
     clarification: dict[str, Any] | None = None
     evidence_kind: str | None = None
+    prompt: str | None = None
     order: dict[str, Any] | None = None
 
 
@@ -98,6 +99,7 @@ def _response(view: ActionView, *, with_order: bool) -> ActionResponse:
         speak=view.speak,
         clarification=view.clarification,
         evidence_kind=view.evidence_kind,
+        prompt=view.prompt,
         order=order,
     )
 

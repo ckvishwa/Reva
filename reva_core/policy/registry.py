@@ -8,6 +8,7 @@ deletion, sending email, ...) are refused by name even though they are not in th
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass
 from enum import StrEnum
@@ -50,6 +51,7 @@ DOMAINS = frozenset(
 
 class Registry:
     def __init__(self, document: dict[str, Any]) -> None:
+        self._document = document
         self.revision = int(document["registry_revision"])
         self.forbidden_prefixes = tuple(document["forbidden_capability_prefixes"])
         self._capabilities: dict[str, Capability] = {}
@@ -81,6 +83,15 @@ class Registry:
 
     def names(self) -> tuple[str, ...]:
         return tuple(self._capabilities)
+
+    def with_app_keys(self, keys: tuple[str, ...]) -> Registry:
+        """A copy whose app-name enums are exactly `keys` (the built-in apps plus the ones the owner
+        approved). Nothing else changes: tier, evidence and the rest stay fixed."""
+        document = copy.deepcopy(self._document)
+        for entry in document["capabilities"]:
+            if entry["capability"] in ("windows.app.open", "windows.app.close"):
+                entry["args_schema"]["properties"]["app_key"]["enum"] = list(keys)
+        return Registry(document)
 
     def __contains__(self, name: object) -> bool:
         return name in self._capabilities
