@@ -27,6 +27,8 @@ public sealed partial class MainWindow : Window
 
     public DevicesViewModel Devices { get; }
 
+    public LiveVoiceViewModel LiveVoiceModel { get; }
+
     public MainWindow(
         ShellViewModel shell,
         AssistantViewModel assistant,
@@ -35,6 +37,7 @@ public sealed partial class MainWindow : Window
         FinanceViewModel finance,
         TodayViewModel today,
         DevicesViewModel devices,
+        LiveVoiceViewModel liveVoice,
         WakeWordCoordinator? wakeWord = null)
     {
         // Set before InitializeComponent: x:Bind reads these while the tree is built.
@@ -45,6 +48,7 @@ public sealed partial class MainWindow : Window
         Finance = finance;
         Today = today;
         Devices = devices;
+        LiveVoiceModel = liveVoice;
         WakeWord = wakeWord;
         InitializeComponent();
         Title = "REVA";
@@ -149,6 +153,16 @@ public sealed partial class MainWindow : Window
         }
 
         args.Handled = true;
+
+        // Live voice first: the microphone and the hotkey hook must be released before Core stops.
+        try
+        {
+            await LiveVoiceModel.TurnOffAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        catch (Exception)
+        {
+            // a stuck voice session must never keep the app from closing
+        }
 
         _changes?.Dispose();
         Assistant.DetachLifecycle();
