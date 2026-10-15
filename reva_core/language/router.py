@@ -44,6 +44,7 @@ class ActionPort(Protocol):
 
     def propose(self, proposal: policy.Proposal) -> ActionView: ...
 
+
 ENTITY_KIND = "proposal"
 MAX_DESCRIPTION = 40
 INTENT = "finance.add_transaction"
