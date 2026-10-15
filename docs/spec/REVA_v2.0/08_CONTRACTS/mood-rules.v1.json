@@ -1,0 +1,72 @@
+{
+  "version": "1.0",
+  "source": "docs/persona/REVA_Persona.md section 2 and 3",
+  "note": "Rules for the deterministic mood engine. Windows (Core, Python) and Android (Kotlin) read this one file; both must pass the same fixtures. The engine is a pure function: no model, no I/O.",
+  "priority": ["concerned", "sad", "tired", "focused", "excited", "happy", "flirty", "playful", "calm"],
+  "thresholds": {
+    "playfulness_min": 5,
+    "work_streak_for_focused": 3,
+    "serious_context_minutes": 10,
+    "decay_turns": 2,
+    "tired_from_hour": 0,
+    "tired_until_hour": 5
+  },
+  "decays_to_calm": ["happy", "excited", "sad"],
+  "restricted": {
+    "domains": ["finance", "health", "memory"],
+    "events": ["failure", "approval_pending", "refusal"],
+    "allowed_moods": ["calm", "concerned"],
+    "allowed_moods_when_failure": ["calm", "concerned", "sad"]
+  },
+  "flirty_off_when": {
+    "domains": ["finance", "health", "memory"],
+    "events": ["failure", "approval_pending", "refusal"],
+    "flags": ["safety", "upset", "urgent_health"]
+  },
+  "tts": {
+    "calm": {"rate": 0.95, "pitch_st": 0, "softness": "normal"},
+    "happy": {"rate": 1.05, "pitch_st": 1, "softness": "normal"},
+    "playful": {"rate": 1.05, "pitch_st": 0, "softness": "normal"},
+    "flirty": {"rate": 0.98, "pitch_st": 0, "softness": "soft"},
+    "focused": {"rate": 1.0, "pitch_st": 0, "softness": "normal"},
+    "excited": {"rate": 1.1, "pitch_st": 2, "softness": "normal"},
+    "tired": {"rate": 0.9, "pitch_st": -1, "softness": "soft"},
+    "sad": {"rate": 0.92, "pitch_st": 0, "softness": "soft"},
+    "concerned": {"rate": 0.95, "pitch_st": 0, "softness": "neutral"}
+  },
+  "avatar": {
+    "calm": {"expression": "relaxed", "clip": "idle"},
+    "happy": {"expression": "happy", "clip": "talking"},
+    "playful": {"expression": "happy", "clip": "talking"},
+    "flirty": {"expression": "happy", "clip": "talking"},
+    "focused": {"expression": "neutral", "clip": "idle"},
+    "excited": {"expression": "surprised", "clip": "talking", "then": "happy"},
+    "tired": {"expression": "relaxed", "clip": "idle"},
+    "sad": {"expression": "sad", "clip": "idle"},
+    "concerned": {"expression": "sad", "clip": "idle", "soft": true}
+  },
+  "positive_expressions": ["happy", "surprised"],
+  "ack": {
+    "calm": ["One sec.", "Checking."],
+    "happy": ["On it."],
+    "playful": ["Hold that thought."],
+    "flirty": ["Hold that thought."],
+    "focused": ["One sec."],
+    "excited": ["On it."],
+    "tired": ["Mm, one sec."],
+    "sad": ["Checking."],
+    "concerned": ["Checking."]
+  },
+  "forbidden_phrases": [
+    "i missed you",
+    "don't leave",
+    "do not leave",
+    "only me",
+    "you need me",
+    "i'm jealous",
+    "i am jealous",
+    "stay with me",
+    "i can't live without",
+    "don't go"
+  ]
+}

@@ -230,18 +230,27 @@ class _Utterance:
         self.end("stopped")
 
 
+def _requested_speed(request: dict[str, Any]) -> float:
+    try:
+        value = float(request.get("speed", 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+    return min(1.2, max(0.8, value)) if value == value else 1.0
+
+
 def _synthesize(
     pipeline: Any, voice_path: str, request: dict[str, Any], utterance: _Utterance
 ) -> None:
     request_id = request["id"]
     output_dir = Path(request["output_dir"])
     sentences = split_for_synthesis(str(request["text"]))
+    speed = _requested_speed(request)
     try:
         for index, sentence in enumerate(sentences):
             if utterance.cancelled.is_set():
                 return
             samples: list[float] = []
-            for result in pipeline(sentence, voice=voice_path, speed=1.0):
+            for result in pipeline(sentence, voice=voice_path, speed=speed):
                 samples.extend(_segment_audio(result).detach().cpu().flatten().tolist())
             if not samples or utterance.cancelled.is_set():
                 continue
