@@ -56,6 +56,7 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 7. Voice/model assets live in `F:\reva-assets` (read it from `REVA_ASSET_ROOT`). They load only if their SHA-256 matches `assets.manifest.json` and provenance is filled. Never use anything in `_excluded\`.
 8. No new services, brokers or databases beyond the ARDs.
 9. Evidence or it didn't happen. Paste real test output. Anything that needs my mic, speakers, phone or GPU is marked `NEEDS_HARDWARE` with exact steps for me. Never report a skipped or mocked test as PASS. Add rows to `tests/evidence/ledger.csv` once it exists (S03).
+10. **Never delete, skip or xfail a failing test to get green.** A failing test is a bug report: fix the code, or stop and ask. If a test is wrong, say so and change it in its own commit with the reason.
 
 ## Safety invariants (break one = stop and ask)
 

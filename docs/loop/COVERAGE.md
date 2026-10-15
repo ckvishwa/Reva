@@ -67,7 +67,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-CORE-007 | R2 | S13 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
 | AR-CORE-008 | R3 | S20 | NOT STARTED | B4 |  |
 | AR-CORE-009 | R1 | S06 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
-| AR-CORE-010 | R1 | S20 | PARTIAL | B4 | consent filter built and tested; per-domain network-capture test in B4 |
+| AR-CORE-010 | R1 | S20 | PARTIAL | G4 | filter exists and is tested at the SDK boundary; no domain context is passed to the cloud path yet, so it is enforced only when the context builder lands (G4). The spoken transcript is sent whenever cloud is on (disclosed) |
 | AR-CORE-011 | R4 | S27 | NOT STARTED | B4 |  |
 | AR-CORE-012 | R1 | S06 | PARTIAL | B4 | bounded queues exist in session/coordinator; saturation tests + doc missing |
 | AR-CORE-013 | R4 | S27 | NOT STARTED | B4 |  |
