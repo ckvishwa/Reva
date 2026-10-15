@@ -1,7 +1,16 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { debugFrame, dist, launch, openAvatar, renders, send, startServer } from './helpers.mjs';
+import {
+  SLOW_RUNNER_MS,
+  debugFrame,
+  dist,
+  launch,
+  openAvatar,
+  renders,
+  send,
+  startServer,
+} from './helpers.mjs';
 
 const built = existsSync(`${dist}/placeholder.vrm`);
 const skip = built ? false : 'avatar/dist has no model: run "npm run build" with Git LFS files pulled';
@@ -22,6 +31,8 @@ test('the page loads offline from local files only and reports ready', { skip },
   const blocked = [];
   const context = await browser.newContext();
   const page = await context.newPage();
+  page.setDefaultTimeout(SLOW_RUNNER_MS);
+  page.setDefaultNavigationTimeout(SLOW_RUNNER_MS);
   await page.route('**/*', (route) => {
     const url = route.request().url();
     if (url.startsWith(server.origin)) return route.continue();
@@ -34,7 +45,7 @@ test('the page loads offline from local files only and reports ready', { skip },
     window.__revaHostOutbox = [];
   });
   await page.goto(`${server.origin}/index.html?debug=1`);
-  await page.waitForFunction(() => window.__revaHostOutbox.length > 0, null, { timeout: 90000 });
+  await page.waitForFunction(() => window.__revaHostOutbox.length > 0, null, { timeout: SLOW_RUNNER_MS });
 
   assert.deepEqual(await page.evaluate(() => window.__revaHostOutbox), [{ type: 'avatar.ready' }]);
   assert.deepEqual(blocked, [], 'the page tried to reach outside the local files');
@@ -104,7 +115,7 @@ test('the model name can only be a plain local .vrm file name', { skip }, async 
 test('the avatar mirrors states, drops stale epochs and moves the mouth only while speaking', { skip }, async () => {
   const { page } = await openAvatar(browser, server.origin);
 
-  const until = (state) => page.waitForFunction((s) => window.__revaAvatarDebug.frame?.state === s, state, { timeout: 15000 });
+  const until = (state) => page.waitForFunction((s) => window.__revaAvatarDebug.frame?.state === s, state, { timeout: SLOW_RUNNER_MS });
   await send(page, { type: 'avatar.state', state: 'listening', turn_epoch: 3 });
   const refused = await send(page, { type: 'avatar.mouth', t_ms: 0, rms: 1, turn_epoch: 3 });
   await until('listening');
