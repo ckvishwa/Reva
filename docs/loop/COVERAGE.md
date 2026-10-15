@@ -1,8 +1,8 @@
 # REVA 2.0 coverage audit (Phase A)
 
-Audit date 2026-10-15, main at 8f2924e. Source: `07_TRACEABILITY/v2_requirements.csv` (207 rows) and `tests/evidence/ledger.csv`. DONE = a ledger PASS row exists (open hardware rows noted). Nothing is DONE from code presence alone.
+Audit date 2026-10-15 (updated after B0, B1a-d, B2a-c; main at 0c39678). Source: `07_TRACEABILITY/v2_requirements.csv` (207 rows) and `tests/evidence/ledger.csv`. DONE = a ledger PASS row exists (open hardware rows noted). Nothing is DONE from code presence alone.
 
-Totals: DONE 42, PARTIAL 41, NOT STARTED 123, DEFERRED 1
+Totals: DONE 65, PARTIAL 44, NOT STARTED 97, DEFERRED 1
 
 Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = nothing left.
 
@@ -27,18 +27,18 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-WIN-001 | P0 | S01 | DONE | - | ledger PASS; wake-word-with-mic row NEEDS_HARDWARE (B1.6) |
 | AR-WIN-002 | P0 | S02 | DONE | - | ledger PASS; wake-word-with-mic row NEEDS_HARDWARE (B1.6) |
 | AR-WIN-003 | R1 | S07 | PARTIAL | B1 | Finance VM only (ledger row); audio/avatar work lands B1/B2 |
-| AR-WIN-004 | R1 | S07 | NOT STARTED | B1 | NAudio capture, PTT, mute |
-| AR-WIN-005 | R1 | S08 | NOT STARTED | B2 | avatar host |
-| AR-WIN-006 | R1 | S08 | NOT STARTED | B2 | avatar host |
-| AR-WIN-007 | R1 | S08 | NOT STARTED | B2 | avatar host |
+| AR-WIN-004 | R1 | S07 | DONE | - | B1b/B2c tests; hardware row AR-WIN-004-hardware open |
+| AR-WIN-005 | R1 | S08 | PARTIAL | B2 | local flush on PTT press + epoch cut tested; 300 ms p95 on speakers open (hardware) |
+| AR-WIN-006 | R1 | S08 | DONE | - | B2b browser tests + B2c host policy; real launch ready |
+| AR-WIN-007 | R1 | S08 | PARTIAL | B2 | 60 fps cap + pause when hidden tested; <15% GPU on reference laptop open (hardware) |
 | AR-WIN-008 | R1 | S09 | NOT STARTED | B3 | executor + grants |
 | AR-WIN-009 | R1 | S09 | NOT STARTED | B3 | executor + grants |
-| AR-WIN-010 | R1 | S07 | NOT STARTED | B1 | NAudio capture, PTT, mute |
+| AR-WIN-010 | R1 | S07 | DONE | - | Ctrl+Space hook ignores injected keys; hardware row open |
 | AR-WIN-011 | R2 | S23 | NOT STARTED | E3 | UIA |
 | AR-WIN-012 | R1 | S10 | PARTIAL | D1-D5 | Finance page via Core API only; other domain pages in D |
 | AR-WIN-013 | R4 | S25 | NOT STARTED | F1 | installer |
 | AR-WIN-014 | R4 | S25 | NOT STARTED | F1 | installer |
-| AR-WIN-015 | R1 | S07 | NOT STARTED | B1 | NAudio capture, PTT, mute |
+| AR-WIN-015 | R1 | S07 | DONE | - | mic/speaker mute, device select, device loss -> idle; unplug test open (hardware) |
 | AR-WIN-016 | R2 | S23 | NOT STARTED | E3 | UIA |
 | AR-AND-001 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
 | AR-AND-002 | R2 | S12 | NOT STARTED | C1 | Android voice/avatar |
@@ -58,31 +58,31 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-016 | R4 | S26 | PARTIAL | F2 | debug APK only; signed APK/AAB in F2 |
 | AR-AND-017 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-018 | R2 | S11 | PARTIAL | C1 | AR-DOM-015-android PASS for Kernel; capture/recognition lands C1 |
-| AR-CORE-001 | R1 | S06 | PARTIAL | B1 | TTS epoch per session PASS; STT/model/tool cancellation wired in B1 |
+| AR-CORE-001 | R1 | S06 | PARTIAL | B1 | TTS and STT/model stages cancelled by epoch in the pipeline; tool stage arrives with S09 |
 | AR-CORE-002 | R1 | S06 | PARTIAL | B1 | stage timings exist; separate deadlines per stage to confirm in B1 |
-| AR-CORE-003 | R1 | S05 | PARTIAL | B1 | providers/registry.py + Kokoro; Ollama default / hosted opt-in in B1.5/B1.7 |
+| AR-CORE-003 | R1 | S05 | PARTIAL | B1 | registry + Kokoro + opt-in Anthropic provider; selection by capability for all kinds continues |
 | AR-CORE-004 | P0 | S03 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
 | AR-CORE-005 | R1 | S06 | PARTIAL | B4 | session/turn ids on session events; correlation on all events audited in B4 |
 | AR-CORE-006 | R1 | S06 | NOT STARTED | B4 |  |
 | AR-CORE-007 | R2 | S13 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
 | AR-CORE-008 | R3 | S20 | NOT STARTED | B4 |  |
 | AR-CORE-009 | R1 | S06 | DONE | - | S03 env guard; AR-DATA-005/006; AR-CORE-009 ledger row |
-| AR-CORE-010 | R1 | S20 | NOT STARTED | B4 |  |
+| AR-CORE-010 | R1 | S20 | PARTIAL | B4 | consent filter built and tested; per-domain network-capture test in B4 |
 | AR-CORE-011 | R4 | S27 | NOT STARTED | B4 |  |
 | AR-CORE-012 | R1 | S06 | PARTIAL | B4 | bounded queues exist in session/coordinator; saturation tests + doc missing |
 | AR-CORE-013 | R4 | S27 | NOT STARTED | B4 |  |
-| AR-VA-001 | R1 | S07 | NOT STARTED | B1 | capture/STT path |
-| AR-VA-002 | R1 | S07 | NOT STARTED | B1 | capture/STT path |
-| AR-VA-003 | R1 | S07 | NOT STARTED | B1 | capture/STT path |
+| AR-VA-001 | R1 | S07 | DONE | - | NAudio capture/playback behind interfaces |
+| AR-VA-002 | R1 | S07 | DONE | - | bounded buffers, overlong utterances discarded whole |
+| AR-VA-003 | R1 | S07 | DONE | - | one mic owner via arbiter |
 | AR-VA-004 | R1 | S06 | DONE | - | S06-per-session-epoch, VOICE-1 kokoro-real/e2e, manifest refusals, S06-stage-timings |
-| AR-VA-005 | R1 | S07 | NOT STARTED | B1 | capture/STT path |
+| AR-VA-005 | R1 | S07 | DONE | - | only final transcript reaches the router |
 | AR-VA-006 | R1 | S07 | NOT STARTED | B1 | capture/STT path |
-| AR-VA-007 | R1 | S07 | PARTIAL | B1 | S06 fixture clips for CI; physical-mic suite with opt-in arrives B1 |
+| AR-VA-007 | R1 | S07 | PARTIAL | B1 | fixture clips for CI; physical-mic suite via STT benchmark tool (hardware) |
 | AR-VA-008 | R1 | S05 | DONE | - | S06-per-session-epoch, VOICE-1 kokoro-real/e2e, manifest refusals, S06-stage-timings |
-| AR-VA-009 | R1 | S08 | NOT STARTED | B2 | avatar |
-| AR-VA-010 | R1 | S08 | NOT STARTED | B2 | avatar |
-| AR-VA-011 | R1 | S08 | NOT STARTED | B2 | avatar |
-| AR-VA-012 | R1 | S08 | NOT STARTED | B2 | avatar |
+| AR-VA-009 | R1 | S08 | DONE | - | avatar mirrors host state incl. approval |
+| AR-VA-010 | R1 | S08 | PARTIAL | B2 | offset estimator + delay setting built; 100 ms p95 on speakers open (hardware) |
+| AR-VA-011 | R1 | S08 | DONE | - | mood engine + page + host enforce verified_outcome+action_id |
+| AR-VA-012 | R1 | S08 | DONE | - | Settings > Avatar: off, reduced motion, quality |
 | AR-VA-013 | R3 | S24 | NOT STARTED | E4 |  |
 | AR-VA-014 | R3 | S24 | NOT STARTED | E4 |  |
 | AR-VA-015 | R3 | S24 | NOT STARTED | E4 |  |
@@ -91,13 +91,13 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-VA-018 | R1 | S07 | NOT STARTED | B1 | capture/STT path |
 | AR-VA-019 | R1 | S06 | PARTIAL | B1 | session events carry timings; cancel id and sequence to confirm |
 | AR-VA-020 | R1 | S05 | DONE | - | S06-per-session-epoch, VOICE-1 kokoro-real/e2e, manifest refusals, S06-stage-timings |
-| AR-VA-021 | R1 | S05 | PARTIAL | B1 | first-audio muted PASS 430 ms, stop PASS, orphans PASS; speaker run + STT CER NEEDS_HARDWARE; blind comparison NOT_APPLICABLE (B0) |
+| AR-VA-021 | R1 | S05 | PARTIAL | B1 | first audio 430 ms muted PASS; speaker run, STT CER open (hardware) |
 | AR-VA-022 | R1 | S06 | DONE | - | S06-per-session-epoch, VOICE-1 kokoro-real/e2e, manifest refusals, S06-stage-timings |
-| AR-LANG-001 | R1 | S07 | PARTIAL | B1 | normalizer takes finals; STT path in B1 |
+| AR-LANG-001 | R1 | S07 | DONE | - | final transcripts only |
 | AR-LANG-002 | R1 | S06 | DONE | - | S06-normalizer (114 tests), S06-ack-first |
 | AR-LANG-003 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
 | AR-LANG-004 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
-| AR-LANG-005 | R1 | S06 | PARTIAL | B0/B1 | S06-dialogue-state PASS; at-rest encryption B0; reference()/accept_proposal wiring B1.3 |
+| AR-LANG-005 | R1 | S06 | DONE | - | reference() and accept_proposal() wired through the router; at-rest DPAPI (B0) |
 | AR-LANG-006 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
 | AR-LANG-007 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
 | AR-LANG-008 | R1 | S09 | NOT STARTED | B3 | rules/ladder/authorize |
@@ -106,7 +106,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-LANG-011 | R1 | S10 | NOT STARTED | D1 | gap (spec S10): grounded answers folded into D1 Memory |
 | AR-LANG-012 | R1 | S10 | NOT STARTED | B3 | gap (spec S10): templates + number check folded into B3 |
 | AR-LANG-013 | R1 | S10 | NOT STARTED | B1 | gap (spec S10): spoken rewrite + chunking with turn_epoch folded into B1.2 |
-| AR-LANG-014 | R1 | S07 | NOT STARTED | B1 | TurnEvent recording |
+| AR-LANG-014 | R1 | S07 | DONE | - | redacted TurnEvent recording + failed-turn fixtures |
 | AR-LANG-015 | R2 | S12 | NOT STARTED | C1/C3 | shared artifacts on Android |
 | AR-LANG-016 | R3 | S24 | NOT STARTED | E2 |  |
 | AR-LANG-017 | R3 | S24 | NOT STARTED | E4 |  |
@@ -128,8 +128,8 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-DATA-015 | R2 | S14 | DONE | - | tests/gateway, sync_peers.rs (ledger); scopes extend in C2/D6 |
 | AR-DATA-016 | R4 | S27 | NOT STARTED | D6 | wipe/export all domains |
 | AR-DATA-017 | R4 | S27 | NOT STARTED | D6 | wipe/export all domains |
-| AR-DATA-018 | R1 | S07 | NOT STARTED | B1 | temp audio lifetime, no raw mic bytes in logs |
-| AR-DATA-019 | R1 | S07 | NOT STARTED | B1 | temp audio lifetime, no raw mic bytes in logs |
+| AR-DATA-018 | R1 | S07 | DONE | - | temp audio deleted after use; scratch swept at start |
+| AR-DATA-019 | R1 | S07 | DONE | - | no raw audio in logs |
 | AR-DATA-020 | R4 | S27 | NOT STARTED | F3 |  |
 | AR-AGT-001 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
 | AR-AGT-002 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
@@ -143,12 +143,12 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AGT-010 | R4 | S27 | NOT STARTED | B3 | gap: action ledger built with the Activity page in B3; hardened in F3 |
 | AR-AGT-011 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
 | AR-AGT-012 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
-| AR-AGT-013 | R1 | S07 | NOT STARTED | B1 | Ollama model eval |
+| AR-AGT-013 | R1 | S07 | DONE | - | 20-prompt eval on 3 local models; qwen2.5:3b chosen |
 | AR-AGT-014 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
 | AR-AGT-015 | R1 | S09 | NOT STARTED | B3 | policy/executor; reva_core/policy and tools hold READMEs only |
 | AR-AGT-016 | R2 | S15 | NOT STARTED | B3 | executor grant binding (Windows) in B3; remote in C2 |
 | AR-AGT-017 | R2 | S15 | NOT STARTED | B3 | executor grant binding (Windows) in B3; remote in C2 |
-| AR-AGT-018 | R2 | S15 | PARTIAL | B3 | Kernel registry has no money movement (AR-DOM-006); registry absence test over every registry in B3 |
+| AR-AGT-018 | R2 | S15 | PARTIAL | B3 | unchanged: registry absence test lands in B3 |
 | AR-AGT-019 | R3 | S21 | NOT STARTED | D1 |  |
 | AR-AGT-020 | R4 | S27 | NOT STARTED | F3 | benchmarks; fixtures separated |
 | AR-AGT-021 | R4 | S27 | NOT STARTED | F3 | benchmarks; fixtures separated |
@@ -178,12 +178,12 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-REL-008 | R4 | S27 | NOT STARTED | E4/F3 |  |
 | AR-REL-009 | R4 | S25 | NOT STARTED | F1 |  |
 | AR-REL-010 | R4 | S27 | PARTIAL | F3 | FIN-2-narrator NEEDS_HARDWARE; other pages pending |
-| FR-AV-001 | R1 | S08 | NOT STARTED | B2 |  |
-| FR-AV-002 | R1 | S08 | NOT STARTED | B2 |  |
-| FR-AV-003 | R1 | S08 | NOT STARTED | B2 |  |
-| FR-AV-004 | R1 | S08 | NOT STARTED | B2 |  |
-| FR-AV-005 | R1 | S08 | NOT STARTED | B2 |  |
-| FR-AV-006 | R1 | S08 | NOT STARTED | B2 |  |
+| FR-AV-001 | R1 | S08 | DONE | - | avatar on Talk screen (placeholder VRM; Blender model F0) |
+| FR-AV-002 | R1 | S08 | DONE | - | six poses mirror state |
+| FR-AV-003 | R1 | S08 | DONE | - | mouth from the audio actually played |
+| FR-AV-004 | R1 | S08 | DONE | - | interrupt closes mouth and audio together |
+| FR-AV-005 | R1 | S08 | DONE | - | verified_outcome rule |
+| FR-AV-006 | R1 | S08 | DONE | - | off / reduced motion |
 | FR-AV-007 | R2 | S12 | NOT STARTED | C1 |  |
 | FR-AV-008 | R3 | S24 | NOT STARTED | E4 |  |
 | FR-DOM-001 | R1 (Win) / R2 (Android) | S10 | PARTIAL | D1-D6 | Finance PASS on both devices; other 7 domains pending |
@@ -220,7 +220,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | FR-LNG-006 | R3 | S24 | NOT STARTED | E2 |  |
 | NFR-017 | R1 | S04 | DONE | - | AR-DOM-002, conformance Rust/Python/Kotlin, AR-DATA-011, AND-1-manifest |
 | NFR-018 | R1 | S04 | DONE | - | AR-DOM-002, conformance Rust/Python/Kotlin, AR-DATA-011, AND-1-manifest |
-| NFR-019 | R1 | S08 | NOT STARTED | B2 |  |
+| NFR-019 | R1 | S08 | PARTIAL | B2 | never blocks UI thread, 60 fps cap, paused when hidden; GPU profile open (hardware) |
 | NFR-020 | R4 | S27 | PARTIAL | F3 | see AR-DOM-011 |
 | NFR-021 | R3 | S17 | NOT STARTED | D3/B3 | Health eval D3; Finance number accuracy B3 |
 | NFR-022 | R3 | S14 | DONE | - | AR-DOM-002, conformance Rust/Python/Kotlin, AR-DATA-011, AND-1-manifest |
