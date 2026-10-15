@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from reva_core.api.auth import build_auth_dependency
+from reva_core.api.versioned import VersionedRequest
 from reva_core.domains.service import DomainRequestError
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.policy import activity
@@ -30,13 +31,13 @@ class DiscoveredApp(BaseModel):
     display_name: str = Field(min_length=1, max_length=60)
 
 
-class DiscoveredRequest(BaseModel):
+class DiscoveredRequest(VersionedRequest):
     model_config = ConfigDict(extra="forbid")
 
     apps: list[DiscoveredApp] = Field(max_length=500)
 
 
-class ApproveRequest(BaseModel):
+class ApproveRequest(VersionedRequest):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str | None = Field(default=None, max_length=60)
@@ -108,6 +109,7 @@ def build_apps_router(lifecycle: CoreLifecycle) -> APIRouter:
         broker = lifecycle.broker
         if broker is None:
             return {"items": []}
+        broker.expire()
         return {
             "items": activity.recent(broker.ledger, lifecycle.apps.display_names(), limit),
         }

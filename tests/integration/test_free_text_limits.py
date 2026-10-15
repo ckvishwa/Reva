@@ -186,3 +186,62 @@ def test_a_huge_body_is_refused_without_a_500(rig) -> None:
 
     assert response.status_code in (413, 422)
     assert response.json()["code"] in ("DOMAIN.VALIDATION", "CORE.VALIDATION")
+
+
+async def test_chunked_body_is_stopped_at_the_limit_without_reading_the_remainder(rig) -> None:
+    import httpx
+
+    client, _ = rig
+    consumed = []
+
+    async def chunks():
+        for n in range(3):
+            consumed.append(n)
+            yield b" " * 600_000
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=client.app), base_url="http://testserver"
+    ) as stream:
+        response = await stream.post(
+            "/v1/actions/proposals",
+            content=chunks(),
+            headers={**dict(client.headers), "Content-Type": "application/json"},
+        )
+    assert response.status_code == 413
+    assert consumed == [0, 1]
+    assert response.json()["code"] == "CORE.VALIDATION"
+
+
+async def test_small_chunked_json_reaches_the_route(rig) -> None:
+    import httpx
+
+    client, _ = rig
+
+    async def chunks():
+        yield b'{"capability":"windows.app.open",'
+        yield b'"args":{"app_key":"notepad"}}'
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=client.app), base_url="http://testserver"
+    ) as stream:
+        response = await stream.post(
+            "/v1/actions/proposals",
+            content=chunks(),
+            headers={**dict(client.headers), "Content-Type": "application/json"},
+        )
+    assert response.status_code == 201
+
+
+def test_activity_read_expires_unreported_grants_without_another_broker_request(rig) -> None:
+    from datetime import timedelta
+
+    client, core = rig
+    proposed = client.post("/v1/actions/proposals", json=OPEN).json()
+    now = core.broker.clock()
+    core.broker.clock = lambda: now + timedelta(minutes=2)
+
+    response = client.get("/v1/activity")
+
+    assert response.status_code == 200
+    row = next(r for r in response.json()["items"] if r["action_id"] == proposed["action_id"])
+    assert row["result"] == "Couldn't confirm"

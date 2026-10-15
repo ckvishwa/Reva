@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from reva_core.shared.errors import StorageError
+
 ALLOWED_EVENTS = frozenset(
     {
         "core.start",
@@ -65,6 +67,10 @@ class Telemetry:
         return isinstance(raw, dict) and raw.get("enabled") is True
 
     def set_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            self._set_enabled(enabled)
+
+    def _set_enabled(self, enabled: bool) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         temporary = self._root / (SETTINGS_FILE + ".tmp")
         temporary.write_text(json.dumps({"enabled": enabled}), encoding="utf-8")
@@ -74,13 +80,15 @@ class Telemetry:
 
     def record(self, name: str, **fields: object) -> bool:
         """Write one event if telemetry is on. Returns whether it was written. Never raises."""
-        if name not in ALLOWED_EVENTS or not self.enabled:
+        if name not in ALLOWED_EVENTS:
             return False
         clean = {k: v for k, v in fields.items() if k in _FIELDS and _FIELDS[k](v)}
         now = self._clock()
         row = {"event": name, "day": now.strftime("%Y-%m-%d"), **clean}  # a day, not a time
         try:
             with self._lock:
+                if not self.enabled:
+                    return False
                 self._dir.mkdir(parents=True, exist_ok=True)
                 path = self._dir / f"events-{now.strftime('%Y%m%d')}.jsonl"
                 if path.exists() and path.stat().st_size >= MAX_FILE_BYTES:
@@ -112,14 +120,14 @@ class Telemetry:
         removed = 0
         with self._lock:
             try:
+                self._set_enabled(False)
                 for path in list(self._dir.glob("events-*.jsonl")):
                     path.unlink(missing_ok=True)
                     removed += 1
                 if self._dir.exists() and not any(self._dir.iterdir()):
                     self._dir.rmdir()
-            except OSError:
-                pass
-        self.set_enabled(False)
+            except OSError as exc:
+                raise StorageError("telemetry removal failed; some records may remain") from exc
         return removed
 
     def _prune(self) -> None:

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from reva_core.api.auth import build_auth_dependency
+from reva_core.api.versioned import VersionedRequest
 from reva_core.audit.events import AuditEvent, AuditEventCategory, AuditOutcome
 from reva_core.orchestration.lifecycle import CoreLifecycle
 from reva_core.providers.cloud import DISCLOSURE, HOSTED_DOMAINS, CloudSettings
@@ -40,7 +41,7 @@ class CloudSettingsResponse(BaseModel):
     disclosure: dict[str, object]
 
 
-class CloudSettingsUpdate(BaseModel):
+class CloudSettingsUpdate(VersionedRequest):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool | None = None

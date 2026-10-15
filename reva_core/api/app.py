@@ -89,6 +89,17 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
         )
         if length.isdigit() and int(length) > max_json_bytes and not exempt:
             return error_body(request, "payload_too_large", 413)
+        if not exempt:
+            # Content-Length is optional (and untrusted). Stop reading as soon as the
+            # stream crosses the bound, before FastAPI buffers/parses the JSON body.
+            chunks = []
+            received = 0
+            async for chunk in request.stream():
+                received += len(chunk)
+                if received > max_json_bytes:
+                    return error_body(request, "payload_too_large", 413)
+                chunks.append(chunk)
+            request._body = b"".join(chunks)
         return await call_next(request)
 
     def error_body(request: Request, error: str, status: int, **extra: Any) -> JSONResponse:
@@ -120,7 +131,7 @@ def create_app(lifecycle: CoreLifecycle) -> FastAPI:
             if part not in ("body", "query") and not isinstance(part, int)
         ]
         field = location[-1] if location else None
-        if field == "schema_version":
+        if first.get("type") == "unsupported_schema_version":
             return error_body(request, "unsupported_schema_version", 422, field=field)
         return error_body(request, "validation_error", 422, field=field)
 

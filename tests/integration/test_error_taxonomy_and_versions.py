@@ -13,6 +13,42 @@ SECRET = "sk-ant-api03-must-never-be-echoed-0123456789"
 CODE = re.compile(r"^[A-Z]+\.[A-Z_]+$")
 
 
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        ("/v1/settings/cloud", {"enabled": False}),
+        ("/v1/apps/discovered", {"apps": []}),
+        ("/v1/apps/obsidian", {"aliases": ["notes"]}),
+    ],
+)
+@pytest.mark.parametrize("version", ["2.0", "2.99", "99.0"])
+def test_supported_versions_are_accepted_on_settings_and_apps(
+    client, auth_headers, path, payload, version
+) -> None:
+    if path == "/v1/apps/obsidian":
+        client.put(
+            "/v1/apps/discovered",
+            headers=auth_headers,
+            json={"apps": [{"key": "obsidian", "display_name": "Obsidian"}]},
+        )
+    response = client.put(path, headers=auth_headers, json={**payload, "schema_version": version})
+    if version == "99.0":
+        assert response.status_code == 422
+        assert response.json()["code"] == "CORE.UNSUPPORTED_VERSION"
+    else:
+        assert response.status_code == 200, response.text
+
+
+def test_wrong_schema_version_type_is_validation_not_an_unsupported_major(client, auth_headers):
+    response = client.put(
+        "/v1/settings/telemetry",
+        headers=auth_headers,
+        json={"schema_version": [], "enabled": False},
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "DOMAIN.VALIDATION"
+
+
 # ------------------------------------------------------------------- the mapping
 
 

@@ -188,3 +188,63 @@ def test_a_bad_body_is_refused(client, auth_headers) -> None:
         ).status_code
         == 422
     )
+
+
+def test_delete_prevents_an_in_flight_record_from_recreating_files(tmp_path: Path) -> None:
+    import threading
+
+    telemetry = make(tmp_path)
+    telemetry.set_enabled(True)
+    waiting = threading.Event()
+    resume = threading.Event()
+    real_lock = telemetry._lock
+
+    class PausedLock:
+        def __enter__(self):
+            if threading.current_thread().name == "telemetry-writer":
+                waiting.set()
+                assert resume.wait(5)
+            real_lock.acquire()
+
+        def __exit__(self, *_args):
+            real_lock.release()
+
+    telemetry._lock = PausedLock()  # type: ignore[assignment]
+    results: list[bool] = []
+    writer = threading.Thread(
+        target=lambda: results.append(telemetry.record("core.start", ok=True)),
+        name="telemetry-writer",
+    )
+    writer.start()
+    try:
+        assert waiting.wait(5)
+        telemetry.remove_all()
+    finally:
+        resume.set()
+        writer.join(5)
+    assert not writer.is_alive()
+    assert results == [False]
+    assert telemetry.read() == []
+    assert not (tmp_path / DIRECTORY).exists()
+
+
+def test_delete_reports_a_typed_failure_and_disables_recording(
+    client, auth_headers, core, monkeypatch
+) -> None:
+    core.telemetry.set_enabled(True)
+    core.telemetry.record("core.start", ok=True)
+    real_unlink = Path.unlink
+
+    def locked(self: Path, missing_ok: bool = False) -> None:
+        if self.name.startswith("events-"):
+            raise PermissionError("in use")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", locked)
+    response = client.delete("/v1/settings/telemetry", headers=auth_headers)
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "CORE.INTERNAL"
+    assert core.telemetry.enabled is False
+    assert core.telemetry.record("core.stop", ok=True) is False
+    assert core.telemetry.read()  # residual records were reported as a failure

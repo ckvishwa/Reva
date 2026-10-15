@@ -319,6 +319,10 @@ class Broker:
 
     # ---------------------------------------------------------------------- reading
 
+    def expire(self) -> None:
+        """Refresh expired actions before serving views built directly from the ledger."""
+        self._expire(self.clock())
+
     def get(self, action_id: str) -> ActionView:
         self._expire(self.clock())
         return self._view(self._get(action_id))

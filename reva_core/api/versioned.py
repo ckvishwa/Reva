@@ -6,8 +6,9 @@ guessed at. A newer minor within the same major is accepted, because minors only
 """
 
 from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic_core import PydanticCustomError
 
-from reva_core.shared.versioning import ensure_supported
+from reva_core.shared.versioning import UnsupportedSchemaVersion, ensure_supported
 
 
 class VersionedRequest(BaseModel):
@@ -18,5 +19,10 @@ class VersionedRequest(BaseModel):
     @field_validator("schema_version")
     @classmethod
     def _major_is_supported(cls, value: str | int | None) -> str | int | None:
-        ensure_supported(value)
+        try:
+            ensure_supported(value)
+        except UnsupportedSchemaVersion as exc:
+            raise PydanticCustomError(
+                "unsupported_schema_version", "Unsupported schema version"
+            ) from exc
         return value
