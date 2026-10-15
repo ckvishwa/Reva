@@ -91,6 +91,9 @@ public sealed class VoiceLoopController : IAsyncDisposable
 
     public string? LastReply { get; private set; }
 
+    /// <summary>Why the answer came from the local model when the cloud one was expected.</summary>
+    public string? LastNotice { get; private set; }
+
     /// <summary>True only while the microphone device is really open.</summary>
     public bool MicOpen => _capture.IsOpen;
 
@@ -159,6 +162,7 @@ public sealed class VoiceLoopController : IAsyncDisposable
             await _client.CloseAsync();
             LastTranscript = null;
             LastReply = null;
+            LastNotice = null;
             Set(LiveVoiceState.Off, null);
         }
         finally
@@ -421,10 +425,12 @@ public sealed class VoiceLoopController : IAsyncDisposable
                 break;
             case "speech.transcript.final":
                 LastTranscript = ev.Text("text");
+                LastNotice = null;
                 Raise();
                 break;
             case "assistant.text.final":
                 LastReply = ev.Text("text");
+                LastNotice = ev.Text("notice");
                 Raise();
                 break;
             case "tts.started" when ev.Text("purpose") == "reply":

@@ -1,0 +1,104 @@
+<UserControl
+    x:Class="Reva.Desktop.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:views="using:Reva.Desktop.Views"
+    xmlns:vm="using:Reva.Desktop.ViewModels">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="24" Spacing="14" MaxWidth="760" HorizontalAlignment="Left">
+            <TextBlock Text="Settings" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="Cloud model" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock
+                TextWrapping="Wrap"
+                Foreground="{StaticResource RevaMutedBrush}"
+                Text="Off by default. When on, free-form questions go to a hosted model; if it is slow or unavailable REVA answers with the local model and tells you." />
+
+            <TextBlock Text="What is sent when it is on" FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{x:Bind ViewModel.SentWhenOn, Mode=OneWay}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{x:Bind}" TextWrapping="Wrap" Margin="0,2" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="What is never sent" FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{x:Bind ViewModel.NeverSent, Mode=OneWay}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{x:Bind}" TextWrapping="Wrap" Margin="0,2" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock
+                AutomationProperties.AutomationId="CloudProvider"
+                Text="{x:Bind ViewModel.Provider, Mode=OneWay}" />
+
+            <TextBlock Text="Your Anthropic API key" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <PasswordBox
+                    x:Name="KeyBox"
+                    AutomationProperties.AutomationId="CloudKeyBox"
+                    AutomationProperties.Name="Anthropic API key"
+                    Width="360"
+                    PlaceholderText="sk-ant-..." />
+                <Button
+                    AutomationProperties.AutomationId="CloudStoreKey"
+                    Content="Store key"
+                    Click="StoreKey_Click"
+                    IsEnabled="{x:Bind views:Vis.Not(ViewModel.Busy), Mode=OneWay}" />
+                <Button
+                    AutomationProperties.AutomationId="CloudRemoveKey"
+                    Content="Remove key"
+                    Click="RemoveKey_Click"
+                    IsEnabled="{x:Bind ViewModel.KeyConfigured, Mode=OneWay}" />
+            </StackPanel>
+            <TextBlock
+                AutomationProperties.AutomationId="CloudKeyStatus"
+                Text="{x:Bind ViewModel.KeyStatus, Mode=OneWay}" />
+
+            <ToggleSwitch
+                x:Name="CloudSwitch"
+                AutomationProperties.AutomationId="CloudSwitch"
+                AutomationProperties.Name="Use the cloud model"
+                Header="Use the cloud model"
+                OnContent="On"
+                OffContent="Off"
+                IsOn="{x:Bind ViewModel.Enabled, Mode=OneWay}"
+                IsEnabled="{x:Bind ViewModel.CanSwitchOn, Mode=OneWay}"
+                Toggled="CloudSwitch_Toggled" />
+
+            <TextBlock Text="Data the model may see, domain by domain" FontWeight="SemiBold" />
+            <TextBlock
+                TextWrapping="Wrap"
+                Foreground="{StaticResource RevaMutedBrush}"
+                Text="All off. Nothing from a domain is sent unless you switch that domain on here." />
+            <ItemsControl x:Name="DomainList" ItemsSource="{x:Bind ViewModel.Domains, Mode=OneWay}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CloudDomainRow">
+                        <ToggleSwitch
+                            AutomationProperties.Name="{x:Bind Label}"
+                            Header="{x:Bind Label}"
+                            OnContent="May be sent"
+                            OffContent="Never sent"
+                            IsOn="{x:Bind IsOn, Mode=OneWay}"
+                            Tag="{x:Bind Id}"
+                            Toggled="DomainSwitch_Toggled" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock
+                AutomationProperties.AutomationId="CloudMessage"
+                Text="{x:Bind ViewModel.Message, Mode=OneWay}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind views:Vis.ShowText(ViewModel.Message), Mode=OneWay}" />
+            <TextBlock
+                AutomationProperties.AutomationId="CloudError"
+                Text="{x:Bind ViewModel.Error, Mode=OneWay}"
+                Foreground="IndianRed"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind views:Vis.ShowText(ViewModel.Error), Mode=OneWay}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
