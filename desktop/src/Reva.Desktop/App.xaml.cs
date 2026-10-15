@@ -90,6 +90,7 @@ public partial class App : Application
             today,
             new ViewModels.DevicesViewModel(devicesApi, new Devices.QrCoderEncoder()),
             liveVoice,
+            new ViewModels.CloudSettingsViewModel(new Settings.CloudSettingsApi(httpClient, tokenProvider, configuration.RequestTimeout)),
             wakeWord);
         _window.Activate();
         if (wakeWordOptions.IsEnabled)

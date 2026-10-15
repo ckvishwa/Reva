@@ -29,6 +29,8 @@ public sealed partial class MainWindow : Window
 
     public LiveVoiceViewModel LiveVoiceModel { get; }
 
+    public CloudSettingsViewModel CloudSettings { get; }
+
     public MainWindow(
         ShellViewModel shell,
         AssistantViewModel assistant,
@@ -38,6 +40,7 @@ public sealed partial class MainWindow : Window
         TodayViewModel today,
         DevicesViewModel devices,
         LiveVoiceViewModel liveVoice,
+        CloudSettingsViewModel cloudSettings,
         WakeWordCoordinator? wakeWord = null)
     {
         // Set before InitializeComponent: x:Bind reads these while the tree is built.
@@ -49,6 +52,7 @@ public sealed partial class MainWindow : Window
         Today = today;
         Devices = devices;
         LiveVoiceModel = liveVoice;
+        CloudSettings = cloudSettings;
         WakeWord = wakeWord;
         InitializeComponent();
         Title = "REVA";
@@ -97,6 +101,11 @@ public sealed partial class MainWindow : Window
         // Pages poll Core only while they are the open section.
         FinancePanel.SetActive(Navigation.ShowsFinance);
         await DevicesPanel.SetActiveAsync(Navigation.ShowsDevices);
+        if (Navigation.ShowsSettings)
+        {
+            await SettingsPanel.LoadAsync();
+        }
+
         if (Navigation.ShowsFinance)
         {
             await FinancePanel.RefreshAsync();

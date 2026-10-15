@@ -8,6 +8,7 @@ immediately, and so a refused voice falls back at the moment it matters.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -101,6 +102,13 @@ def build_tts_registry(
     return registry
 
 
+def _accepts_speed(function: Any) -> bool:
+    try:
+        return "speed" in inspect.signature(function).parameters
+    except (TypeError, ValueError):
+        return False
+
+
 class RegistryTTS:
     """Core-facing TTS: resolves a provider on first use, falls back on refusal."""
 
@@ -122,9 +130,15 @@ class RegistryTTS:
     def skipped(self) -> tuple[tuple[str, str], ...]:
         return self._last.skipped if self._last is not None else ()
 
-    async def synthesize(self, text: str, language: str) -> SynthesizedAudio:
+    async def synthesize(
+        self, text: str, language: str, *, speed: float | None = None
+    ) -> SynthesizedAudio:
         selection = await self._select(_SYNTHESIZE)
-        audio: SynthesizedAudio = await selection.provider.synthesize(text, language)
+        provider = selection.provider
+        if speed is not None and _accepts_speed(provider.synthesize):
+            audio: SynthesizedAudio = await provider.synthesize(text, language, speed=speed)
+        else:
+            audio = await provider.synthesize(text, language)
         return audio
 
     async def require_interruptible(self) -> Any:
