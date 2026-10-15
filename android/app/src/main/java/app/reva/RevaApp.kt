@@ -16,6 +16,13 @@ import app.reva.sync.PinnedHttpsTransport
 import app.reva.sync.SyncEngine
 import app.reva.sync.SyncService
 import app.reva.ui.ExportShare
+import app.reva.voice.AndroidPermissionGate
+import app.reva.voice.AndroidRecognizerAvailability
+import app.reva.voice.AndroidServiceLauncher
+import app.reva.voice.AndroidSpeechRecognizer
+import app.reva.voice.SilentSpeaker
+import app.reva.voice.UnavailableReplies
+import app.reva.voice.VoiceController
 import java.io.File
 import uniffi.reva_kernel.openDomain
 
@@ -55,6 +62,30 @@ class AppContainer(private val context: Context) {
         )
     }
 
+    /** The activity in front, if any; the permission gate needs it to tell "denied" from "blocked". */
+    @Volatile
+    var currentActivity: java.lang.ref.WeakReference<android.app.Activity>? = null
+
+    val micPermission: AndroidPermissionGate by lazy {
+        AndroidPermissionGate(
+            context,
+            context.getSharedPreferences("reva_voice", Context.MODE_PRIVATE),
+        ) { currentActivity?.get() }
+    }
+
+    /** One voice session at a time. Recognizer and service are created per session and released at its end. */
+    val voice: VoiceController by lazy {
+        VoiceController(
+            permissions = micPermission,
+            availability = { AndroidRecognizerAvailability.check(context) },
+            recognizerFactory = { AndroidSpeechRecognizer(context) },
+            replies = UnavailableReplies(),
+            speaker = SilentSpeaker,
+            service = AndroidServiceLauncher(context),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+        )
+    }
+
     /** Syncs with the paired PC on its own while the app is in front (setting, default on). */
     val autoSync: AutoSyncController by lazy {
         AutoSyncController(
@@ -70,6 +101,12 @@ class RevaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            // Debug builds log any disk or network work on the main thread (AR-AND-018).
+            android.os.StrictMode.setThreadPolicy(
+                android.os.StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build(),
+            )
+        }
         // A Finance export is a plain file in the cache for the share sheet; never keep it past the session.
         ExportShare.clear(cacheDir)
     }

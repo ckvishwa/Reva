@@ -69,6 +69,7 @@ android {
             )
             it.systemProperty("reva.sourceManifest", file("src/main/AndroidManifest.xml").absolutePath)
             it.systemProperty("reva.resDir", file("src/main/res").absolutePath)
+            it.systemProperty("reva.fixtures", rootProject.file("../tests/fixtures").absolutePath)
             it.systemProperty("reva.uiTestsBuild", providers.gradleProperty("reva.uiTests").isPresent.toString())
             it.dependsOn("processDebugMainManifest")
         }

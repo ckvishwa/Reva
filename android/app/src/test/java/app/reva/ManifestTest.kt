@@ -12,8 +12,8 @@ import org.w3c.dom.NodeList
 
 /**
  * Manifest checks for this slice, run on every unit-test build against the MERGED manifest (so permissions
- * and services pulled in by libraries count too): only INTERNET and CAMERA (for pairing with the user's own PC),
- * no cleartext, no QUERY_ALL_PACKAGES, no AccessibilityService,
+ * and services pulled in by libraries count too): INTERNET and CAMERA (for pairing with the user's own PC) and
+ * RECORD_AUDIO plus the two foreground-service permissions (for the voice session), no cleartext, no QUERY_ALL_PACKAGES, no AccessibilityService,
  * and backup rules that exclude the domain files.
  */
 class ManifestTest {
@@ -33,12 +33,35 @@ class ManifestTest {
 
     private fun Document.permissions() = getElementsByTagName("uses-permission").elements().map { it.getAttributeNS(androidNs, "name") }
 
-    @Test fun the_app_requests_exactly_internet_and_camera_plus_androidxs_internal_permission() {
+    @Test fun the_app_requests_exactly_the_pairing_and_voice_permissions_plus_androidxs_internal_permission() {
         val permissions = merged().permissions().sorted()
         assertEquals(
-            listOf("android.permission.CAMERA", "android.permission.INTERNET", "app.reva.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
+            listOf(
+                "android.permission.CAMERA",
+                "android.permission.FOREGROUND_SERVICE",
+                "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+                "android.permission.INTERNET",
+                "android.permission.RECORD_AUDIO",
+                "app.reva.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+            ),
             permissions,
         )
+    }
+
+    @Test fun the_voice_service_is_a_private_microphone_service_and_nothing_starts_it_but_the_app() {
+        val doc = parse(System.getProperty("reva.sourceManifest"))
+        val service = doc.getElementsByTagName("service").elements().single { it.getAttributeNS(androidNs, "name") == ".voice.VoiceService" }
+        assertEquals("microphone", service.getAttributeNS(androidNs, "foregroundServiceType"))
+        assertEquals("false", service.getAttributeNS(androidNs, "exported"))
+        assertTrue("no intent filter: only an explicit intent from this app starts it", service.getElementsByTagName("intent-filter").length == 0)
+        val receivers = doc.getElementsByTagName("receiver").elements().map { it.getAttributeNS(androidNs, "name") }
+        assertFalse("nothing restarts the microphone at boot", receivers.any { it.contains("Boot", ignoreCase = true) })
+        assertFalse(merged().permissions().contains("android.permission.RECEIVE_BOOT_COMPLETED"))
+    }
+
+    @Test fun the_microphone_is_optional_hardware_so_phones_without_one_can_still_type() {
+        val mic = merged().getElementsByTagName("uses-feature").elements().single { it.getAttributeNS(androidNs, "name") == "android.hardware.microphone" }
+        assertEquals("false", mic.getAttributeNS(androidNs, "required"))
     }
 
     @Test fun internet_is_used_for_the_paired_pc_only_so_cleartext_is_refused_everywhere() {
@@ -51,12 +74,12 @@ class ManifestTest {
         assertFalse("no domain may be allowed cleartext", config.contains("cleartextTrafficPermitted=\"true\""))
     }
 
-    @Test fun the_camera_is_optional_hardware_and_no_other_hardware_or_network_permission_is_requested() {
+    @Test fun the_camera_is_optional_hardware_and_no_location_network_or_notification_permission_is_requested() {
         val doc = merged()
         val camera = doc.getElementsByTagName("uses-feature").elements().single { it.getAttributeNS(androidNs, "name") == "android.hardware.camera" }
         assertEquals("false", camera.getAttributeNS(androidNs, "required"))
         val permissions = doc.permissions()
-        assertFalse(permissions.any { it.contains("RECORD_AUDIO") || it.contains("LOCATION") || it.contains("NETWORK") || it.contains("WIFI") })
+        assertFalse(permissions.any { it.contains("LOCATION") || it.contains("NETWORK") || it.contains("WIFI") || it.contains("POST_NOTIFICATIONS") })
     }
 
     @Test fun there_is_no_query_all_packages() {
