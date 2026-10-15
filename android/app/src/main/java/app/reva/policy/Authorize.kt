@@ -1,5 +1,6 @@
 package app.reva.policy
 
+import java.math.BigDecimal
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -101,11 +102,20 @@ private fun canonicalValue(v: Any?): String = when (v) {
     else -> throw IllegalArgumentException("unsupported argument value ${v::class.simpleName}")
 }
 
-/** Python's repr for the doubles that appear in arguments: whole numbers keep ".0", others the shortest digits. */
+/** Match Python json.dumps float spelling for the finite argument values accepted by the registry. */
 private fun canonicalDouble(d: Double): String {
     require(!d.isNaN() && !d.isInfinite()) { "non-finite number" }
-    if (d == Math.rint(d) && Math.abs(d) < 1e16) return d.toLong().toString() + ".0"
-    return d.toString()
+    if (d == 0.0) return if (java.lang.Double.doubleToRawLongBits(d) < 0) "-0.0" else "0.0"
+    val decimal = BigDecimal.valueOf(d).stripTrailingZeros()
+    if (Math.abs(d) in 1e-4..<1e16) {
+        val plain = decimal.toPlainString()
+        return if (d == Math.rint(d)) "$plain.0" else plain
+    }
+    val scientific = decimal.toString()
+    val exponent = scientific.substringAfter('E').toInt()
+    val mantissa = scientific.substringBefore('E')
+    val sign = if (exponent < 0) "-" else "+"
+    return "$mantissa" + "e" + sign + Math.abs(exponent).toString().padStart(2, '0')
 }
 
 private fun quote(s: String): String {
