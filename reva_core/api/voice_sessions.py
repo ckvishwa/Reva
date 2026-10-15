@@ -125,7 +125,7 @@ def build_voice_session_router(
             stt=lifecycle.speech_to_text_provider,
             tts=lifecycle.text_to_speech_provider,
             respond=reply_text,
-            router=IntentRouter(session.dialogue),
+            router=IntentRouter(session.dialogue, lifecycle.broker),
             recorder=recorder,
             scratch_dir=scratch,
         )
