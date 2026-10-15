@@ -40,6 +40,8 @@ _ALLOWED_PATHS = {
     "/v1/devices/pairing/approve",
     "/v1/devices/pairing/deny",
     "/v1/devices/{device_id}/revoke",
+    "/v1/devices/{device_id}/pc-access",
+    "/v1/devices/requests",
     "/v1/settings/cloud",
     "/v1/settings/cloud/key",
     "/v1/settings/privacy",

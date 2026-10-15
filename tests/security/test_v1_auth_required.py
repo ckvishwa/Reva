@@ -17,6 +17,8 @@ import pytest
         ("post", "/v1/devices/pairing/approve", {"json": {"fingerprint": "123456"}}),
         ("post", "/v1/devices/pairing/deny", {}),
         ("post", "/v1/devices/some-device/revoke", {}),
+        ("patch", "/v1/devices/some-device/pc-access", {"json": {"open_apps": True, "close_apps": True}}),
+        ("get", "/v1/devices/requests", {}),
         ("get", "/v1/settings/cloud", {}),
         ("put", "/v1/settings/cloud", {"json": {"enabled": False}}),
         ("put", "/v1/settings/cloud/key", {"json": {"api_key": "sk-ant-nope-0123456789012"}}),
