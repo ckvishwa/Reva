@@ -1,5 +1,5 @@
 {
-  "registry_revision": 2,
+  "registry_revision": 3,
   "schema_version": "2.0",
   "note": "Shared by Windows Core and Android local brain. No payment, transfer, purchase, bank-login or medical-dosing capability may ever be added (ADR-033); CI absence test checks forbidden_capability_prefixes.",
   "forbidden_capability_prefixes": [
@@ -27,6 +27,56 @@
         "additionalProperties": false,
         "required": [],
         "properties": {}
+      }
+    },
+    {
+      "capability": "assistant.stop",
+      "device": "any",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "none",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "assistant.repeat",
+      "device": "any",
+      "tier": "T0",
+      "confirm_on": null,
+      "idempotent": true,
+      "evidence_kind": "none",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "capability": "assistant.undo",
+      "device": "kernel",
+      "tier": "T2",
+      "confirm_on": "origin",
+      "idempotent": false,
+      "evidence_kind": "kernel_event",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_action_id"
+        ],
+        "properties": {
+          "target_action_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
       }
     },
     {

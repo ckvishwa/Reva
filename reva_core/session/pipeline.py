@@ -31,8 +31,9 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from reva_core.language import mood as moods
+from reva_core.language import outcomes
 from reva_core.language.mood_flags import utterance_flags
-from reva_core.language.router import IntentRouter
+from reva_core.language.router import IntentRouter, RoutedTurn
 from reva_core.models.stt import SpeechToTextProvider, TranscriptionInput, TranscriptionResult
 from reva_core.models.tts import SynthesizedAudio
 from reva_core.policy.broker import ActionView
@@ -154,6 +155,7 @@ class TurnPipeline:
         self.mood_settings = moods.MoodSettings()
         self._watchdog: asyncio.Task[None] | None = None
         self._owned_actions: set[str] = set()
+        self._last_spoken: str | None = None
 
     # ------------------------------------------------------------------ actions
 
@@ -173,6 +175,7 @@ class TurnPipeline:
         if view.action_id not in self._owned_actions or view.status not in FINAL:
             return
         self._owned_actions.discard(view.action_id)
+        self._router.note_outcome(view)
         self.session.emit(SessionEventKind.ACTION_OUTCOME, view_to_dict(view, with_order=False))
         self._spawn(self._speak_outcome(view))
 
@@ -407,6 +410,16 @@ class TurnPipeline:
         routed = self._router.route(transcript.text, now=self._now())
         if routed.action is not None:
             self._announce_proposal(routed.action)
+        if routed.kind == "stop":
+            # Silence, nothing said. An interrupt is the legal way out of REASONING and stops
+            # anything still playing; no "speaking" state is shown for a reply that is not spoken.
+            record("ok", transcript=transcript.text, route="stop", language=transcript.language)
+            if session.turn_epoch == epoch:
+                await session.interrupt()
+            return
+        if routed.kind == "repeat":
+            # Only words REVA already said, never a fresh claim.
+            routed = RoutedTurn("repeat", self._last_spoken or outcomes.NOTHING_TO_REPEAT)
         if routed.kind == "chat":
             answer = await self._ask_assistant(transcript.text, epoch)
             if answer is None:
@@ -528,6 +541,8 @@ class TurnPipeline:
     ) -> None:
         session = self.session
         await session.transition(SessionState.SPEAKING)
+        if text:
+            self._last_spoken = text
         if self._tts is None or not text:
             await self._finish_silently("tts_unavailable" if text else "nothing_to_say")
             return

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -25,6 +26,31 @@ from reva_core.policy.broker import ExecutionOrder
 logger = logging.getLogger(__name__)
 
 UNCATEGORISED = "Uncategorised"
+MAX_UNDOABLE = 32
+
+
+class ExpenseLog:
+    """The expenses this Core saved by voice, keyed by the action that saved them, so a later
+    `assistant.undo` can name exactly one transaction. Only an expense the Kernel confirmed is ever
+    recorded. Held in memory and bounded: after a restart nothing is undoable, and REVA says so."""
+
+    def __init__(self, limit: int = MAX_UNDOABLE) -> None:
+        self._limit = limit
+        self._rows: OrderedDict[str, str] = OrderedDict()
+
+    def record(self, action_id: str, transaction_id: str) -> None:
+        self._rows[action_id] = transaction_id
+        while len(self._rows) > self._limit:
+            self._rows.popitem(last=False)
+
+    def get(self, action_id: str) -> str | None:
+        return self._rows.get(action_id)
+
+    def forget(self, action_id: str) -> None:
+        self._rows.pop(action_id, None)
+
+    def undoable(self, action_id: str) -> bool:
+        return action_id in self._rows
 
 
 class FinanceExpenseExecutor:
@@ -32,9 +58,11 @@ class FinanceExpenseExecutor:
         self,
         service: Callable[[], DomainService],
         today: Callable[[], date] = date.today,
+        log: ExpenseLog | None = None,
     ) -> None:
         self._service = service
         self._today = today
+        self._log = log
 
     def __call__(self, order: ExecutionOrder) -> tuple[str, Mapping[str, Any] | None]:
         args = order.args
@@ -63,6 +91,8 @@ class FinanceExpenseExecutor:
             logger.warning("voice expense was refused by the Kernel", exc_info=True)
             return "failed", None
         service.note_change("finance")
+        if self._log is not None:
+            self._log.record(order.grant.action_id, str(result.aggregate_id))
         return "verified", {"kind": "kernel_event", "ref": str(result.event_id)}
 
     @staticmethod
@@ -82,3 +112,34 @@ class FinanceExpenseExecutor:
             if wanted.lower() in (n.lower() for n in names):
                 return str(row["name"])
         return None
+
+
+class ExpenseUndoExecutor:
+    """Reverses one voice expense the same way the Finance page deletes a transaction: a Kernel
+    `transaction.delete`, which writes a tombstone event (nothing is erased, and sync carries it).
+
+    It acts only on a signed grant for `assistant.undo` (T2: a click on the confirm card) and only
+    on an expense this Core recorded in `ExpenseLog`; anything else, including an expense already
+    undone, is `failed`. "Undone." is said only from the tombstone event the Kernel returned."""
+
+    def __init__(self, service: Callable[[], DomainService], log: ExpenseLog) -> None:
+        self._service = service
+        self._log = log
+
+    def __call__(self, order: ExecutionOrder) -> tuple[str, Mapping[str, Any] | None]:
+        target = str(order.args.get("target_action_id", ""))
+        transaction_id = self._log.get(target)
+        if transaction_id is None:
+            return "failed", None
+        service = self._service()
+        handle = service.handle("finance")
+        module = service.binding()
+        try:
+            result = handle.command("transaction.delete", json.dumps({"id": transaction_id}))
+        except module.DomainError:
+            logger.warning("undo was refused by the Kernel", exc_info=True)
+            self._log.forget(target)  # already deleted or gone: not undoable again
+            return "failed", None
+        self._log.forget(target)
+        service.note_change("finance")
+        return "verified", {"kind": "kernel_event", "ref": str(result.event_id)}

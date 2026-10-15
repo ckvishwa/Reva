@@ -321,20 +321,34 @@ class DialogueTracker:
         pending, self.state.pending_clarification = self.state.pending_clarification, None
         return pending
 
-    def accept_proposal(self, action_id: str, entities: list[Entity] | None = None) -> None:
-        """A proposal was accepted and committed: remember it for undo and persist (AR-LANG-005)."""
-        now = self._clock()
+    def accept_proposal(
+        self, action_id: str, entities: list[Entity] | None = None, *, committed: bool = True
+    ) -> None:
+        """A proposal was accepted and committed: remember it for undo and persist (AR-LANG-005).
+
+        `committed=False` accepts the draft but leaves the undo pointer alone: the action is not
+        done until an executor says so (`record_commit`)."""
         for entity in reversed(entities or []):
             self.reference(entity)
-        self.state.committed = [
-            CommittedAction(action_id[:64], now.isoformat()),
-            *self.state.committed,
-        ][:MAX_UNDO]
+        if committed:
+            self._push_committed(action_id)
         self.state.active_intent = None
         self.state.filled_slots = {}
         self.state.missing_slots = []
         self.state.pending_clarification = None
         self._save()
+
+    def record_commit(self, action_id: str) -> None:
+        """An executor confirmed `action_id`: it can now be undone."""
+        self._push_committed(action_id)
+        self._save()
+
+    def _push_committed(self, action_id: str) -> None:
+        now = self._clock()
+        self.state.committed = [
+            CommittedAction(action_id[:64], now.isoformat()),
+            *self.state.committed,
+        ][:MAX_UNDO]
 
     # ---- undo
 
