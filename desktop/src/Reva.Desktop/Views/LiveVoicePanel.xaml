@@ -76,5 +76,10 @@
             AutomationProperties.AutomationId="LiveVoiceReply"
             Text="{x:Bind ViewModel.Reply, Mode=OneWay}" TextWrapping="Wrap"
             Visibility="{x:Bind views:Vis.ShowText(ViewModel.Reply), Mode=OneWay}" />
+        <TextBlock
+            AutomationProperties.AutomationId="LiveVoiceNotice"
+            Text="{x:Bind ViewModel.Notice, Mode=OneWay}" TextWrapping="Wrap"
+            Foreground="{StaticResource RevaMutedBrush}"
+            Visibility="{x:Bind views:Vis.ShowText(ViewModel.Notice), Mode=OneWay}" />
     </StackPanel>
 </UserControl>
