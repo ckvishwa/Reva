@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { AvatarController } from './controller.js';
-import { paused, pixelRatioFor, QUALITY, shouldRender } from './scheduler.js';
+import { advanceSchedule, paused, pixelRatioFor, QUALITY, shouldRender } from './scheduler.js';
 import { loadVrm, VrmRig } from './vrmRig.js';
 
 const params = new URLSearchParams(location.search);
@@ -76,7 +76,7 @@ function tick(now) {
   if (!shouldRender(now, lastRender, controller.quality)) return;
   const dt = (now - last) / 1000;
   last = now;
-  lastRender = now;
+  lastRender = advanceSchedule(now, lastRender, controller.quality);
   const frame = controller.update(dt, now);
   rig.apply(frame, Math.min(dt, 0.1));
   renderer.render(scene, camera);
