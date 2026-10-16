@@ -1,0 +1,35 @@
+{
+  "devices": [
+    {
+      "actions": {
+        "close_apps": true,
+        "open_apps": true
+      },
+      "approved_at": "2026-10-12T09:00:00+00:00",
+      "device_id": "00000000-0000-7000-8000-000000000001",
+      "fingerprint": "f0e1d2c3b4a59687f0e1d2c3b4a59687f0e1d2c3b4a59687f0e1d2c3b4a59687",
+      "last_seen_at": "2026-10-12T09:00:00+00:00",
+      "name": "Pixel 8",
+      "platform": "android",
+      "revoked_at": null,
+      "scopes": [
+        "finance",
+        "pc.app.open",
+        "pc.app.close"
+      ],
+      "status": "active"
+    }
+  ],
+  "gateway": {
+    "enabled": true,
+    "error": null,
+    "host": "192.168.1.20",
+    "listening": true,
+    "pairing": {
+      "expires_in": 118,
+      "state": "approved"
+    },
+    "port": 47821,
+    "tls_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

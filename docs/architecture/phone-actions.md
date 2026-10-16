@@ -41,6 +41,14 @@ Nothing else is reachable from a phone, whatever the registry contains: not UI c
 - **Evidence.** `verified` without evidence of the right shape is recorded as `unknown`, so the phone never hears success from a bare report.
 - **Concurrency.** The broker serializes its public methods (the gateway thread and the Core API thread both use it).
 
+## This PC's app (C2b)
+
+- `desktop/src/Reva.Desktop/Actions/PhoneRequestPoller.cs` long-polls `GET /v1/devices/requests` (Core token, loopback, up to 20 s), with a 250 ms floor between rounds and a backoff of 1 s doubling to 30 s while the Core is unreachable.
+- A request that waits for approval becomes the same confirm card the voice flow uses, headed "Pixel 8 asks: Close Calculator? Approve it on screen." The click goes to the Core as a click on this PC (`via: click`), exactly as for a voice request. A card the Core stops listing (expired, denied, phone revoked) is closed.
+- An order for something safe goes to the existing executor, which verifies the signed grant (signature, expiry, target, actor, arguments) before it touches anything; the same order twice runs once; one item that throws does not stop the next.
+- Devices page: each active phone has two checkboxes, "Let this phone open apps on this PC" and "Let this phone ask to close apps (I approve each one here)". They call `PATCH /v1/devices/{id}/pc-access`, so a phone paired before C2 is upgraded in place; unchecking takes it back.
+- Contract: `tools/desktop/generate_devices_fixtures.py` now captures the real Core's `pc-access`, the paired-with-access device list and the inbox (card + order, then card only) from a real gateway and phone simulator; the C# client and parser are tested against those files, and `tests/contract/test_devices_ui_fixtures.py` fails if the Core's shape changes.
+
 ## Limits worth knowing
 
 - The "delivered" mark for an order is in memory: if Core restarts between handing an order to the app and the executor reporting, the order is not handed out again and the action ends `unknown` when its grant expires. That is the safe direction (no double run).

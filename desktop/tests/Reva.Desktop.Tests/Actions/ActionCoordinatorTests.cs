@@ -212,6 +212,105 @@ public sealed class ActionCoordinatorTests : IDisposable
         Assert.False(model.IsVisible);
     }
 
+    // ------------------------------------------------------------ phone requests (C2)
+
+    private PhoneRequest PhoneOrder(string vectorName = "valid")
+    {
+        var order = ActionsApi.ParseOrder(Proposed(vectorName).Payload)!;
+        return new PhoneRequest("act-0001", order.Capability, "granted", null, null, "Pixel 8", order);
+    }
+
+    [Fact]
+    public async Task A_phone_order_is_executed_and_reported_like_any_other_order()
+    {
+        _launcher.OnStart = () => _windows.Add(new TopWindow(new IntPtr(0x50), 21, "notepad"));
+        var coordinator = new ActionCoordinator(_api, Executor());
+
+        await coordinator.OnPhoneRequestAsync(PhoneOrder());
+
+        var (actionId, grantId, report) = Assert.Single(_api.Reports);
+        Assert.Equal(("act-0001", "grant-valid", "verified"), (actionId, grantId, report.Status));
+        Assert.Equal(1, _launcher.Starts);
+    }
+
+    [Fact]
+    public async Task The_same_phone_order_twice_runs_once()
+    {
+        _launcher.OnStart = () => _windows.Add(new TopWindow(new IntPtr(0x51), 22, "notepad"));
+        var coordinator = new ActionCoordinator(_api, Executor());
+
+        await coordinator.OnPhoneRequestAsync(PhoneOrder());
+        await coordinator.OnPhoneRequestAsync(PhoneOrder());
+
+        Assert.Equal(1, _launcher.Starts);
+        Assert.Single(_api.Reports);
+    }
+
+    [Theory]
+    [InlineData("wrong_signer")]
+    [InlineData("tampered_args_hash")]
+    [InlineData("substituted_args")]
+    [InlineData("malformed_signature")]
+    [InlineData("not_base64")]
+    public async Task A_phone_order_the_executor_cannot_verify_starts_nothing_and_is_reported_failed(string vector)
+    {
+        var coordinator = new ActionCoordinator(_api, Executor());
+
+        await coordinator.OnPhoneRequestAsync(PhoneOrder(vector));
+
+        Assert.Equal(0, _launcher.Starts);
+        Assert.Equal("failed", Assert.Single(_api.Reports).Report.Status);
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("from_the_future")]
+    public async Task A_phone_order_outside_its_validity_window_starts_nothing(string vector)
+    {
+        var at = DateTimeOffset.Parse(_vectors.RootElement.GetProperty("cases").EnumerateArray()
+            .Single(c => c.GetProperty("name").GetString() == vector).GetProperty("now").GetString()!);
+        var executor = new AppActionExecutor(_verifier, new FakeTargets(), _windows, _launcher, new TickingTime(at), poll: TimeSpan.Zero);
+        var coordinator = new ActionCoordinator(_api, executor);
+
+        await coordinator.OnPhoneRequestAsync(PhoneOrder(vector));
+
+        Assert.Equal(0, _launcher.Starts);
+        Assert.Equal("failed", Assert.Single(_api.Reports).Report.Status);
+    }
+
+    [Fact]
+    public async Task A_phone_request_that_waits_for_approval_becomes_a_card_that_names_the_phone()
+    {
+        var coordinator = new ActionCoordinator(_api, Executor());
+        var shown = new List<ApprovalCard>();
+        coordinator.CardRequested += shown.Add;
+        var request = new PhoneRequest("ph-1", "windows.app.close", "awaiting_approval", "Close Calculator? Approve it on screen.", null, "Pixel 8", null);
+
+        await coordinator.OnPhoneRequestAsync(request);
+
+        var card = Assert.Single(shown);
+        Assert.Equal(("ph-1", "Close Calculator? Approve it on screen.", "Pixel 8"), (card.ActionId, card.Prompt, card.From));
+        Assert.Empty(_api.Reports);
+        Assert.Equal(0, _launcher.Starts);
+        var model = new ApprovalCardViewModel(coordinator, action => action());
+        model.Add(card);
+        Assert.Equal("Pixel 8 asks: Close Calculator? Approve it on screen.", model.Prompt);
+    }
+
+    [Fact]
+    public async Task A_phone_request_with_no_order_and_no_prompt_does_nothing()
+    {
+        var coordinator = new ActionCoordinator(_api, Executor());
+        var shown = new List<ApprovalCard>();
+        coordinator.CardRequested += shown.Add;
+
+        await coordinator.OnPhoneRequestAsync(new PhoneRequest("ph-1", "windows.app.open", "refused", null, null, "Pixel 8", null));
+        await coordinator.OnPhoneRequestAsync(new PhoneRequest("ph-2", "windows.app.close", "awaiting_approval", "", null, "Pixel 8", null));
+
+        Assert.Empty(shown);
+        Assert.Empty(_api.Reports);
+    }
+
     private static VoiceEvent Event(string kind, string json) =>
         new(kind, 1, JsonDocument.Parse(json).RootElement.Clone());
 
@@ -244,6 +343,25 @@ internal sealed class FakeApi : IActionsApi
     public List<(string ActionId, bool Approve)> Decisions { get; } = new();
 
     public ActionState? DecideResult { get; set; }
+
+    public List<(long After, TimeSpan Wait)> PhoneRequestCalls { get; } = new();
+
+    public Queue<SettingsResult<PhoneRequests>> PhoneResponses { get; } = new();
+
+    public Func<long, TimeSpan, CancellationToken, Task>? OnPhoneRequests { get; set; }
+
+    public async Task<SettingsResult<PhoneRequests>> GetPhoneRequestsAsync(long after, TimeSpan wait, CancellationToken ct = default)
+    {
+        PhoneRequestCalls.Add((after, wait));
+        if (OnPhoneRequests is not null)
+        {
+            await OnPhoneRequests(after, wait, ct);
+        }
+
+        return PhoneResponses.Count > 0
+            ? PhoneResponses.Dequeue()
+            : SettingsResult<PhoneRequests>.Success(new PhoneRequests(after, Array.Empty<PhoneRequest>()));
+    }
 
     public async Task WaitForReportAsync(int count = 1)
     {

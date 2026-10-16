@@ -551,6 +551,35 @@ public sealed class DevicesViewModel : ObservableObject
         }
     }
 
+    /// <summary>Let a paired phone ask this PC to open or close apps, or take that back. The choice is
+    /// made here, on this PC, and nowhere else.</summary>
+    public async Task SetPhoneAccessAsync(
+        DeviceRowViewModel device, bool openApps, bool closeApps, CancellationToken cancellationToken = default)
+    {
+        if (!device.IsActive || IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var result = await _api.SetPhoneAccessAsync(device.DeviceId, openApps, closeApps, cancellationToken).ConfigureAwait(true);
+            if (!result.IsSuccess)
+            {
+                ErrorMessage = result.Error!.SafeMessage;
+                return;
+            }
+
+            ErrorMessage = null;
+            await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     /// <summary>Hides a finished pairing's message.</summary>
     public void DismissMessage()
     {
