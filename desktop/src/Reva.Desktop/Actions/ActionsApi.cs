@@ -22,6 +22,19 @@ public sealed record WaitingApp(string Key, string DisplayName);
 
 public sealed record AppsSnapshot(IReadOnlyList<AppRow> Apps, IReadOnlyList<WaitingApp> Waiting);
 
+/// <summary>One thing a paired phone asked this PC to do: a card to show (it waits for a click here) or a
+/// signed order to run. Orders are handed out once.</summary>
+public sealed record PhoneRequest(
+    string ActionId,
+    string Capability,
+    string Status,
+    string? Prompt,
+    DateTimeOffset? Deadline,
+    string From,
+    ActionOrder? Order);
+
+public sealed record PhoneRequests(long Seq, IReadOnlyList<PhoneRequest> Items);
+
 public sealed record ActivityRow(string Time, string Request, string From, string Result, string? Evidence);
 
 public interface IActionsApi
@@ -44,6 +57,10 @@ public interface IActionsApi
     Task<SettingsResult<AppsSnapshot>> RemoveAppAsync(string key, CancellationToken ct = default);
 
     Task<SettingsResult<IReadOnlyList<ActivityRow>>> GetActivityAsync(int limit, CancellationToken ct = default);
+
+    /// <summary>What paired phones have asked this PC to do. Waits up to <paramref name="wait"/> for
+    /// something newer than <paramref name="after"/>.</summary>
+    Task<SettingsResult<PhoneRequests>> GetPhoneRequestsAsync(long after, TimeSpan wait, CancellationToken ct = default);
 }
 
 /// <summary>HTTP over Core's loopback <c>/v1/actions</c>, <c>/v1/apps</c> and <c>/v1/activity</c>.</summary>
@@ -118,7 +135,50 @@ public sealed class ActionsApi : IActionsApi
     public async Task<SettingsResult<IReadOnlyList<ActivityRow>>> GetActivityAsync(int limit, CancellationToken ct = default) =>
         Map(await SendAsync(HttpMethod.Get, $"v1/activity?limit={limit}", null, ct).ConfigureAwait(false), ParseActivity);
 
+    public async Task<SettingsResult<PhoneRequests>> GetPhoneRequestsAsync(long after, TimeSpan wait, CancellationToken ct = default) =>
+        Map(
+            await SendAsync(
+                HttpMethod.Get,
+                $"v1/devices/requests?after={after}&wait={wait.TotalSeconds.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}",
+                null,
+                ct,
+                wait + TimeSpan.FromSeconds(10)).ConfigureAwait(false),
+            ParsePhoneRequests);
+
     // ------------------------------------------------------------------ parsing
+
+    public static PhoneRequests? ParsePhoneRequests(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array
+            || !root.TryGetProperty("seq", out var seq) || !seq.TryGetInt64(out var sequence))
+        {
+            return null;
+        }
+
+        var list = new List<PhoneRequest>();
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            string? Text(string name) =>
+                item.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+            var id = Text("action_id");
+            var status = Text("status");
+            if (id is null || status is null)
+            {
+                continue; // an item REVA cannot read is dropped, never guessed at
+            }
+
+            DateTimeOffset? deadline = DateTimeOffset.TryParse(Text("deadline"), out var parsed) ? parsed : null;
+            list.Add(new PhoneRequest(id, Text("capability") ?? string.Empty, status, Text("prompt"), deadline, Text("from") ?? "A phone", ParseOrder(item)));
+        }
+
+        return new PhoneRequests(sequence, list);
+    }
 
     public static ActionState? ParseAction(JsonElement root)
     {
@@ -217,7 +277,8 @@ public sealed class ActionsApi : IActionsApi
 
     // ------------------------------------------------------------------ transport
 
-    private async Task<SettingsResult<JsonElement>> SendAsync(HttpMethod method, string path, JsonObject? body, CancellationToken ct)
+    private async Task<SettingsResult<JsonElement>> SendAsync(
+        HttpMethod method, string path, JsonObject? body, CancellationToken ct, TimeSpan? timeoutOverride = null)
     {
         var token = await _tokens.GetTokenAsync(ct).ConfigureAwait(false);
         if (!token.IsAvailable)
@@ -232,7 +293,7 @@ public sealed class ActionsApi : IActionsApi
             request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
         }
 
-        using var timeout = new CancellationTokenSource(_timeout);
+        using var timeout = new CancellationTokenSource(timeoutOverride ?? _timeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         try
         {

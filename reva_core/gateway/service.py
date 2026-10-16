@@ -14,7 +14,9 @@ stay on the PC.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
+import re
 import threading
 import time
 from collections import OrderedDict, deque
@@ -28,8 +30,24 @@ from reva_core.gateway import protocol
 from reva_core.gateway.identity import GatewayIdentity, make_kernel_signer
 from reva_core.gateway.pairing import SCOPES, PairingError, PendingPhone
 from reva_core.gateway.store import Grant, GrantStore
+from reva_core.policy.authorize import Proposal
+from reva_core.policy.broker import ActionView, Broker, BrokerFull, UnknownAction
 
 DOMAIN = "finance"
+
+# What a paired phone may ask this PC to do, and the grant scope that allows each. Nothing else is
+# reachable from a phone, whatever the registry says: not UI control, not memory, not money.
+PHONE_ACTION_SCOPES = {
+    "windows.app.open": "pc.app.open",  # T1: opens an app the owner approved
+    "windows.app.close": "pc.app.close",  # T2: also needs a click on this PC
+}
+MAX_OPEN_PER_PHONE = 8  # one phone cannot fill the broker and starve this PC's own actions
+MAX_NEW_ACTIONS_PER_PHONE = 20  # completed actions cannot evade the open-request cap
+ACTION_RATE_WINDOW = 60.0
+ACTION_REQUEST_TTL = 120  # seconds a request may sit before the PC refuses it as stale
+ACTION_REQUEST_FUTURE = 30  # clock skew allowed the other way
+MAX_ACTION_ARGS_BYTES = 2048
+_REQUEST_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 CLOCK_SKEW_SECONDS = 120
 MAX_PULL_EVENTS = 500
 _FAILURE_WINDOW = 60.0
@@ -55,7 +73,9 @@ class GatewayService:
         domains: Callable[[], DomainService],
         privacy: DomainPrivacyStore,
         now: Callable[[], float] = time.time,
+        broker: Callable[[], Broker | None] = lambda: None,
     ) -> None:
+        self._broker = broker
         self._store = store
         self._identity_factory = identity
         self._domains = domains
@@ -64,6 +84,7 @@ class GatewayService:
         self._lock = threading.RLock()
         self._nonces: OrderedDict[str, float] = OrderedDict()
         self._failures: dict[str, deque[float]] = {}
+        self._phone_actions: dict[str, deque[float]] = {}
 
     @property
     def _identity(self) -> GatewayIdentity:
@@ -229,13 +250,58 @@ class GatewayService:
             if grant is None:
                 return False
             changed = self._store.revoke(device_id)
+            self._phone_actions.pop(device_id, None)
             handle, module = self._finance()
             for kernel_id in grant.kernel_ids.values():
                 # Not registered in the Kernel? The grant is revoked either way.
                 with contextlib.suppress(module.DomainError):
                     handle.revoke_peer(kernel_id)
-            self._store.audit("device_revoked", AuditOutcome.SUCCESS, device_id=device_id)
+            withdrawn = 0
+            broker = self._broker()
+            if broker is not None:
+                # Requests from this phone that are still waiting, or whose order nobody has picked
+                # up, are withdrawn; the PC's app is never handed an order from a revoked phone.
+                withdrawn = broker.cancel_for_origin(device_id)
+            self._store.audit(
+                "device_revoked", AuditOutcome.SUCCESS, device_id=device_id, withdrawn=withdrawn
+            )
             return changed
+
+    def set_phone_actions(
+        self, device_id: str, *, open_apps: bool, close_apps: bool
+    ) -> dict[str, bool]:
+        """The owner, on this PC, decides which PC actions an already paired phone may ask for.
+        This is the upgrade path: a phone paired before actions existed gets nothing until then."""
+        with self._lock:
+            grant = self._store.get(device_id)
+            if grant is None or not grant.active:
+                raise GatewayError("unknown_device", 404)
+            kept = tuple(s for s in grant.scopes if s not in PHONE_ACTION_SCOPES.values())
+            chosen = tuple(
+                scope
+                for wanted, scope in (
+                    (open_apps, "pc.app.open"),
+                    (close_apps, "pc.app.close"),
+                )
+                if wanted
+            )
+            self._store.set_scopes(device_id, kept + chosen)
+            self._store.audit(
+                "device_actions_changed",
+                AuditOutcome.SUCCESS,
+                device_id=device_id,
+                open_apps=int(open_apps),
+                close_apps=int(close_apps),
+            )
+            return {"open_apps": open_apps, "close_apps": close_apps}
+
+    def is_active_device(self, device_id: str) -> bool:
+        grant = self._store.get(device_id)
+        return grant is not None and grant.active
+
+    def device_name(self, device_id: str) -> str:
+        grant = self._store.get(device_id)
+        return grant.display_name if grant is not None else "A phone"
 
     # ------------------------------------------------------------------------------ sync
 
@@ -318,6 +384,102 @@ class GatewayService:
             raise _map(module, exc) from exc
         return {"acknowledged": cursor}
 
+    # -------------------------------------------------------------------------- actions
+
+    def act_propose(self, grant: Grant, payload: dict[str, Any]) -> dict[str, Any]:
+        """A phone asks this PC to do one allowlisted thing. The same `request_id` is the same
+        request, however many times it is sent: a retry after a dropped connection never acts twice,
+        and the same id with different content is refused, not merged. Nothing here decides or acts:
+        the broker authorizes, a click on this PC approves anything sensitive, and only the PC's
+        executor reports what happened."""
+        request_id = _request_id(payload)
+        capability = payload.get("capability")
+        args = payload.get("args")
+        issued_at = payload.get("issued_at")
+        if (
+            not isinstance(capability, str)
+            or not isinstance(args, dict)
+            or not isinstance(issued_at, int)
+            or isinstance(issued_at, bool)
+            or len(json.dumps(args)) > MAX_ACTION_ARGS_BYTES
+        ):
+            raise GatewayError("bad_request", 422)
+        age = self._now() - issued_at
+        if age > ACTION_REQUEST_TTL or age < -ACTION_REQUEST_FUTURE:
+            self._store.audit(
+                "phone_action_refused",
+                AuditOutcome.DENIED,
+                device_id=grant.device_id,
+                reason="request_expired",
+            )
+            raise GatewayError("request_expired", 410)
+        needed = PHONE_ACTION_SCOPES.get(capability)
+        if needed is None:
+            self._store.audit(
+                "phone_action_refused",
+                AuditOutcome.DENIED,
+                device_id=grant.device_id,
+                reason="capability_not_allowed",
+            )
+            raise GatewayError("capability_not_allowed", 403)
+        if needed not in grant.scopes:
+            self._store.audit(
+                "phone_action_refused",
+                AuditOutcome.DENIED,
+                device_id=grant.device_id,
+                reason="out_of_scope",
+            )
+            raise GatewayError("out_of_scope", 403)
+        broker = self._broker()
+        if broker is None:
+            raise GatewayError("actions_unavailable", 503)
+        proposal_id = _proposal_id(grant.device_id, request_id)
+        is_new = not broker.knows(proposal_id)
+        if is_new:
+            if broker.open_for_origin(grant.device_id) >= MAX_OPEN_PER_PHONE:
+                raise GatewayError("too_many_actions", 429)
+            recent = self._phone_actions.setdefault(grant.device_id, deque())
+            horizon = self._now() - ACTION_RATE_WINDOW
+            while recent and recent[0] < horizon:
+                recent.popleft()
+            if len(recent) >= MAX_NEW_ACTIONS_PER_PHONE:
+                raise GatewayError("rate_limited", 429)
+        proposal = Proposal(
+            proposal_id=proposal_id,
+            capability=capability,
+            args=args,
+            source="phone",
+            origin_device=grant.device_id,
+            target_device="local",
+        )
+        try:
+            view = broker.propose(proposal, device_scopes=frozenset({"windows"}))
+        except BrokerFull as exc:
+            raise GatewayError("too_many_actions", 429) from exc
+        if is_new:
+            self._phone_actions[grant.device_id].append(self._now())
+        self._store.audit(
+            "phone_action_requested",
+            AuditOutcome.SUCCESS,
+            device_id=grant.device_id,
+            capability=capability,
+            status=view.status,
+        )
+        return _action_view(request_id, view)
+
+    def act_status(self, grant: Grant, payload: dict[str, Any]) -> dict[str, Any]:
+        """What the Core's own record says about this phone's request. A phone can read only its
+        own requests (the id is derived from its device id) and never receives an order or grant."""
+        request_id = _request_id(payload)
+        broker = self._broker()
+        if broker is None:
+            raise GatewayError("actions_unavailable", 503)
+        try:
+            view = broker.get(_proposal_id(grant.device_id, request_id))
+        except UnknownAction as exc:
+            raise GatewayError("unknown_request", 404) from exc
+        return _action_view(request_id, view)
+
     # ---------------------------------------------------------------------------- helpers
 
     def _finance(self) -> tuple[Any, Any]:
@@ -340,6 +502,36 @@ class GatewayService:
         handle, module = self._finance()
         self._ensure_signer(handle, module)
         return handle, module
+
+
+def _request_id(payload: dict[str, Any]) -> str:
+    value = payload.get("request_id")
+    if not isinstance(value, str) or not _REQUEST_ID.match(value):
+        raise GatewayError("bad_request", 422)
+    return value
+
+
+def _proposal_id(device_id: str, request_id: str) -> str:
+    """The broker's id for a phone's request: derived from the phone, so two phones (or a phone and
+    this PC's own app) can never collide on, read, or overwrite each other's requests."""
+    return "ph-" + hashlib.sha256(f"{device_id}:{request_id}".encode()).hexdigest()[:40]
+
+
+def _action_view(request_id: str, view: ActionView) -> dict[str, Any]:
+    """The answer for a phone. Words come from the Core's templates; success is only ever
+    `verified`, which the broker records only with the executor's evidence. No order, grant or
+    signature."""
+    return {
+        "request_id": request_id,
+        "capability": view.capability,
+        "tier": view.tier,
+        "status": view.status,
+        "reason": view.reason,
+        "speak": view.speak,
+        "prompt": view.prompt,
+        "deadline": view.deadline,
+        "evidence_kind": view.evidence_kind,
+    }
 
 
 def _int(payload: dict[str, Any], key: str) -> int:

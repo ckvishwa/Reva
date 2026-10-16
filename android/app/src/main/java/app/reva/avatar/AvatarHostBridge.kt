@@ -1,5 +1,7 @@
 package app.reva.avatar
 
+import android.os.Handler
+import android.os.Looper
 import android.webkit.JavascriptInterface
 import org.json.JSONException
 import org.json.JSONObject
@@ -39,8 +41,10 @@ sealed interface AvatarReport {
  * and returns nothing.
  */
 class AvatarHostBridge(private val onReport: (AvatarReport) -> Unit) {
+    private val ui = Handler(Looper.getMainLooper())
+
     @JavascriptInterface
     fun postMessage(raw: String?) {
-        AvatarReport.parse(raw)?.let(onReport)
+        AvatarReport.parse(raw)?.let { report -> ui.post { onReport(report) } }
     }
 }

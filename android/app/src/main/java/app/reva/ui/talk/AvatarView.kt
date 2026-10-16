@@ -2,6 +2,8 @@ package app.reva.ui.talk
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -114,6 +116,7 @@ private fun reducedMotion(context: Context): Boolean =
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun createAvatarWebView(context: Context, onFailed: () -> Unit, onLoaded: () -> Unit): WebView {
+    val ui = Handler(Looper.getMainLooper())
     val loader = WebViewAssetLoader.Builder()
         .setDomain(HOST)
         .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
@@ -136,7 +139,7 @@ private fun createAvatarWebView(context: Context, onFailed: () -> Unit, onLoaded
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                 val local = loader.shouldInterceptRequest(request.url)
                 if (local != null && request.url.host == HOST) return local
-                onFailed.takeIf { request.isForMainFrame }?.invoke()
+                if (request.isForMainFrame) ui.post { onFailed() }
                 return WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
             }
 

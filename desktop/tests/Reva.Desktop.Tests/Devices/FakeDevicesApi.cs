@@ -63,6 +63,33 @@ internal sealed class FakeDevicesApi : IDevicesApi
             return new ApprovedPairing("dev-1");
         }, ct);
 
+    public List<(string DeviceId, bool OpenApps, bool CloseApps)> AccessChanges { get; } = new();
+
+    public Task<DevicesResult<PhoneAccessOutcome>> SetPhoneAccessAsync(
+        string deviceId, bool openApps, bool closeApps, CancellationToken ct = default) =>
+        Run($"SetPhoneAccess:{deviceId}:{openApps}:{closeApps}", () =>
+        {
+            AccessChanges.Add((deviceId, openApps, closeApps));
+            var index = Devices.FindIndex(d => d.DeviceId == deviceId);
+            if (index >= 0)
+            {
+                var scopes = new List<string> { "finance" };
+                if (openApps)
+                {
+                    scopes.Add("pc.app.open");
+                }
+
+                if (closeApps)
+                {
+                    scopes.Add("pc.app.close");
+                }
+
+                Devices[index] = Devices[index] with { Actions = new PhoneActionAccess(openApps, closeApps), Scopes = scopes };
+            }
+
+            return new PhoneAccessOutcome(deviceId, openApps, closeApps);
+        }, ct);
+
     public Task<DevicesResult<DeniedPairing>> DenyPairingAsync(CancellationToken ct = default) =>
         Run("Deny", () =>
         {

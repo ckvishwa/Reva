@@ -106,6 +106,7 @@ class CoreLifecycle:
             lambda: self.domain_service,
             self._domain_privacy,
             self._gateway_key_provider,
+            broker=lambda: self._broker,
         )
         self._gateway.startup()
         self._embedding_provider = OllamaEmbeddingProvider(

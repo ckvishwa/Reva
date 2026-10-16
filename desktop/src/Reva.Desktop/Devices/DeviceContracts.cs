@@ -32,7 +32,18 @@ public sealed record PairedDevice(
     [property: JsonPropertyName("fingerprint")] string Fingerprint,
     [property: JsonPropertyName("approved_at")] string ApprovedAt,
     [property: JsonPropertyName("revoked_at")] string? RevokedAt,
-    [property: JsonPropertyName("last_seen_at")] string? LastSeenAt);
+    [property: JsonPropertyName("last_seen_at")] string? LastSeenAt,
+    [property: JsonPropertyName("actions")] PhoneActionAccess? Actions = null);
+
+/// <summary>What the owner has let a paired phone ask this PC to do. Set only here, on this PC.</summary>
+public sealed record PhoneActionAccess(
+    [property: JsonPropertyName("open_apps")] bool OpenApps,
+    [property: JsonPropertyName("close_apps")] bool CloseApps);
+
+public sealed record PhoneAccessOutcome(
+    [property: JsonPropertyName("device_id")] string DeviceId,
+    [property: JsonPropertyName("open_apps")] bool OpenApps,
+    [property: JsonPropertyName("close_apps")] bool CloseApps);
 
 public sealed record DevicesSnapshot(
     [property: JsonPropertyName("gateway")] GatewayStatus Gateway,

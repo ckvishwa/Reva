@@ -257,10 +257,19 @@ class KernelConformanceTest {
         }
     }
 
-    @Test fun the_app_holds_only_the_sync_permissions_at_runtime() {
+    @Test fun the_app_holds_only_the_pairing_and_voice_permissions_at_runtime() {
         val info = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
         val requested = info.requestedPermissions?.toList() ?: emptyList()
-        assertEquals(setOf("android.permission.INTERNET", "android.permission.CAMERA"), requested.filter { it.startsWith("android.permission.") }.toSet())
+        assertEquals(
+            setOf(
+                "android.permission.INTERNET",
+                "android.permission.CAMERA",
+                "android.permission.RECORD_AUDIO",
+                "android.permission.FOREGROUND_SERVICE",
+                "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+            ),
+            requested.filter { it.startsWith("android.permission.") }.toSet(),
+        )
         assertFalse(requested.contains("android.permission.QUERY_ALL_PACKAGES"))
         assertFalse(requested.any { it.contains("ACCESSIBILITY") })
     }

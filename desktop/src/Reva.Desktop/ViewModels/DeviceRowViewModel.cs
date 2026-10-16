@@ -13,6 +13,8 @@ public sealed class DeviceRowViewModel
         IsActive = device.Status == "active";
         StatusText = IsActive ? "Active" : "Revoked";
         ScopesText = ScopesFor(device.Scopes);
+        OpenAppsAllowed = device.Actions?.OpenApps ?? false;
+        CloseAppsAllowed = device.Actions?.CloseApps ?? false;
         LastSeenText = IsActive ? LastSeen(device.LastSeenAt, now) : $"Revoked {RelativeTime(device.RevokedAt, now)}";
         FingerprintText = ShortFingerprint(device.Fingerprint);
         PairedText = $"Paired {RelativeTime(device.ApprovedAt, now)}";
@@ -29,6 +31,12 @@ public sealed class DeviceRowViewModel
 
     public string ScopesText { get; }
 
+    /// <summary>This phone may ask this PC to open an approved app (no confirmation).</summary>
+    public bool OpenAppsAllowed { get; }
+
+    /// <summary>This phone may ask this PC to close an app; each request waits for a click here.</summary>
+    public bool CloseAppsAllowed { get; }
+
     public string LastSeenText { get; }
 
     public string PairedText { get; }
@@ -38,10 +46,35 @@ public sealed class DeviceRowViewModel
 
     public string AccessibleName { get; }
 
-    public static string ScopesFor(IReadOnlyList<string> scopes) =>
-        scopes.Count == 1 && scopes[0] == "finance"
-            ? "Finance only"
-            : string.Join(", ", scopes.Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
+    public static string ScopesFor(IReadOnlyList<string> scopes)
+    {
+        if (!scopes.Any(s => s.StartsWith("pc.", StringComparison.Ordinal)))
+        {
+            return scopes.Count == 1 && scopes[0] == "finance"
+                ? "Finance only"
+                : string.Join(", ", scopes.Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
+        }
+
+        var parts = new List<string>();
+        if (scopes.Contains("finance"))
+        {
+            parts.Add("Finance sync");
+        }
+
+        if (scopes.Contains("pc.app.open"))
+        {
+            parts.Add("can open apps here");
+        }
+
+        if (scopes.Contains("pc.app.close"))
+        {
+            parts.Add("can ask to close apps (you approve here)");
+        }
+
+        var others = scopes.Where(s => s != "finance" && !s.StartsWith("pc.", StringComparison.Ordinal))
+            .Select(s => char.ToUpperInvariant(s[0]) + s[1..]);
+        return string.Join(", ", parts.Concat(others));
+    }
 
     public static string ShortFingerprint(string hex)
     {

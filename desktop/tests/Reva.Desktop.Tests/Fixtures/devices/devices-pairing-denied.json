@@ -1,6 +1,10 @@
 {
   "devices": [
     {
+      "actions": {
+        "close_apps": true,
+        "open_apps": true
+      },
       "approved_at": "2026-10-12T09:00:00+00:00",
       "device_id": "00000000-0000-7000-8000-000000000001",
       "fingerprint": "f0e1d2c3b4a59687f0e1d2c3b4a59687f0e1d2c3b4a59687f0e1d2c3b4a59687",
@@ -9,7 +13,9 @@
       "platform": "android",
       "revoked_at": null,
       "scopes": [
-        "finance"
+        "finance",
+        "pc.app.open",
+        "pc.app.close"
       ],
       "status": "active"
     }

@@ -33,6 +33,18 @@
                                 VerticalAlignment="Center" />
                         </StackPanel>
                         <TextBlock Text="{x:Bind ScopesText}" Style="{StaticResource RevaBodyText}" />
+                        <CheckBox
+                            Content="Let this phone open apps on this PC"
+                            IsChecked="{x:Bind OpenAppsAllowed}"
+                            Visibility="{x:Bind local:Vis.Show(IsActive)}"
+                            AutomationProperties.AutomationId="PhoneOpenAppsToggle"
+                            Click="PhoneOpenApps_Click" />
+                        <CheckBox
+                            Content="Let this phone ask to close apps (I approve each one here)"
+                            IsChecked="{x:Bind CloseAppsAllowed}"
+                            Visibility="{x:Bind local:Vis.Show(IsActive)}"
+                            AutomationProperties.AutomationId="PhoneCloseAppsToggle"
+                            Click="PhoneCloseApps_Click" />
                         <TextBlock Text="{x:Bind LastSeenText}" Style="{StaticResource RevaMutedText}" />
                         <TextBlock Style="{StaticResource RevaCaptionText}">
                             <Run Text="{x:Bind PairedText}" /><Run Text=" · key " /><Run Text="{x:Bind FingerprintText}" FontFamily="{StaticResource RevaMono}" />

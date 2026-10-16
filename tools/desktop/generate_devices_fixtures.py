@@ -63,6 +63,12 @@ def normalise(value: Any, seen: dict[str, str], key: str = "") -> Any:
         return STAMP
     if key == "expires_in":
         return 118
+    if key in {"issued_at", "expires_at", "deadline", "created"} and isinstance(value, str):
+        return STAMP
+    if key == "signature":
+        return "SIGNATURE"
+    if isinstance(value, str) and value.startswith("ph-"):
+        return seen.setdefault(value, f"ph-{len(seen) + 1:040d}")
     if key == "expires_at":
         return EXPIRES_AT
     if key == "session_id":
@@ -144,6 +150,31 @@ def build() -> dict[str, Any]:
             )
             assert phone.push().status == 200
             out["devices-paired"] = get("/v1/devices")
+
+            # C2: the owner lets this phone open and close apps (here, on this PC); the phone asks;
+            # this PC's app picks up a card (close, waits for a click here) and an order (open).
+            out["pc-access"] = client.patch(
+                f"/v1/devices/{phone.device_id}/pc-access",
+                json={"open_apps": True, "close_apps": True},
+                headers=auth,
+            ).json()
+            out["devices-paired-with-access"] = get("/v1/devices")
+            for capability, args in (
+                ("windows.app.close", {"app_key": "calculator"}),
+                ("windows.app.open", {"app_key": "calculator"}),
+            ):
+                asked = phone.signed(
+                    "/actions/propose",
+                    {
+                        "request_id": "fixture-" + capability.split(".")[-1] + "-00000001",
+                        "capability": capability,
+                        "args": args,
+                        "issued_at": int(__import__("time").time()),
+                    },
+                )
+                assert asked.status == 200, asked.body
+            out["phone-requests"] = get("/v1/devices/requests")
+            out["phone-requests-card-only"] = get("/v1/devices/requests")
 
             client.post("/v1/devices/pairing", headers=auth)
             out["pairing-denied"] = client.post("/v1/devices/pairing/deny", headers=auth).json()

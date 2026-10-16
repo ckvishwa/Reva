@@ -1,4 +1,4 @@
-"""The gateway's own ASGI app: five POST routes and nothing else (ARD-500 section 2, AR-DATA-006).
+"""The gateway's own ASGI app: seven POST routes and nothing else (ARD-500 section 2, AR-DATA-006).
 
 It shares no router, dependency, token or exception handler with the loopback Core API, and it never
 sees the Core bearer token. Every other path, method or content type gets a bare error before any
@@ -9,6 +9,8 @@ logic runs. Interactive docs and the OpenAPI document are switched off.
     POST /sync/push      phone -> PC   signed events from the phone
     POST /sync/pull      phone -> PC   next signed events for the phone (+ key directory)
     POST /sync/ack       phone -> PC   cursor the phone has applied
+    POST /actions/propose phone -> PC  a request for the PC to act (an allowlisted capability)
+    POST /actions/status  phone -> PC  what became of that request, from the Core's own record
 """
 
 from __future__ import annotations
@@ -171,6 +173,16 @@ def build_gateway_app(
     @app.post("/sync/ack")
     async def sync_ack(request: Request) -> Response:
         return await authenticated(request, service.ack)
+
+    # ----------------------------------------------------------------------- actions (C2)
+
+    @app.post("/actions/propose")
+    async def actions_propose(request: Request) -> Response:
+        return await authenticated(request, service.act_propose)
+
+    @app.post("/actions/status")
+    async def actions_status(request: Request) -> Response:
+        return await authenticated(request, service.act_status)
 
     # ------------------------------------------------------------------------- errors
 
