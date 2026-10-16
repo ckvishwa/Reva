@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     # through authorize()/the signed-grant broker exactly like a voice command would.
     openclaw_enabled: bool = False
     openclaw_host: str = "127.0.0.1"
-    openclaw_port: int = Field(default=8765, ge=1, le=65535)
+    openclaw_port: int = Field(default=18789, ge=1, le=65535)  # gateway.port doc default
     # Owner-authorized (ADR-041): the local OpenClaw instance is expected to run with
     # agents.defaults.sandbox.mode="off". REVA records this expectation for the audit trail; it
     # does not and cannot enforce OpenClaw's own process config from here.

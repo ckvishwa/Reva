@@ -12,6 +12,18 @@ The owner has explicitly authorized running the local OpenClaw instance with
 config from here; this module only enforces REVA's own boundary: loopback-only, authenticated,
 one request per connection, a hard timeout, no REVA secret ever placed in an outbound message, and
 every reply is an untrusted proposal, never a claim of completion.
+
+Wire shapes here are verified against the pinned upstream commit's own published machine-readable
+contract (`@openclaw/gateway-protocol@2026.8.1` `protocol.schema.json`), not guessed from prose —
+see docs/security/O0-openclaw-source-audit.md §10 for exactly what was checked and how.
+
+**Open scope question (not resolved here, needs owner sign-off):** the pinned docs' own scope
+table (`docs/gateway/clients.md`) says `chat.send` and "ordinary session mutations" require
+`operator.write`, not `operator.talk`. This adapter still requests only `operator.read` plus
+`operator.talk` — the narrower pair ADR-041 described — because widening to `operator.write` is a
+real increase in authority this module must not grant itself silently. Until the owner decides,
+`sessions.create`/`chat.send` are expected to fail with `MISSING_SCOPE` against a real Gateway, and
+that failure is surfaced as `OpenClawUnavailable("missing_scope")`, not misread as something else.
 """
 
 from __future__ import annotations
@@ -40,7 +52,10 @@ SOURCE = "openclaw"
 ORIGIN_DEVICE = "local"  # the sidecar runs on this same PC; the confirm-card UI is this PC's own
 TARGET_DEVICE = "local"
 MAX_REPLY_CHARS = 4000
-_TERMINAL_STATES = frozenset({"final", "error", "aborted"})
+# The scope this adapter requests today. Verified (protocol.schema.json + docs/gateway/clients.md)
+# that `operator.write` is the documented minimum for chat.send/sessions.create; requesting it is
+# a scope-widening decision left to the owner (see module docstring), so this stays as-is for now.
+REQUESTED_SCOPES: tuple[str, ...] = ("operator.read", "operator.talk")
 
 
 class OpenClawUnavailable(Exception):
@@ -68,7 +83,8 @@ class OpenClawConfig:
 
     enabled: bool = False
     host: str = "127.0.0.1"
-    port: int = 8765
+    # docs/gateway/config-gateway.md: `gateway.port` default.
+    port: int = 18789
     sandbox_mode: str = "off"  # owner-authorized (ADR-041); recorded, not enforced from here
     connect_timeout_seconds: float = 5.0
     request_timeout_seconds: float = 30.0
@@ -76,7 +92,9 @@ class OpenClawConfig:
 
     @property
     def url(self) -> str:
-        return f"ws://{self.host}:{self.port}/gateway"
+        # docs/gateway/config-gateway.md `gateway.remote.url` example is the bare `ws://host:port`
+        # with no path suffix; there is no documented `/gateway` (or any other) path segment.
+        return f"ws://{self.host}:{self.port}"
 
 
 @dataclass(frozen=True)
@@ -102,9 +120,7 @@ def _connect_frame(request_id: str, token: str) -> dict[str, Any]:
                 "mode": "operator",
             },
             "role": "operator",
-            # Deliberately minimal: no operator.admin/write/approvals/pairing — this connection
-            # only ever reads a reply, it never issues OpenClaw-side approvals or config changes.
-            "scopes": ["operator.read", "operator.talk"],
+            "scopes": list(REQUESTED_SCOPES),
             "auth": {"token": token},
         },
     }
@@ -121,8 +137,26 @@ def _redact(frame: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _missing_scope(error: Mapping[str, Any]) -> bool:
+    details = error.get("details")
+    return isinstance(details, Mapping) and details.get("code") == "MISSING_SCOPE"
+
+
+def _check_ack(message: Mapping[str, Any], request_id: str, *, refused_reason: str) -> Any:
+    """A response frame: right `type`, right `id` (never trust an unmatched response), `ok`."""
+    if message.get("type") != "res" or str(message.get("id")) != str(request_id):
+        raise OpenClawUnavailable("protocol_error")
+    if message.get("ok"):
+        return message.get("payload")
+    error = message.get("error") or {}
+    if _missing_scope(error):
+        raise OpenClawUnavailable("missing_scope")
+    raise OpenClawUnavailable(refused_reason)
+
+
 class OpenClawGatewayClient:
-    """One request, one connection: connect, send, read until a terminal state, close.
+    """One request, one connection: challenge, connect, subscribe, send, read until a terminal
+    state, close.
 
     No persistent session reuse in this first slice (a known limitation — see
     docs/security/O0-openclaw-source-audit.md §7) so there is no reconnect/resubscribe state
@@ -154,8 +188,15 @@ class OpenClawGatewayClient:
         except SecretStoreError:
             return False
 
-    async def ask(self, text: str) -> OpenClawReply:
-        """Send one chat turn; return its final text. Raises `OpenClawUnavailable` otherwise."""
+    async def ask(self, text: str, *, idempotency_key: str | None = None) -> OpenClawReply:
+        """Send one chat turn; return its final text. Raises `OpenClawUnavailable` otherwise.
+
+        `idempotency_key` doubles as the session key and the protocol-level `idempotencyKey`
+        `chat.send` requires. Pass the same value on a retry of the same logical request; a fresh
+        one is generated otherwise. This is in addition to, not instead of, the broker's own
+        same-proposal-id dedup in `OpenClawAdapter`, which keys off the chat event stream's
+        `runId`, not this value.
+        """
         if not self._config.enabled:
             raise OpenClawUnavailable("off")
         try:
@@ -166,7 +207,7 @@ class OpenClawGatewayClient:
             raise OpenClawUnavailable("no_token")
 
         ids = itertools.count(1)
-        session_key = f"reva-{new_id()}"
+        session_key = idempotency_key or f"reva-{new_id()}"
         try:
             async with asyncio.timeout(self._config.connect_timeout_seconds):
                 ws = await self._connector(self._config.url)
@@ -178,8 +219,8 @@ class OpenClawGatewayClient:
         try:
             async with asyncio.timeout(self._config.request_timeout_seconds):
                 await self._handshake(ws, next(ids), token)
-                run_id = await self._start_turn(ws, next(ids), session_key, text)
-                return await self._read_until_final(ws, run_id)
+                await self._start_turn(ws, ids, session_key, text)
+                return await self._read_until_final(ws, session_key)
         except TimeoutError as exc:
             try:
                 await self._abort(ws, next(ids), session_key)
@@ -218,6 +259,15 @@ class OpenClawGatewayClient:
                 await ws.close()
 
     async def _handshake(self, ws: WebSocketLike, request_id: int, token: str) -> None:
+        # docs/gateway/protocol/handshake.md: the Gateway sends a pre-connect `connect.challenge`
+        # event before the client's `connect` request is answered. Requesting protocol 4 only (as
+        # this client does) means the Gateway always sends it; a connection that skips it is a
+        # protocol surprise this client fails closed on rather than guessing at compatibility.
+        raw = await ws.recv()
+        challenge = _loads(raw)
+        if challenge.get("type") != "event" or challenge.get("event") != "connect.challenge":
+            raise OpenClawUnavailable("protocol_error")
+
         frame = _connect_frame(str(request_id), token)
         await ws.send(_dumps(frame))
         raw = await ws.recv()
@@ -226,6 +276,8 @@ class OpenClawGatewayClient:
             raise OpenClawUnavailable("protocol_error")
         if not message.get("ok"):
             error = message.get("error") or {}
+            if _missing_scope(error):
+                raise OpenClawUnavailable("missing_scope")
             code = error.get("code", "UNKNOWN")
             if code in ("UNAUTHORIZED", "FORBIDDEN", "admission-rejected"):
                 raise OpenClawUnavailable("unauthorized")
@@ -235,62 +287,87 @@ class OpenClawGatewayClient:
             raise OpenClawUnavailable("protocol_error")
 
     async def _start_turn(
-        self, ws: WebSocketLike, request_id: int, session_key: str, text: str
-    ) -> str | None:
+        self, ws: WebSocketLike, ids: itertools.count[int], session_key: str, text: str
+    ) -> None:
+        create_id = str(next(ids))
         create = {
             "type": "req",
-            "id": str(request_id),
+            "id": create_id,
             "method": "sessions.create",
-            "params": {"key": session_key, "surface": "reva-openclaw-adapter"},
+            # Schema-verified (SessionsCreateParams, additionalProperties: false): no "surface"
+            # or other invented field survives a real Gateway's schema validation.
+            "params": {"key": session_key, "idempotencyKey": session_key},
         }
         await ws.send(_dumps(create))
         raw = await ws.recv()
-        if not _loads(raw).get("ok", True):
-            raise OpenClawUnavailable("session_create_failed")
+        _check_ack(_loads(raw), create_id, refused_reason="session_create_failed")
 
-        send_id = request_id + 1000
+        subscribe_id = str(next(ids))
+        subscribe = {
+            "type": "req",
+            "id": subscribe_id,
+            "method": "sessions.messages.subscribe",
+            "params": {"key": session_key},
+        }
+        await ws.send(_dumps(subscribe))
+        raw = await ws.recv()
+        _check_ack(_loads(raw), subscribe_id, refused_reason="subscribe_failed")
+
+        send_id = str(next(ids))
         send = {
             "type": "req",
-            "id": str(send_id),
+            "id": send_id,
             "method": "chat.send",
             "params": {
                 "sessionKey": session_key,
-                "queueMode": "steer",
                 "message": text[:MAX_REPLY_CHARS],
+                # Required by ChatSendParams, not optional: the Gateway's own protocol-level
+                # dedup for this exact send. Reusing `session_key` means a retry that passes the
+                # same idempotency_key to `ask()` is a no-op send at the Gateway too.
+                "idempotencyKey": session_key,
+                "queueMode": "steer",
             },
         }
         await ws.send(_dumps(send))
         raw = await ws.recv()
-        message = _loads(raw)
-        if not message.get("ok"):
-            raise OpenClawUnavailable("send_refused")
-        run_started = (message.get("payload") or {}).get("runStarted") or {}
-        return run_started.get("runId")
+        _check_ack(_loads(raw), send_id, refused_reason="send_refused")
 
-    async def _read_until_final(self, ws: WebSocketLike, run_id: str | None) -> OpenClawReply:
+    async def _read_until_final(self, ws: WebSocketLike, session_key: str) -> OpenClawReply:
         text_parts: list[str] = []
+        run_id: str | None = None
         while True:
             raw = await ws.recv()
             message = _loads(raw)
-            if message.get("type") != "event":
-                continue  # a res for some other in-flight id; this slice only has one at a time
+            if message.get("type") != "event" or message.get("event") != "chat":
+                continue  # a res for some other in-flight id, or an unrelated event family
             payload = message.get("payload") or {}
+            # ChatEvent (protocol.schema.json) requires sessionKey and runId on every state.
+            # Never act on an event for a session we did not subscribe to, or a run that is not
+            # the one we started — this is the only thing standing between a buggy or hostile
+            # Gateway mixing two sessions' events on one connection and this client acting on it.
+            if payload.get("sessionKey") != session_key:
+                continue
+            event_run_id = payload.get("runId")
+            if run_id is None:
+                run_id = event_run_id
+            elif event_run_id != run_id:
+                continue
             state = payload.get("state")
+            if state == "status":
+                continue  # workspace-prep phase; nothing to show yet
             if state == "delta":
-                delta = payload.get("delta")
+                delta = payload.get("deltaText")
                 if isinstance(delta, str):
                     text_parts.append(delta)
                 continue
             if state == "final":
-                final_text = payload.get("text")
-                text = final_text if isinstance(final_text, str) else "".join(text_parts)
+                text = _extract_text(payload.get("message"), fallback="".join(text_parts))
                 return OpenClawReply(text=text.strip()[:MAX_REPLY_CHARS], run_id=run_id)
             if state == "error":
                 raise OpenClawUnavailable("agent_error")
             if state == "aborted":
                 raise OpenClawUnavailable("aborted")
-            # Anything else (tool activity, presence, etc.) is read-only noise to this adapter:
-            # it never acts on a tool-stream event. REVA's own broker is the only executor.
+            # Any other state is a protocol-schema surprise; this slice does not act on it.
 
     async def _abort(self, ws: WebSocketLike, request_id: int, session_key: str) -> None:
         frame = {
@@ -300,6 +377,19 @@ class OpenClawGatewayClient:
             "params": {"sessionKey": session_key},
         }
         await ws.send(_dumps(frame))
+
+
+def _extract_text(message_field: Any, *, fallback: str) -> str:
+    """`ChatFinalEvent.message` is schema-opaque (`{}` — any shape). The delta-text aggregate is
+    the only field this protocol gives a guaranteed string type for, so it is the fallback
+    whenever `message` is not itself a plain string or a `{"text": "..."}` shape."""
+    if isinstance(message_field, str):
+        return message_field
+    if isinstance(message_field, Mapping):
+        text = message_field.get("text")
+        if isinstance(text, str):
+            return text
+    return fallback
 
 
 def _dumps(frame: Mapping[str, Any]) -> str:
@@ -361,9 +451,10 @@ class OpenClawAdapter:
         return AdapterResult(reply_text=reply.text, action=self._propose(hit, reply.run_id))
 
     def _propose(self, hit: RuleHit, run_id: str | None) -> ActionView:
-        # A stable id derived from OpenClaw's own run id (when it gives one): if the same run is
-        # ever delivered twice — a redelivered event, a caller retry after a dropped response —
-        # this is the same proposal_id both times, so the broker's existing same-id dedup
+        # A stable id derived from OpenClaw's own run id (carried on every chat event, not the
+        # send acknowledgment — see ChatEvent in protocol.schema.json): if the same run is ever
+        # delivered twice — a redelivered event, a caller retry after a dropped response — this
+        # is the same proposal_id both times, so the broker's existing same-id dedup
         # (`test_sending_the_same_request_again_is_one_action_not_two`-style behavior) answers
         # the second one without re-authorizing or re-executing anything. A fresh random id per
         # call would defeat that: two calls for the same run would look like two unrelated asks.
