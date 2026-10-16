@@ -24,9 +24,9 @@ import app.reva.ui.SecondaryButton
 import app.reva.ui.SectionTitle
 import app.reva.ui.theme.RevaColors
 
-/** Talk is a placeholder in this slice: no avatar, voice or chat exists on the phone yet, and it says so. */
+/** Shown where no voice controller exists (previews and UI tests that build the root without one). */
 @Composable
-fun TalkScreen(modifier: Modifier = Modifier) {
+fun TalkUnavailableScreen(modifier: Modifier = Modifier) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("Talk", style = MaterialTheme.typography.headlineMedium, color = RevaColors.Text, modifier = Modifier.semantics { heading() }) }
         item {

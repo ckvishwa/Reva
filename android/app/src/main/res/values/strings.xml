@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">REVA</string>
+    <string name="voice_channel_name">Voice session</string>
+    <string name="voice_notification_title">REVA is listening</string>
+    <string name="voice_notification_text">The microphone is open. Tap Stop to close it.</string>
+    <string name="voice_notification_stop">Stop</string>
 </resources>

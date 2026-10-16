@@ -2,17 +2,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        Exactly two permissions, both for pairing and syncing with the user's OWN PC (SYNC-1d):
+        Five permissions. Two are for pairing and syncing with the user's OWN PC (SYNC-1d), three are for voice (C1):
         - INTERNET: HTTPS to the PC's pairing gateway on the local network. The gateway's TLS key is pinned
           from the QR code, cleartext is refused (network_security_config), and no server of ours is involved.
         - CAMERA: only to read the pairing QR code on the PC; asked for when the user taps "Scan the code".
           The camera is optional hardware, so phones without one can still paste the code.
+        - RECORD_AUDIO: asked for only after a tap on the mic button; typing works without it. Audio is
+          recognised on the phone itself and never sent anywhere.
+        - FOREGROUND_SERVICE and FOREGROUND_SERVICE_MICROPHONE: the voice service runs only while the
+          microphone is open, started from that tap, with a notification and a Stop action.
+        POST_NOTIFICATIONS is deliberately not requested: Android still lists the running service in its task
+        manager and shows the microphone indicator without it.
         ACCESS_NETWORK_STATE is not needed (plain sockets), and the "local network" permission Android
         introduces for apps targeting API 37+ does not apply at targetSdk 36. src/test checks this exact set
         on every build, and that there is no QUERY_ALL_PACKAGES and no AccessibilityService.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -37,6 +47,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Microphone foreground service: not exported, started only by this app from the mic button. -->
+        <service
+            android:name=".voice.VoiceService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Share sheet for Export: hands out one cached file through a content:// URI, nothing else. -->
         <provider

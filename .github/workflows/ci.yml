@@ -194,6 +194,39 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: python tools/kernel/build_android.py
 
+  android-unit:
+    # The phone app's JVM tests (view models, voice session, manifest checks). They need the generated
+    # Kotlin binding of the Kernel, which is built here the same way as in the kernel lane.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build the Kotlin binding
+        run: python tools/kernel/build_bindings.py
+
+      - name: Android SDK platform
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Unit tests
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon
+
   avatar:
     # three.js + three-vrm page: unit tests (events, mood faces, stale epochs, frame cap, lip-sync offset)
     # and browser tests in Edge (offline load, CSP, no network, drawing stops when off). Needs the

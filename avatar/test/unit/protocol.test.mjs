@@ -76,3 +76,13 @@ test('avatar.ready and avatar.error are page-to-host only: the page refuses them
   assert.notEqual(validate({ type: 'avatar.ready' }), null);
   assert.notEqual(validate({ type: 'avatar.error', detail: 'x' }), null);
 });
+
+test('every message the hosts are required to send (host-messages.json) is valid', () => {
+  const fixturePath = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'host-messages.json');
+  const { messages } = JSON.parse(readFileSync(fixturePath, 'utf8'));
+  assert.ok(messages.length >= 10);
+  for (const message of messages) {
+    assert.equal(validate(message), null, JSON.stringify(message));
+    assert.equal(check(message), true, JSON.stringify(message));
+  }
+});

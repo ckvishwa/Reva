@@ -69,11 +69,31 @@ android {
             )
             it.systemProperty("reva.sourceManifest", file("src/main/AndroidManifest.xml").absolutePath)
             it.systemProperty("reva.resDir", file("src/main/res").absolutePath)
+            it.systemProperty("reva.fixtures", rootProject.file("../tests/fixtures").absolutePath)
+            it.systemProperty("reva.contracts", rootProject.file("../contracts").absolutePath)
+            it.systemProperty("reva.avatarFixtures", rootProject.file("../avatar/test/fixtures").absolutePath)
             it.systemProperty("reva.uiTestsBuild", providers.gradleProperty("reva.uiTests").isPresent.toString())
             it.dependsOn("processDebugMainManifest")
         }
     }
 }
+
+// Files the app carries that are built or shared elsewhere in the repo: the avatar page (avatar/dist, built by
+// `npm run build`; absent in unit-test lanes, where the Talk screen shows no avatar) and the mood rules, the same
+// contracts/mood-rules.v1.json the PC reads.
+val stageRevaAssets = tasks.register<Copy>("stageRevaAssets") {
+    from(rootProject.file("../avatar/dist")) {
+        into("avatar")
+        include("index.html", "avatar.js", "placeholder.vrm")
+    }
+    from(rootProject.file("../contracts")) {
+        into("contracts")
+        include("mood-rules.v1.json", "capability-registry.v2.json")
+    }
+    into(layout.buildDirectory.dir("generated/revaAssets"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/revaAssets"))
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(stageRevaAssets) }
 
 kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
@@ -99,6 +119,8 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.zxing.core)
+    // WebViewAssetLoader serves the avatar page and model from the APK without file:// access.
+    implementation(libs.androidx.webkit)
     // UniFFI's Kotlin binding loads libreva_kernel.so through JNA; the AAR carries JNA's own native stub.
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
 
