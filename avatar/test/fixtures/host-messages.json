@@ -1,0 +1,20 @@
+{
+  "note": "Exact host-to-page messages. The Android host builds each one with AvatarProtocol.kt and compares; the page tests validate each against the page validator and the JSON Schema.",
+  "messages": [
+    {"type": "avatar.state", "state": "idle", "turn_epoch": 0},
+    {"type": "avatar.state", "state": "listening", "turn_epoch": 3},
+    {"type": "avatar.state", "state": "thinking", "turn_epoch": 3},
+    {"type": "avatar.state", "state": "speaking", "turn_epoch": 3},
+    {"type": "avatar.state", "state": "approval", "turn_epoch": 4},
+    {"type": "avatar.state", "state": "error", "turn_epoch": 5},
+    {"type": "avatar.mouth", "t_ms": 0, "rms": 0, "turn_epoch": 3},
+    {"type": "avatar.mouth", "t_ms": 120, "rms": 0.4231, "turn_epoch": 3},
+    {"type": "avatar.mouth", "t_ms": 5000, "rms": 1, "turn_epoch": 3},
+    {"type": "avatar.expression", "name": "relaxed", "cause": "mood"},
+    {"type": "avatar.expression", "name": "neutral", "cause": "mood"},
+    {"type": "avatar.expression", "name": "happy", "cause": "verified_outcome", "action_id": "action-0001-abcd"},
+    {"type": "avatar.settings", "enabled": true, "reduced_motion": false, "quality": "medium"},
+    {"type": "avatar.settings", "enabled": false},
+    {"type": "avatar.settings", "enabled": true, "reduced_motion": true, "quality": "low"}
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "any_live_may_go": [
+    "cancelling",
+    "fatal_error",
+    "recoverable_error"
+  ],
+  "forward": {
+    "acquiring_permission": [
+      "listening"
+    ],
+    "approval_pending": [
+      "executing",
+      "speaking"
+    ],
+    "cancelling": [
+      "idle"
+    ],
+    "endpointing": [
+      "listening",
+      "transcribing"
+    ],
+    "executing": [
+      "speaking"
+    ],
+    "fatal_error": [],
+    "idle": [
+      "acquiring_permission"
+    ],
+    "listening": [
+      "endpointing"
+    ],
+    "reasoning": [
+      "approval_pending",
+      "executing",
+      "speaking"
+    ],
+    "recoverable_error": [
+      "idle",
+      "listening"
+    ],
+    "speaking": [
+      "idle",
+      "listening"
+    ],
+    "transcribing": [
+      "listening",
+      "reasoning"
+    ]
+  },
+  "interruptible": [
+    "approval_pending",
+    "executing",
+    "reasoning",
+    "speaking",
+    "transcribing"
+  ],
+  "not_live": [
+    "fatal_error",
+    "idle"
+  ],
+  "states": [
+    "idle",
+    "acquiring_permission",
+    "listening",
+    "endpointing",
+    "transcribing",
+    "reasoning",
+    "approval_pending",
+    "executing",
+    "speaking",
+    "cancelling",
+    "recoverable_error",
+    "fatal_error"
+  ]
+}

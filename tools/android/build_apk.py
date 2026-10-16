@@ -5,7 +5,8 @@ Usage:  python tools/android/build_apk.py [--skip-kernel] [--task assembleDebug]
 Steps (each prints what it does):
   1. python tools/kernel/build_bindings.py   Kotlin binding (kernel/bindings, git-ignored)
   2. python tools/kernel/build_android.py    libreva_kernel.so for arm64-v8a and x86_64 (readelf)
-  3. copy the two libraries to android/app/build/kernel-libs/<abi>/
+  3. npm ci && npm run build in avatar/ (the page and model go into the APK; --skip-avatar to omit)
+  3b. copy the two libraries to android/app/build/kernel-libs/<abi>/
   4. android/gradlew :app:assembleDebug      signed with the standard Android debug key
 
 Output: android/app/build/outputs/apk/debug/app-debug.apk (path and SHA-256 are printed).
@@ -48,6 +49,11 @@ def main() -> int:
     parser.add_argument(
         "--skip-kernel", action="store_true", help="reuse the libraries already built"
     )
+    parser.add_argument(
+        "--skip-avatar",
+        action="store_true",
+        help="do not build the avatar page (the APK then has no avatar)",
+    )
     parser.add_argument("--task", default="assembleDebug")
     args = parser.parse_args()
 
@@ -67,6 +73,15 @@ def main() -> int:
         destination.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination / "libreva_kernel.so")
         print(f"copied {abi}: {source.stat().st_size} bytes")
+
+    if not args.skip_avatar:
+        npm = shutil.which("npm")
+        if npm is None:
+            raise SystemExit(
+                "npm not found: install Node 22, or pass --skip-avatar to build without the avatar"
+            )
+        run([npm, "ci"], ROOT / "avatar", env)
+        run([npm, "run", "build"], ROOT / "avatar", env)
 
     gradlew = str(ANDROID / ("gradlew.bat" if sys.platform.startswith("win") else "gradlew"))
     run([gradlew, f":app:{args.task}", "--console=plain"], ANDROID, env)
