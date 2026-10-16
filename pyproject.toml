@@ -15,6 +15,8 @@ dependencies = [
     "fastapi>=0.111,<1",
     "uvicorn>=0.30,<1",
     "httpx>=0.27,<1",
+    # Real Gateway client for the optional, default-off OpenClaw sidecar (ADR-041).
+    "websockets>=15.0,<16",
     # Orchestration dependency for Slice 5's AssistantOrchestrator boundary
     # (opt-in via REVA_ASSISTANT_ORCHESTRATOR=adk) — see
     # docs/adr/ADR-017-google-adk-orchestration-dependency.md for the exact

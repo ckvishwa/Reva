@@ -54,6 +54,29 @@ class Settings(BaseSettings):
     # times; never headers or bodies). For diagnosing stalls and dropped connections. None = off.
     gateway_trace: Path | None = None
 
+    # Optional external OpenClaw sidecar (ADR-041, docs/security/O0-openclaw-source-audit.md).
+    # Off by default; the owner must set REVA_OPENCLAW_ENABLED=true. OpenClaw's own Gateway must
+    # stay loopback-only (enforced below) and its own tool policy must deny every host-capable
+    # tool (exec, fs, node, plugins) — REVA cannot verify that from here, only its own boundary:
+    # OpenClaw's text is never executor evidence, and every executable proposal still goes
+    # through authorize()/the signed-grant broker exactly like a voice command would.
+    openclaw_enabled: bool = False
+    openclaw_host: str = "127.0.0.1"
+    openclaw_port: int = Field(default=18789, ge=1, le=65535)  # gateway.port doc default
+    # Owner-authorized (ADR-041): the local OpenClaw instance is expected to run with
+    # agents.defaults.sandbox.mode="off". REVA records this expectation for the audit trail; it
+    # does not and cannot enforce OpenClaw's own process config from here.
+    openclaw_sandbox_mode: Literal["off"] = "off"
+    openclaw_connect_timeout_seconds: float = 5.0
+    openclaw_request_timeout_seconds: float = 30.0
+    # The `authorize()` device_scopes an OpenClaw-sourced proposal is checked against — the same
+    # life-domain names a hosted cloud model's consent uses (memory/finance/health/coach/career/
+    # learn/cyber/personal) for domain capabilities, plus device tags ("windows", "android",
+    # "kernel", "any") for the rest. Empty (the default) means every OpenClaw proposal gets
+    # CONSENT_REQUIRED — enabling the sidecar alone grants it no capability at all until the
+    # owner explicitly lists scopes here.
+    openclaw_allowed_scopes: tuple[str, ...] = ()
+
     # Placeholder for a future real provider credential. Never a real key in
     # Phase 0 — no provider integration exists yet. Documented future path:
     # Windows Credential Manager / DPAPI, not plaintext `.env`, for prod.
@@ -184,6 +207,11 @@ def load_settings(
         raise ConfigurationError(
             f"REVA_API_HOST must be a loopback address, got {settings.api_host!r}. "
             "REVA Core is never publicly exposed (security invariant #2)."
+        )
+    if settings.openclaw_enabled and settings.openclaw_host.lower() not in _LOOPBACK_HOSTS:
+        raise ConfigurationError(
+            f"REVA_OPENCLAW_HOST must be a loopback address, got {settings.openclaw_host!r}. "
+            "The OpenClaw sidecar is never reached off this machine (ADR-041)."
         )
     if settings.domain_keystore == "memory":
         from reva_core.domains.keys import KeyStoreError, ensure_memory_keystore_allowed
