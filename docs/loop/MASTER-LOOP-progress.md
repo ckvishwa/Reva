@@ -1,5 +1,11 @@
 # MASTER LOOP progress
 
+## Phase C live checkpoint (2026-10-16)
+
+- Fresh `origin/main` is `fcd328b26059eb5ea133c137dd83b2b41c6a640e` (PR #27 recovery merge). PRs #22–#27 have merged, bringing C1b/C1c and C2a/C2b/C2c into `main`; main CI run `38861940686` passed. C2c's real-Kernel validation is recorded in `docs/security/C2c-review.md` and the ledger; physical phone/PC checks remain `NEEDS_HARDWARE`. PR #29 is an unrelated OpenClaw sidecar and stays outside this Phase C loop.
+- C3a worktree `D:\Projects\Reva-c3-phase`, branch `feat/c3a-android-local-brain`, starts at that main SHA. Local brain now answers Today from the Rust Kernel-backed repository, runs shared policy before any query, uses an explicit offline planner registry, and returns typed failure/unknown for timeout, cancellation, missing provider or exception. Full Android JVM suite: 316 passed, 0 failed, 0 skipped; 9 focused new tests. Contracts: 9 schemas checked, 0 problems. C3a PR/CI/merge pending. C3b/c, G2 software matrix, APK, hardware checklist and Phase C report remain open. No Phase D work begun.
+- Next: review C3a diff, commit/push/open PR, obtain all code CI lanes, merge and update this checkpoint; then C3b modes and hosted consent, C3c privacy/performance/packaging, G2 and report. Never label hardware complete without observed physical evidence.
+
 ## Phase C recovery checkpoint (2026-10-15)
 
 - Clean integration worktree: `D:\Projects\Reva-c-phase`, branch `feat/c1b-phase-c-integration`, created at `origin/main` `f1ff301c73804ff936e587c2c79a37c8402a1790` (PR #21 C1a merge). `D:\Projects\Reva` on `fixing-things` has unrelated uncommitted work and must stay untouched.

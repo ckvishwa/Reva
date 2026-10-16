@@ -25,6 +25,9 @@ import app.reva.mood.MoodEngine
 import app.reva.voice.AndroidTtsSpeaker
 import app.reva.voice.NeutralMood
 import app.reva.language.PolicyReplies
+import app.reva.brain.KernelQueries
+import app.reva.brain.LocalBrain
+import app.reva.brain.PlannerRegistry
 import app.reva.pcrequests.PcRequestTracker
 import app.reva.phone.AndroidIntentPort
 import app.reva.phone.ApprovedApps
@@ -129,7 +132,10 @@ class AppContainer(private val context: Context) {
             permissions = micPermission,
             availability = { AndroidRecognizerAvailability.check(context) },
             recognizerFactory = { AndroidSpeechRecognizer(context) },
-            replies = PolicyReplies(registry, pc = pcRequests, phone = phoneActions),
+            replies = PolicyReplies(
+                registry, pc = pcRequests, phone = phoneActions,
+                local = KernelQueries(financeRepository), fallback = LocalBrain(PlannerRegistry.offlineOnly()),
+            ),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
