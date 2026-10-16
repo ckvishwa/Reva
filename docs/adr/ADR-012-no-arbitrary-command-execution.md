@@ -1,6 +1,6 @@
 # ADR-012: No Arbitrary Command Execution
 
-**Status:** Accepted
+**Status:** Superseded by ADR-042 (2026-10-16). Historical decision; do not apply to new slices.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # REVA — Architecture Decision Register v2.0
 
-**Document ID:** REVA-ADR-INDEX-002 · **Version:** 2.0.2 · **Date:** 2026-10-12
+**Document ID:** REVA-ADR-INDEX-002 · **Version:** 2.0.3 · **Date:** 2026-10-16
 Each ADR: decision, rejected alternatives, consequence, reversal trigger, proof. v1 ADR full text is in `09_ARCHIVE_v1/03_REVA_ADR_DECISIONS.md`.
 
 ## Part A — v1 ADRs, status in v2
@@ -132,6 +132,11 @@ Each ADR: decision, rejected alternatives, consequence, reversal trigger, proof.
 - **Rejected:** shipping a voice with unrecorded provenance or a non-permissive engine/model license for the intended use.
 - **Trigger:** Revi fails latency or interrupt gates on the PC → Kokoro stays default and Revi is offered as "high quality, slower".
 - **Proof:** V2–V4 slices, AR-VA-020/021.
+
+### ADR-042 — REVA agent platform and cloud placement
+- **Decision:** shell, browser, plugins, nodes, scheduler, and optional cloud execution use one REVA-owned agent runtime and signed-grant execution contract. See `docs/adr/ADR-042-agent-platform-and-cloud-placement.md`.
+- **Supersedes:** the no-arbitrary-command decision in `docs/adr/ADR-012-no-arbitrary-command-execution.md` and the older PRD exclusions for shell and browser.
+- **Proof:** initial `ToolHost` tests; each concrete capability and cloud placement needs its own tests and release evidence.
 
 ## Governance
 

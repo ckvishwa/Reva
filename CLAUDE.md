@@ -66,7 +66,7 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 - A model may **propose**. Only the deterministic policy broker **authorizes**. Only executors **act**. REVA reports success only from executor/Kernel evidence. "Done" always comes from a template, never from model text.
 - `authorize()` is pure: no model calls, no I/O, no writes, and stable reason codes.
-- These capabilities do not exist and must never be added: payments, transfers, purchases, bank logins, medical diagnosis or dosing, a generic shell, file deletion, sending email.
+- These capabilities remain prohibited: payments, transfers, purchases, bank logins, medical diagnosis or dosing, autonomous file deletion, and sending email. Shell/process and browser tools are in scope under ADR-042, but only through registered capabilities, signed grants, target-device approval when required, and executor evidence.
 - T2 actions need a click or tap approval on the target device. A spoken "yes" is not enough.
 - The Core binds to `127.0.0.1` only. Remote devices come in only through the pairing gateway.
 - Hosted (cloud) models are opt-in, disclosed, and pass the per-domain consent filter. Finance, Health, Memory and Personal default to no cloud.

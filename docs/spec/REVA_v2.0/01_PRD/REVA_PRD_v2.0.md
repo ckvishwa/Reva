@@ -1,8 +1,8 @@
 # REVA — Master Product Requirements Document v2.0
 
 **Document ID:** REVA-PRD-002
-**Version:** 2.0.2 (supersedes REVA-PRD-001 v1.0/v1.1, archived in `09_ARCHIVE_v1/`)
-**Date:** 2026-10-11
+**Version:** 2.0.3 (supersedes REVA-PRD-001 v1.0/v1.1, archived in `09_ARCHIVE_v1/`)
+**Date:** 2026-10-16
 **Product:** REVA 2.0 — voice-first personal AI system with a visible avatar, life domains, and verified device actions
 **Clients:** Windows desktop (WinUI 3) + Android (Kotlin/Compose); both fully usable on their own
 **Status:** Proposed requirements. Nothing here is a claim that a feature is built. Status is PLANNED until promoted to VERIFIED with evidence (see ARD-800).
@@ -55,7 +55,9 @@ Non-negotiables carried from v1: REVA never says something happened unless a nat
 
 **2.0.0 outcome:** a signed Windows installer and a signed Android app, each with speech in/out, avatar, conversations, approved memory, eight life domains working offline, safe device actions, pairing, LAN sync, optional encrypted relay, documented cloud/offline behavior.
 
-**Non-goals for 2.0 (v1 list kept):** unrestricted OS shell; background device surveillance; continuous Android hotword in all states; sending email without confirmation; **autonomous purchases or financial transfers**; default screen recording; iOS; general browser agent; cloud microservice fleet; offline LLM on every handset.
+**Non-goals for 2.0:** background device surveillance; continuous Android hotword in all states; sending email without confirmation; **autonomous purchases or financial transfers**; default screen recording; iOS; offline LLM on every handset. ADR-042 supersedes the earlier exclusions for shell, browser, plugins, device nodes and optional cloud placement. Their activation requires explicit capability policy and release evidence; this scope change does not claim they are implemented.
+
+**Agent-platform expansion (ADR-042):** REVA will implement its own persistent agent runtime, tool registry, shell/process tool, managed browser, plugin API, paired-device node capabilities, scheduler, and optional hosted Gateway/cloud workers. A single authenticated session and signed-grant execution contract spans placements. Models propose; the Broker authorizes; the target executor acts; evidence determines the reported outcome. A hosted Gateway must not silently take ownership of offline domain data held in the device-local Kernel.
 
 **New non-goals:** moving money of any kind; connecting bank credentials in 2.0 (aggregation is Future); medical diagnosis, dosing or treatment advice; writing data back into Health Connect; multi-user accounts; selling or sharing data.
 
