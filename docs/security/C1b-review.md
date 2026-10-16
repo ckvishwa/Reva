@@ -1,0 +1,11 @@
+# C1b Android speech and avatar review
+
+Reviewed on the C1b integration branch rebased by cherry-pick onto merged C1a (`origin/main` `f1ff301`). The Android TTS path synthesizes to a cache WAV, decodes PCM16, and reports RMS only for windows reached by `AudioTrack.playbackHeadPosition`. `VoiceController` rejects stale epochs, cancels the turn and stops audio on interruption. The WebView serves packaged assets through `WebViewAssetLoader`, blocks network loads and navigation, and has a narrow ready/error JavaScript bridge. The generated mood fixture compares Android behavior with Python's shared rules.
+
+Finding fixed: the JavaScript bridge runs on a WebView worker thread. Its callback changed Compose state, risking thread violations. The bridge now dispatches valid reports to the Android main looper; blocked main-frame resource errors do the same. `AvatarBridgeThreadTest` failed on an API 36 emulator before the fix (`the bridge delivered off the UI thread`) and passed afterward.
+
+Fresh local checks after the fix: Android JVM `testDebugUnitTest` passed (206 tests, 0 failures/skips); targeted instrumented bridge test passed (1); avatar unit 36/36 and browser 9/9 passed; mood fixture Python 2/2 and contracts 9 schemas passed. The physical phone speech, interruption, airplane-mode WebView, leakage and performance checks remain `NEEDS_HARDWARE` under `docs/android/voice-device-checklist.md`. Emulator results do not close those rows.
+
+The optional paired-PC Kokoro playback belongs to the later paired request route; C1b speaks only with an installed offline Android TTS voice. No claim of physical speaker latency or battery performance is made here.
+
+Full API 36 instrumented suite exposed a stale pre-C1 permission assertion. The app's merged manifest and JVM test both require exactly INTERNET, CAMERA, RECORD_AUDIO, FOREGROUND_SERVICE and FOREGROUND_SERVICE_MICROPHONE; the runtime returned that same set. The instrumented assertion now checks those exact five permissions and still rejects QUERY_ALL_PACKAGES and Accessibility permissions. It failed before the update and passed after. The full airplane-mode emulator report has 34 tests, 0 failures, 2 explicit opt-in skips (screenshots and host-driven sync E2E), hence 32 passed. Airplane mode was restored after the run.

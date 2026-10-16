@@ -60,6 +60,8 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
+// A WebView can be laid out after the page loads (Android); watch the canvas itself, not only the window.
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resize).observe(canvas);
 
 let rig = null;
 let last = performance.now();

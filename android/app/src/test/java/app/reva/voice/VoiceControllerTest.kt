@@ -1,5 +1,6 @@
 package app.reva.voice
 
+import app.reva.mood.ExpressionEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -49,11 +50,13 @@ private class FakeReplies : ReplySource {
 }
 
 private class FakeSpeaker : Speaker {
+    var sink: LevelSink? = null
+    var prosody: Prosody? = null
     var spoken = mutableListOf<String>()
     var finish: CompletableDeferred<Unit>? = null
     var stops = 0
     var releases = 0
-    override suspend fun speak(text: String, epoch: Int) { spoken += text; finish?.await() }
+    override suspend fun speak(text: String, epoch: Int, prosody: Prosody, levels: LevelSink) { spoken += text; sink = levels; this.prosody = prosody; finish?.await() }
     override fun stop() { stops++ }
     override fun release() { releases++ }
 }
@@ -63,6 +66,7 @@ private class Rig(
     scope: TestScope,
     permission: MicPermission = MicPermission.Granted,
     var availability: RecognizerAvailability = RecognizerAvailability.OnDevice,
+    mood: VoiceMood = NeutralMood,
 ) {
     val job = Job()
     val permissions = FakePermissions(permission)
@@ -80,6 +84,7 @@ private class Rig(
         speaker = speaker,
         service = service,
         scope = CoroutineScope(job + StandardTestDispatcher(scope.testScheduler)),
+        mood = mood,
     )
     val last get() = recognizers.last()
     val ui get() = controller.ui.value
@@ -426,6 +431,85 @@ class VoiceControllerTest {
         rig.last.listener!!.onPartial("x".repeat(5000))
 
         assertEquals(VoiceController.MAX_TEXT, rig.ui.partial.length)
+        rig.close()
+    }
+
+    // ---------------------------------------------------------------- speech, mood and the avatar's inputs
+
+    @Test fun loudness_is_passed_on_only_while_speaking_and_only_for_the_current_epoch() = runTest {
+        val rig = Rig(this)
+        rig.speaker.finish = CompletableDeferred()
+        val seen = mutableListOf<Level>()
+        val collector = CoroutineScope(rig.job + StandardTestDispatcher(testScheduler))
+        collector.launch(start = CoroutineStart.UNDISPATCHED) { rig.controller.levels.collect { seen += it } }
+        rig.listening()
+        rig.last.listener!!.onFinal("hello")
+        runCurrent()
+        val epoch = rig.ui.epoch
+
+        rig.speaker.sink!!.onLevel(epoch, 0.4, 20)
+        rig.speaker.sink!!.onLevel(epoch - 1, 0.9, 40) // an older sentence
+        runCurrent()
+        assertEquals(listOf(Level(epoch, 0.4, 20)), seen)
+
+        rig.controller.onStopTapped() // speech ended
+        rig.speaker.sink!!.onLevel(epoch, 0.5, 60)
+        runCurrent()
+        assertEquals("nothing after the speech ended", 1, seen.size)
+        rig.close()
+    }
+
+    @Test fun the_mood_decides_how_the_reply_sounds_and_which_face_may_show() = runTest {
+        val face = ExpressionEvent("relaxed", "mood")
+        val rig = Rig(this, mood = VoiceMood { MoodDecision(Prosody(0.9f, -1), face) })
+        rig.speaker.finish = CompletableDeferred()
+        rig.listening()
+
+        rig.last.listener!!.onFinal("good evening")
+        runCurrent()
+
+        assertEquals(Prosody(0.9f, -1), rig.speaker.prosody)
+        assertEquals(face, rig.ui.expression)
+        assertEquals(1, rig.ui.expressionSeq)
+        // The words are the reply source's. The mood never rewrites them.
+        assertEquals(listOf("Hello."), rig.speaker.spoken)
+        rig.close()
+    }
+
+    @Test fun a_typed_reply_is_shown_but_not_spoken() = runTest {
+        val rig = Rig(this)
+
+        rig.controller.onTextSubmitted("hello")
+        advanceUntilIdle()
+
+        assertTrue(rig.speaker.spoken.isEmpty())
+        assertEquals(1, rig.said().size)
+        rig.close()
+    }
+
+    @Test fun a_failure_is_flagged_for_the_error_pose_and_cleared_by_the_next_try() = runTest {
+        val rig = Rig(this)
+        rig.service.allow = false
+        rig.controller.onMicTapped()
+        assertTrue(rig.ui.failed)
+
+        rig.service.allow = true
+        rig.controller.onMicTapped()
+
+        assertFalse(rig.ui.failed)
+        assertEquals(VoiceState.Listening, rig.ui.state)
+        rig.close()
+    }
+
+    @Test fun the_epoch_in_the_ui_follows_the_session_so_the_avatar_can_drop_old_messages() = runTest {
+        val rig = Rig(this)
+        rig.listening()
+        val first = rig.ui.epoch
+
+        rig.controller.onStopTapped()
+        rig.listening()
+
+        assertTrue(rig.ui.epoch > first)
         rig.close()
     }
 
