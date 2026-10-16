@@ -158,6 +158,11 @@ public sealed class ActionsApi : IActionsApi
         var list = new List<PhoneRequest>();
         foreach (var item in items.EnumerateArray())
         {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
             string? Text(string name) =>
                 item.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 

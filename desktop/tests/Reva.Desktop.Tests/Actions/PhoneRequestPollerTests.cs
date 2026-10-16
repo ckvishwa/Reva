@@ -60,6 +60,16 @@ public sealed class PhoneRequestPollerTests
         Assert.Null(ActionsApi.ParsePhoneRequests(JsonDocument.Parse("[]").RootElement));
     }
 
+    [Fact]
+    public void A_malformed_inbox_item_does_not_stop_valid_requests()
+    {
+        const string json = """{"seq":3,"items":[null,42,[],{"action_id":"ph-1","status":"awaiting_approval","prompt":"p"}]}""";
+
+        var parsed = ActionsApi.ParsePhoneRequests(JsonDocument.Parse(json).RootElement)!;
+
+        Assert.Equal("ph-1", Assert.Single(parsed.Items).ActionId);
+    }
+
     // ---------------------------------------------------------------- polling
 
     [Fact]
