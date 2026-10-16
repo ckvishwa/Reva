@@ -79,7 +79,7 @@ def test_the_packaged_registry_and_schema_equal_the_contract_copies() -> None:
 
 
 def test_every_capability_has_a_supported_schema_and_a_known_tier() -> None:
-    assert len(DEFAULT_REGISTRY.names()) == 31
+    assert len(DEFAULT_REGISTRY.names()) == 34
     for name in DEFAULT_REGISTRY.names():
         capability = DEFAULT_REGISTRY.get(name)
         assert capability is not None

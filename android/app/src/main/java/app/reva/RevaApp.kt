@@ -24,7 +24,14 @@ import app.reva.mood.EngineMood
 import app.reva.mood.MoodEngine
 import app.reva.voice.AndroidTtsSpeaker
 import app.reva.voice.NeutralMood
-import app.reva.voice.UnavailableReplies
+import app.reva.language.PolicyReplies
+import app.reva.pcrequests.PcRequestTracker
+import app.reva.phone.AndroidIntentPort
+import app.reva.phone.ApprovedApps
+import app.reva.phone.PhoneActions
+import app.reva.pcrequests.SignedPcGateway
+import app.reva.pcrequests.SigningUnavailable
+import app.reva.policy.Registry
 import app.reva.voice.VoiceController
 import java.io.File
 import uniffi.reva_kernel.openDomain
@@ -34,6 +41,7 @@ import uniffi.reva_kernel.openDomain
  * never backs up; the XML backup rule files exclude it explicitly as well.
  */
 class AppContainer(private val context: Context) {
+    private val noBackupRoot: File get() = context.noBackupFilesDir
     val domainRoot: File get() = File(context.noBackupFilesDir, "domains")
     val keyRoot: File get() = File(context.noBackupFilesDir, "keys")
 
@@ -52,12 +60,46 @@ class AppContainer(private val context: Context) {
 
     val financeRepository: FinanceRepository get() = kernelRepository
 
+    /** The paired PC (public data only), read by sync and by requests for the PC to act. */
+    val pairedPcStore: PairedPcStore by lazy { PairedPcStore(File(syncRoot, "paired_pc.json")) }
+
+    val approvedApps: ApprovedApps by lazy { ApprovedApps(File(noBackupRoot, "phone/approved_apps.json")) }
+
+    val intentPort: AndroidIntentPort by lazy { AndroidIntentPort(context) }
+
+    /** The phone's own actions: open an approved app, hand an alarm, reminder, event or share to another app. */
+    val phoneActions: PhoneActions by lazy {
+        PhoneActions(registry, approvedApps, intentPort, onText = { voice.postReply(it) })
+    }
+
+    /** This phone's device key, shared by sync and by requests for the PC to act. */
+    private val deviceSigner: KeystoreDeviceSigner by lazy { KeystoreDeviceSigner() }
+
+    /** Requests for the PC to open or close an app. Results come back as lines in Talk, from the PC's own report. */
+    val pcRequests: PcRequestTracker by lazy {
+        PcRequestTracker(
+            pc = { pairedPcStore.load() },
+            gateway = SignedPcGateway(
+                signer = { message ->
+                    try {
+                        deviceSigner.sign(message)
+                    } catch (e: uniffi.reva_kernel.SignerException) {
+                        throw SigningUnavailable("the device key could not be used")
+                    }
+                },
+                transport = PinnedHttpsTransport(),
+            ),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            onText = { voice.postReply(it) },
+        )
+    }
+
     /** Pairing and LAN sync with the user's own PC. Signs with a Keystore key; pins the PC's TLS key from the QR code. */
     val syncService: SyncService by lazy {
         SyncEngine(
             kernel = { kernelRepository.kernelHandle() },
-            signer = KeystoreDeviceSigner(),
-            store = PairedPcStore(File(syncRoot, "paired_pc.json")),
+            signer = deviceSigner,
+            store = pairedPcStore,
             transport = PinnedHttpsTransport(),
             deviceName = android.os.Build.MODEL ?: "Android phone",
             // A sync that applied events from the PC moves the change counter, so open screens reload.
@@ -76,13 +118,18 @@ class AppContainer(private val context: Context) {
         ) { currentActivity?.get() }
     }
 
+    /** The capability registry the PC uses, shipped in the APK from contracts/. */
+    val registry: Registry by lazy {
+        Registry(org.json.JSONObject(context.assets.open("contracts/capability-registry.v2.json").bufferedReader().use { it.readText() }))
+    }
+
     /** One voice session at a time. Recognizer and service are created per session and released at its end. */
     val voice: VoiceController by lazy {
         VoiceController(
             permissions = micPermission,
             availability = { AndroidRecognizerAvailability.check(context) },
             recognizerFactory = { AndroidSpeechRecognizer(context) },
-            replies = UnavailableReplies(),
+            replies = PolicyReplies(registry, pc = pcRequests, phone = phoneActions),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),

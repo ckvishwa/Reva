@@ -513,6 +513,58 @@ class VoiceControllerTest {
         rig.close()
     }
 
+    // ---------------------------------------------------------------- assistant controls
+
+    @Test fun a_typed_stop_is_silent_and_never_reaches_the_reply_source() = runTest {
+        val rig = Rig(this)
+
+        rig.controller.onTextSubmitted("stop")
+        advanceUntilIdle()
+
+        assertTrue(rig.replies.calls.isEmpty())
+        assertTrue(rig.said().isEmpty())
+        assertEquals(VoiceState.Idle, rig.ui.state)
+        rig.close()
+    }
+
+    @Test fun a_spoken_stop_ends_the_session_without_a_reply_or_speech() = runTest {
+        val rig = Rig(this)
+        rig.listening()
+
+        rig.last.listener!!.onFinal("stop")
+        advanceUntilIdle()
+
+        assertEquals(VoiceState.Idle, rig.ui.state)
+        assertTrue(rig.replies.calls.isEmpty())
+        assertTrue(rig.speaker.spoken.isEmpty())
+        assertEquals(0, rig.open)
+        rig.close()
+    }
+
+    @Test fun repeat_says_the_last_words_again_and_claims_nothing_new() = runTest {
+        val rig = Rig(this)
+        rig.controller.onTextSubmitted("hello")
+        advanceUntilIdle()
+
+        rig.controller.onTextSubmitted("repeat that")
+        advanceUntilIdle()
+
+        assertEquals(listOf("Hello.", "Hello."), rig.said())
+        assertEquals("repeat is not sent to the reply source", listOf("hello"), rig.replies.calls)
+        rig.close()
+    }
+
+    @Test fun repeat_with_nothing_said_yet_says_so() = runTest {
+        val rig = Rig(this)
+
+        rig.controller.onTextSubmitted("say that again")
+        advanceUntilIdle()
+
+        assertEquals(listOf(app.reva.language.Outcomes.NOTHING_TO_REPEAT), rig.said())
+        assertTrue(rig.replies.calls.isEmpty())
+        rig.close()
+    }
+
     // ---------------------------------------------------------------- foreground and background
 
     @Test fun leaving_the_screen_while_listening_closes_the_microphone_with_a_notice() = runTest {

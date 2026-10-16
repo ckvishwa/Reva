@@ -34,6 +34,10 @@ _ALLOWED_DOMAIN_ROUTES = {
     ("POST", "/v1/devices/pairing/approve"),
     ("POST", "/v1/devices/pairing/deny"),
     ("POST", "/v1/devices/{device_id}/revoke"),
+    # C2: the owner, on this PC, chooses what a paired phone may ask this PC to do, and this PC's
+    # app picks up what phones asked (cards and orders). Neither path carries an action itself.
+    ("PATCH", "/v1/devices/{device_id}/pc-access"),
+    ("GET", "/v1/devices/requests"),
     ("GET", "/v1/settings/cloud"),
     ("PUT", "/v1/settings/cloud"),
     ("PUT", "/v1/settings/cloud/key"),

@@ -23,7 +23,9 @@ public sealed class ApprovalCardViewModel : ObservableObject
 
     public bool IsVisible => _cards.Count > 0;
 
-    public string Prompt => _cards.Count > 0 ? _cards[0].Prompt : string.Empty;
+    public string Prompt => _cards.Count > 0
+        ? (_cards[0].From is { Length: > 0 } from ? $"{from} asks: {_cards[0].Prompt}" : _cards[0].Prompt)
+        : string.Empty;
 
     public string? ActionId => _cards.Count > 0 ? _cards[0].ActionId : null;
 

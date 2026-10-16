@@ -47,6 +47,9 @@ class MainActivity : ComponentActivity() {
                     sync = container.syncService,
                     autoSync = container.autoSync,
                     voice = container.voice,
+                    pcRequests = container.pcRequests,
+                    phoneActions = container.phoneActions,
+                    phoneApps = container.approvedApps to container.intentPort,
                     onBeforeMicRequest = { container.micPermission.markAsked() },
                     onOpenAppSettings = {
                         startActivity(

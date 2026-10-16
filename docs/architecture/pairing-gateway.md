@@ -15,7 +15,7 @@ WinUI / tools ──loopback + Core bearer token──► Core API /v1/devices/*
 * The gateway is its own FastAPI app on its own socket and thread inside the Core process. It shares no router, dependency, exception handler or token with the Core API. The Core bearer token is never sent to a phone and never accepted by the gateway (a test greps the gateway sources for it).
 * **Off by default.** `PATCH /v1/devices/gateway {"enabled": true}` is the Devices setting. It is remembered in `<data_dir>/gateway/settings.json`. Turning it off closes the socket. If the LAN address is missing or the port is busy, the setting stays off and the reason is returned.
 * **Bind.** One interface address (`REVA_GATEWAY_HOST`, default: the machine's LAN IPv4), port `REVA_GATEWAY_PORT` (default 47821, 0 = any). Never the wildcard. `GET /v1/devices` reports `host`, `port`, `listening` and the TLS key hash.
-* **Allowlist.** `POST /pair/start`, `/pair/complete`, `/sync/push`, `/sync/pull`, `/sync/ack`. Everything else is a bare 404/405 (`{"error": ...}`); no docs, no OpenAPI, no trailing-slash redirects. Body limit 9 MB; JSON only.
+* **Allowlist.** `POST /pair/start`, `/pair/complete`, `/sync/push`, `/sync/pull`, `/sync/ack`, `/actions/propose`, `/actions/status` (the last two are C2: a phone asks the PC to act; see `docs/architecture/phone-actions.md`). Everything else is a bare 404/405 (`{"error": ...}`); no docs, no OpenAPI, no trailing-slash redirects. Body limit 9 MB; JSON only.
 
 ## Keys
 

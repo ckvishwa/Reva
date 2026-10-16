@@ -4,7 +4,7 @@ using Reva.Desktop.Voice;
 namespace Reva.Desktop.Actions;
 
 /// <summary>A confirm card waiting for a click. The sentence is the Core's, not ours.</summary>
-public sealed record ApprovalCard(string ActionId, string Prompt, DateTimeOffset? Deadline);
+public sealed record ApprovalCard(string ActionId, string Prompt, DateTimeOffset? Deadline, string? From = null);
 
 /// <summary>Joins the live session to the executor. It never decides anything:
 ///
@@ -76,6 +76,25 @@ public sealed class ActionCoordinator
                 break;
         }
     }
+
+    /// <summary>Something a paired phone asked this PC to do, from the Core's inbox. A request that
+    /// waits for approval becomes a card (the click happens here, on this PC); an order for something
+    /// safe is run, once. Nothing here decides: the Core already did, and the executor still verifies
+    /// the signed grant before it touches anything.</summary>
+    public async Task OnPhoneRequestAsync(PhoneRequest request, CancellationToken ct = default)
+    {
+        if (request.Order is { } order)
+        {
+            await RunAsync(order, ct).ConfigureAwait(false);
+        }
+        else if (request.Status == "awaiting_approval" && request.Prompt is { Length: > 0 } prompt)
+        {
+            CardRequested?.Invoke(new ApprovalCard(request.ActionId, prompt, request.Deadline, request.From));
+        }
+    }
+
+    /// <summary>The Core no longer lists this card (expired, denied, or the phone was revoked).</summary>
+    public void CloseCard(string actionId) => CardClosed?.Invoke(actionId);
 
     /// <summary>The Confirm / Not now buttons.</summary>
     public async Task DecideAsync(string actionId, bool approve, CancellationToken ct = default)

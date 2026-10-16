@@ -88,7 +88,7 @@ val stageRevaAssets = tasks.register<Copy>("stageRevaAssets") {
     }
     from(rootProject.file("../contracts")) {
         into("contracts")
-        include("mood-rules.v1.json")
+        include("mood-rules.v1.json", "capability-registry.v2.json")
     }
     into(layout.buildDirectory.dir("generated/revaAssets"))
 }

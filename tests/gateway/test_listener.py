@@ -125,7 +125,7 @@ def test_the_lan_address_is_never_loopback_or_wildcard() -> None:
     assert address is None or not address.startswith("127.") and address != "0.0.0.0"  # noqa: S104
 
 
-def test_only_the_five_allowlisted_routes_exist(env: Env) -> None:
+def test_only_the_seven_allowlisted_routes_exist(env: Env) -> None:
     env.enable()
     app = env.manager._server._app  # noqa: SLF001
     found = {

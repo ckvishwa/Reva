@@ -213,6 +213,26 @@ public sealed partial class DevicesPage : UserControl
 
     private void Dismiss_Click(object sender, RoutedEventArgs e) => ViewModel?.DismissMessage();
 
+    private async void PhoneOpenApps_Click(object sender, RoutedEventArgs e) => await ChangeAccessAsync(sender, open: true);
+
+    private async void PhoneCloseApps_Click(object sender, RoutedEventArgs e) => await ChangeAccessAsync(sender, open: false);
+
+    private async Task ChangeAccessAsync(object sender, bool open)
+    {
+        if (ViewModel is not { } vm
+            || sender is not CheckBox box
+            || box.DataContext is not DeviceRowViewModel device)
+        {
+            return;
+        }
+
+        var on = box.IsChecked == true;
+        await vm.SetPhoneAccessAsync(
+            device,
+            open ? on : device.OpenAppsAllowed,
+            open ? device.CloseAppsAllowed : on);
+    }
+
     private async void Revoke_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is not { } vm || (sender as FrameworkElement)?.DataContext is not DeviceRowViewModel device)

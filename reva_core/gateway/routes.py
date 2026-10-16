@@ -25,6 +25,13 @@ class GatewaySetting(BaseModel):
     enabled: bool
 
 
+class PhoneActions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    open_apps: bool
+    close_apps: bool
+
+
 class Approval(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -80,6 +87,33 @@ def build_devices_router(lifecycle: CoreLifecycle) -> APIRouter:
     ) -> dict[str, Any]:
         guarded(lifecycle.gateway.deny_pairing)
         return {"denied": True}
+
+    @router.get("/requests")
+    def actions_inbox(
+        header_correlation_id: Annotated[str, Depends(require_token)],
+        after: int = 0,
+        wait: float = 0.0,
+    ) -> dict[str, Any]:
+        """What this PC's app has to do for phones: confirm cards and signed orders (handed out
+        once). Long-polls up to `wait` seconds (at most 25) for something newer than `after`."""
+        result: dict[str, Any] = guarded(
+            lambda: lifecycle.gateway.actions_inbox(max(0, after), min(max(wait, 0.0), 25.0))
+        )
+        return result
+
+    @router.patch("/{device_id}/pc-access")
+    def set_phone_actions(
+        device_id: str,
+        body: PhoneActions,
+        header_correlation_id: Annotated[str, Depends(require_token)],
+    ) -> dict[str, Any]:
+        """The owner, on this PC, chooses which PC actions this phone may ask for."""
+        result: dict[str, Any] = guarded(
+            lambda: lifecycle.gateway.set_phone_actions(
+                device_id, open_apps=body.open_apps, close_apps=body.close_apps
+            )
+        )
+        return result
 
     @router.post("/{device_id}/revoke")
     def revoke_device(

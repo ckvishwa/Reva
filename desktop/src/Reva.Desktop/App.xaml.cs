@@ -11,6 +11,7 @@ namespace Reva.Desktop;
 public partial class App : Application
 {
     private Window? _window;
+    private CancellationTokenSource? _phoneRequestsCts;
     private RevaCoreLifecycle? _lifecycle;
 
     public App()
@@ -86,6 +87,10 @@ public partial class App : Application
             System.IO.Path.Combine(configuration.CoreDataDirectory, "app-targets.json"));
         var actionCoordinator = new Actions.ActionCoordinator(actionsApi, () => CreateExecutor(configuration, appTargets));
         voiceLoop.CoreEvent += actionCoordinator.OnCoreEvent;
+        // What paired phones ask this PC to do arrives here, not through a voice session.
+        var phoneRequests = new Actions.PhoneRequestPoller(actionsApi, actionCoordinator);
+        _phoneRequestsCts = new CancellationTokenSource();
+        _ = phoneRequests.RunAsync(_phoneRequestsCts.Token);
         _window = new MainWindow(
             new ViewModels.ShellViewModel(lifecycle),
             assistant,
@@ -101,6 +106,7 @@ public partial class App : Application
             new ViewModels.ActivityViewModel(actionsApi),
             new ViewModels.ApprovalCardViewModel(actionCoordinator, action => uiQueue.TryEnqueue(() => action())),
             wakeWord);
+        _window.Closed += (_, _) => _phoneRequestsCts?.Cancel();
         _window.Activate();
         if (wakeWordOptions.IsEnabled)
         {

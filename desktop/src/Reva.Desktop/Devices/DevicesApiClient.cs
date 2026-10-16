@@ -56,6 +56,14 @@ public sealed class DevicesApiClient : IDevicesApi
         SendAsync<RevokeOutcome>(
             HttpMethod.Post, $"{Base}/{Uri.EscapeDataString(deviceId)}/revoke", null, ct);
 
+    public Task<DevicesResult<PhoneAccessOutcome>> SetPhoneAccessAsync(
+        string deviceId, bool openApps, bool closeApps, CancellationToken ct = default) =>
+        SendAsync<PhoneAccessOutcome>(
+            HttpMethod.Patch,
+            $"{Base}/{Uri.EscapeDataString(deviceId)}/pc-access",
+            new JsonObject { ["open_apps"] = openApps, ["close_apps"] = closeApps },
+            ct);
+
     private async Task<DevicesResult<T>> SendAsync<T>(HttpMethod method, string path, JsonObject? body, CancellationToken ct)
     {
         var token = await _tokens.GetTokenAsync(ct).ConfigureAwait(false);

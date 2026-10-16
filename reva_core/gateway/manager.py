@@ -26,9 +26,10 @@ from reva_core.gateway.app import build_gateway_app
 from reva_core.gateway.identity import GatewayIdentity, gateway_key_provider
 from reva_core.gateway.pairing import DEFAULT_TTL_SECONDS, PairingError, PairingManager
 from reva_core.gateway.server import GatewayListenError, GatewayServer, detect_lan_address
-from reva_core.gateway.service import GatewayService
+from reva_core.gateway.service import GatewayError, GatewayService
 from reva_core.gateway.store import Grant, GrantStore
 from reva_core.gateway.trace import FileTraceSink
+from reva_core.policy.broker import Broker
 from reva_core.shared.logging import get_logger
 
 logger = get_logger("gateway")
@@ -56,7 +57,9 @@ class GatewayManager:
         *,
         pairing_ttl: int = DEFAULT_TTL_SECONDS,
         now: Callable[[], float] = time.time,
+        broker: Callable[[], Broker | None] = lambda: None,
     ) -> None:
+        self._broker = broker
         self._settings = settings
         self._dir = Path(settings.data_dir) / "gateway"
         self._key_provider = key_provider
@@ -74,6 +77,7 @@ class GatewayManager:
             domains=domains,
             privacy=privacy,
             now=lambda: self._now(),
+            broker=broker,
         )
         self._pairing: PairingManager | None = None
         self._server: GatewayServer | None = None
@@ -177,6 +181,48 @@ class GatewayManager:
             raise GatewayStateError("unknown_device", 404)
         return self._service.revoke(device_id)
 
+    # ------------------------------------------------------------- phone actions (C2)
+
+    def set_phone_actions(
+        self, device_id: str, *, open_apps: bool, close_apps: bool
+    ) -> dict[str, Any]:
+        try:
+            chosen = self._service.set_phone_actions(
+                device_id, open_apps=open_apps, close_apps=close_apps
+            )
+        except GatewayError as exc:
+            raise GatewayStateError(exc.code, exc.status) from exc
+        return {"device_id": device_id, **chosen}
+
+    def actions_inbox(self, after: int, wait: float) -> dict[str, Any]:
+        """What this PC's app must do for phones: confirm cards and signed orders. Waits up to
+        `wait` seconds for something new after `after`. Orders are handed out once."""
+        broker = self._broker()
+        if broker is None:
+            return {"seq": after, "items": []}
+        seq = broker.wait_remote(after, wait) if wait > 0 else broker.remote_seq()
+        items = broker.remote_inbox(active_origins=self._service.is_active_device)
+        return {
+            "seq": seq,
+            "items": [
+                {
+                    "action_id": v.action_id,
+                    "capability": v.capability,
+                    "tier": v.tier,
+                    "status": v.status,
+                    "prompt": v.prompt,
+                    "deadline": v.deadline,
+                    "from": self._origin_name(broker, v.action_id),
+                    "order": _order_json(v),
+                }
+                for v in items
+            ],
+        }
+
+    def _origin_name(self, broker: Broker, action_id: str) -> str:
+        record = broker._records.get(action_id)  # noqa: SLF001 - same package family, read only
+        return self._service.device_name(record.proposal.origin_device) if record else "A phone"
+
     # ------------------------------------------------------------------------- internals
 
     def _get_identity(self) -> GatewayIdentity:
@@ -260,12 +306,28 @@ class GatewayManager:
             raise
 
 
+def _order_json(view: Any) -> dict[str, Any] | None:
+    if view.order is None:
+        return None
+    return {
+        "grant": view.order.grant.to_dict(),
+        "signature": view.order.signature,
+        "capability": view.order.capability,
+        "args": dict(view.order.args),
+        "target_device_id": view.order.target_device,
+    }
+
+
 def _device_view(grant: Grant) -> dict[str, Any]:
     return {
         "device_id": grant.device_id,
         "name": grant.display_name,
         "platform": grant.platform,
         "scopes": list(grant.scopes),
+        "actions": {
+            "open_apps": "pc.app.open" in grant.scopes,
+            "close_apps": "pc.app.close" in grant.scopes,
+        },
         "status": grant.status,
         "fingerprint": protocol.spki_sha256(grant.public_key),
         "approved_at": grant.approved_at,

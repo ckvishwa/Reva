@@ -10,11 +10,14 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.reva.phone.ApprovedApps
+import app.reva.phone.LaunchableApps
 import app.reva.sync.AutoSyncController
+import app.reva.ui.apps.PhoneAppsScreen
 import app.reva.sync.SyncService
 import app.reva.ui.more.MoreScreen
 
-private enum class MorePage { More, Devices, Scan }
+private enum class MorePage { More, Devices, Scan, Apps }
 
 private class DevicesViewModelFactory(private val service: SyncService, private val onSynced: () -> Unit) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -23,7 +26,13 @@ private class DevicesViewModelFactory(private val service: SyncService, private 
 
 /** The More tab: the section list, with Devices (pair, sync, forget) and the QR scanner one tap away. */
 @Composable
-fun MoreHost(sync: SyncService?, versionName: String, onSynced: () -> Unit, autoSync: AutoSyncController? = null) {
+fun MoreHost(
+    sync: SyncService?,
+    versionName: String,
+    onSynced: () -> Unit,
+    autoSync: AutoSyncController? = null,
+    phoneApps: Pair<ApprovedApps, LaunchableApps>? = null,
+) {
     if (sync == null) {
         MoreScreen(versionName)
         return
@@ -41,10 +50,13 @@ fun MoreHost(sync: SyncService?, versionName: String, onSynced: () -> Unit, auto
             onCancel = { page = MorePage.Devices },
         )
         MorePage.Devices -> DevicesScreen(vm, onScan = { page = MorePage.Scan }, onBack = { page = MorePage.More }, autoSync = autoSync)
+        MorePage.Apps -> phoneApps?.let { (approved, installed) -> PhoneAppsScreen(approved, installed, onBack = { page = MorePage.More }) }
         MorePage.More -> MoreScreen(
             versionName,
             devicesSummary = state.pc?.let { "Paired with your PC. ${state.lastSyncText ?: ""}".trim() },
             onOpenDevices = { page = MorePage.Devices },
+            appsSummary = phoneApps?.first?.all()?.size?.let { "$it approved" },
+            onOpenApps = phoneApps?.let { { page = MorePage.Apps } },
         )
     }
 }

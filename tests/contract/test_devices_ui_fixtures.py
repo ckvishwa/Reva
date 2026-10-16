@@ -42,4 +42,4 @@ def test_committed_fixtures_match_the_real_core_responses():
     ]
     extra = sorted(p.name for p in directory.glob("*.json") if p.name not in files)
     assert not stale and not extra, f"fixtures out of date: {stale}; unexpected files: {extra}"
-    assert len(files) >= 17
+    assert len(files) >= 21

@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "action_id": "ph-0000000000000000000000000000000000000002",
+      "capability": "windows.app.close",
+      "deadline": "2026-10-12T09:00:00+00:00",
+      "from": "Pixel 8",
+      "order": null,
+      "prompt": "Close Calculator? Approve it on screen.",
+      "status": "awaiting_approval",
+      "tier": "T2"
+    },
+    {
+      "action_id": "ph-0000000000000000000000000000000000000003",
+      "capability": "windows.app.open",
+      "deadline": null,
+      "from": "Pixel 8",
+      "order": {
+        "args": {
+          "app_key": "calculator"
+        },
+        "capability": "windows.app.open",
+        "grant": {
+          "action_id": "ph-0000000000000000000000000000000000000003",
+          "actor": "owner",
+          "args_hash": "65b8bdb0ca80a9a556e0e42fbc9ce7af985d058f7d75194d4c93ee4bc4bb6aa5",
+          "capability": "windows.app.open",
+          "expires_at": "2026-10-12T09:00:00+00:00",
+          "grant_id": "00000000-0000-7000-8000-000000000004",
+          "idempotency_key": "00000000-0000-7000-8000-000000000005",
+          "issued_at": "2026-10-12T09:00:00+00:00",
+          "target_device": "local",
+          "version": "1"
+        },
+        "signature": "SIGNATURE",
+        "target_device_id": "local"
+      },
+      "prompt": null,
+      "status": "granted",
+      "tier": "T1"
+    }
+  ],
+  "seq": 2
+}
