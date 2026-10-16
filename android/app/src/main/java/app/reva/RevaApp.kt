@@ -24,7 +24,8 @@ import app.reva.mood.EngineMood
 import app.reva.mood.MoodEngine
 import app.reva.voice.AndroidTtsSpeaker
 import app.reva.voice.NeutralMood
-import app.reva.voice.UnavailableReplies
+import app.reva.language.PolicyReplies
+import app.reva.policy.Registry
 import app.reva.voice.VoiceController
 import java.io.File
 import uniffi.reva_kernel.openDomain
@@ -76,13 +77,18 @@ class AppContainer(private val context: Context) {
         ) { currentActivity?.get() }
     }
 
+    /** The capability registry the PC uses, shipped in the APK from contracts/. */
+    val registry: Registry by lazy {
+        Registry(org.json.JSONObject(context.assets.open("contracts/capability-registry.v2.json").bufferedReader().use { it.readText() }))
+    }
+
     /** One voice session at a time. Recognizer and service are created per session and released at its end. */
     val voice: VoiceController by lazy {
         VoiceController(
             permissions = micPermission,
             availability = { AndroidRecognizerAvailability.check(context) },
             recognizerFactory = { AndroidSpeechRecognizer(context) },
-            replies = UnavailableReplies(),
+            replies = PolicyReplies(registry),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
