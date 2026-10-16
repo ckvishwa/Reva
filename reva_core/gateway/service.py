@@ -42,6 +42,8 @@ PHONE_ACTION_SCOPES = {
     "windows.app.close": "pc.app.close",  # T2: also needs a click on this PC
 }
 MAX_OPEN_PER_PHONE = 8  # one phone cannot fill the broker and starve this PC's own actions
+MAX_NEW_ACTIONS_PER_PHONE = 20  # completed actions cannot evade the open-request cap
+ACTION_RATE_WINDOW = 60.0
 ACTION_REQUEST_TTL = 120  # seconds a request may sit before the PC refuses it as stale
 ACTION_REQUEST_FUTURE = 30  # clock skew allowed the other way
 MAX_ACTION_ARGS_BYTES = 2048
@@ -82,6 +84,7 @@ class GatewayService:
         self._lock = threading.RLock()
         self._nonces: OrderedDict[str, float] = OrderedDict()
         self._failures: dict[str, deque[float]] = {}
+        self._phone_actions: dict[str, deque[float]] = {}
 
     @property
     def _identity(self) -> GatewayIdentity:
@@ -247,6 +250,7 @@ class GatewayService:
             if grant is None:
                 return False
             changed = self._store.revoke(device_id)
+            self._phone_actions.pop(device_id, None)
             handle, module = self._finance()
             for kernel_id in grant.kernel_ids.values():
                 # Not registered in the Kernel? The grant is revoked either way.
@@ -430,10 +434,16 @@ class GatewayService:
         if broker is None:
             raise GatewayError("actions_unavailable", 503)
         proposal_id = _proposal_id(grant.device_id, request_id)
-        if not broker.knows(proposal_id) and broker.open_for_origin(grant.device_id) >= (
-            MAX_OPEN_PER_PHONE
-        ):
-            raise GatewayError("too_many_actions", 429)  # a retry of a known request is not new
+        is_new = not broker.knows(proposal_id)
+        if is_new:
+            if broker.open_for_origin(grant.device_id) >= MAX_OPEN_PER_PHONE:
+                raise GatewayError("too_many_actions", 429)
+            recent = self._phone_actions.setdefault(grant.device_id, deque())
+            horizon = self._now() - ACTION_RATE_WINDOW
+            while recent and recent[0] < horizon:
+                recent.popleft()
+            if len(recent) >= MAX_NEW_ACTIONS_PER_PHONE:
+                raise GatewayError("rate_limited", 429)
         proposal = Proposal(
             proposal_id=proposal_id,
             capability=capability,
@@ -446,6 +456,8 @@ class GatewayService:
             view = broker.propose(proposal, device_scopes=frozenset({"windows"}))
         except BrokerFull as exc:
             raise GatewayError("too_many_actions", 429) from exc
+        if is_new:
+            self._phone_actions[grant.device_id].append(self._now())
         self._store.audit(
             "phone_action_requested",
             AuditOutcome.SUCCESS,

@@ -613,6 +613,32 @@ def test_one_phone_cannot_fill_the_broker_and_starve_this_pcs_own_actions(env: E
     assert own.status_code == 201, "this PC's own app is not affected"
 
 
+def test_completed_requests_are_rate_limited_per_phone_without_blocking_retries(env: Env) -> None:
+    phone, _ = _paired(env)
+    first_id = ""
+    for index in range(20):
+        request_id, reply = _ask(env, phone)
+        assert reply.status == 200
+        if index == 0:
+            first_id = request_id
+        order = _inbox(env)["items"][0]["order"]
+        assert (
+            _report(
+                env, order, "verified", {"kind": "process_started", "ref": f"pid:{index + 1}"}
+            ).status_code
+            == 200
+        )
+
+    assert _ask(env, phone)[1].status == 429
+    assert _ask(env, phone, request_id=first_id)[1].status == 200
+    assert _inbox(env)["items"] == []
+    other, _ = _paired(env)
+    assert _ask(env, other)[1].status == 200
+
+    env.clock[0] += 61
+    assert _ask(env, phone)[1].status == 200
+
+
 def test_responses_are_signed_by_the_paired_pc_and_carry_no_secrets(env: Env) -> None:
     phone, _ = _paired(env)
 

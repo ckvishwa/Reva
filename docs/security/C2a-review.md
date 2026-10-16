@@ -14,8 +14,8 @@ Scope: `reva_core/gateway/service.py` (`act_propose`, `act_status`, `set_phone_a
 | Revoked phone keeps acting | Admission refuses it; waiting requests and undelivered orders are withdrawn (`DEVICE_REVOKED`); the inbox never hands out an order from an inactive phone. An order the executor already holds is not recalled (documented) |
 | Evidence forgery | Executor reports go through the existing broker check; `verified` without evidence of the registry's shape is `unknown`; the phone is told only the Core's status and template |
 | Order or grant leaks to the phone | Responses are built from a fixed field list with no order, grant or signature (asserted on every response) |
-| Resource exhaustion | One phone may hold 8 open requests (429 beyond; retries of known ids still work); the PC's own app is unaffected; arguments are capped at 2 KiB; body limits unchanged |
+| Resource exhaustion | One phone may hold 8 open requests or submit 20 new requests per 60 seconds (429 beyond; retries of known ids still work); another phone and the PC's own app are unaffected; arguments are capped at 2 KiB; body limits unchanged |
 | Race between gateway and Core API threads | The broker's public methods are serialized by one re-entrant lock; an 8-thread proposal test passes |
 | Unauthenticated PC pickup | `/v1/devices/requests` and `/v1/devices/{id}/pc-access` need the Core bearer token; the gateway never serves them |
 
-Findings fixed in this slice: a phone could have held the whole broker open (per-phone cap added); the first design wrote ledger kinds the schema does not allow (switched to the existing kinds rather than adding a migration). Left open: orders are marked delivered in memory only (the safe direction, documented).
+Findings fixed in this slice: a phone could have held the whole broker open (per-phone cap added); completing each action evaded that cap, so a per-device rolling request limit was added; the first design wrote ledger kinds the schema does not allow (switched to the existing kinds rather than adding a migration). Left open: orders are marked delivered in memory only (the safe direction, documented).
