@@ -1,6 +1,8 @@
 package app.reva.language
 
 import app.reva.pcrequests.PcIntent
+import app.reva.brain.BrainResult
+import app.reva.brain.KernelQueries
 import app.reva.pcrequests.PcPhrases
 import app.reva.pcrequests.PcRequestTracker
 import app.reva.pcrequests.PcStart
@@ -16,9 +18,9 @@ import java.util.UUID
 
 /**
  * Answers a sentence the way the PC does before it reaches any model: the rule fast path turns it into a typed
- * proposal and the same `authorize()` decides. The phone has no executor and no data engine behind this yet, so an
- * allowed proposal is answered "not on the phone yet" and nothing is claimed done. A refused one gets its refusal
- * template. A sentence no rule matches is an open question, which the phone cannot answer yet.
+ * proposal and the same `authorize()` decides. Supported read-only questions go to the local Kernel repository;
+ * unsupported proposals are answered "not on the phone yet" and nothing is claimed done. A refused one gets its
+ * refusal template. An open question goes to the selected planner, which can explicitly say it is unavailable.
  *
  * The assistant controls (stop, repeat) are handled by the voice controller itself; undo has nothing to undo here.
  */
@@ -30,6 +32,7 @@ class PolicyReplies(
     private val pc: PcRequestTracker? = null,
     /** The phone's own actions (open an approved app, alarm, reminder, calendar, share). */
     private val phone: PhoneActions? = null,
+    private val local: KernelQueries? = null,
 ) : ReplySource {
     override suspend fun reply(text: String): ReplySource.Reply {
         PcPhrases.parse(text)?.let { return forPc(it) }
@@ -50,6 +53,9 @@ class PolicyReplies(
         )
         if (!decision.allowed && decision.reason != "APPROVAL_REQUIRED") {
             return ReplySource.Reply(Outcomes.refusalText(decision.reason, hit.capability), "template")
+        }
+        local?.answer(hit.capability, hit.args)?.let { result ->
+            return ReplySource.Reply(result.text, if (result is BrainResult.Answer) result.provider else "template")
         }
         return ReplySource.Reply(NOT_ON_PHONE_YET, "template")
     }
