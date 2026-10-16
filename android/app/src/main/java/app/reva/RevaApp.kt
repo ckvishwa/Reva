@@ -28,6 +28,14 @@ import app.reva.language.PolicyReplies
 import app.reva.brain.KernelQueries
 import app.reva.brain.LocalBrain
 import app.reva.brain.PlannerRegistry
+import app.reva.brain.AndroidSecretBlobStore
+import app.reva.brain.AnthropicTransport
+import app.reva.brain.HostedPlanner
+import app.reva.brain.HostedSecrets
+import app.reva.brain.ModeAvailability
+import app.reva.brain.ModeController
+import app.reva.brain.RunMode
+import app.reva.brain.SharedPrefsModeSettings
 import app.reva.pcrequests.PcRequestTracker
 import app.reva.phone.AndroidIntentPort
 import app.reva.phone.ApprovedApps
@@ -37,6 +45,8 @@ import app.reva.pcrequests.SigningUnavailable
 import app.reva.policy.Registry
 import app.reva.voice.VoiceController
 import java.io.File
+import java.net.NetworkInterface
+import kotlinx.coroutines.withContext
 import uniffi.reva_kernel.openDomain
 
 /**
@@ -62,6 +72,43 @@ class AppContainer(private val context: Context) {
     }
 
     val financeRepository: FinanceRepository get() = kernelRepository
+
+    val hostedSecrets: HostedSecrets by lazy {
+        HostedSecrets(AndroidSecretBlobStore(File(noBackupRoot, "hosted/anthropic.key")))
+    }
+
+    val modes: ModeController by lazy {
+        ModeController(SharedPrefsModeSettings(context.getSharedPreferences("reva_modes", Context.MODE_PRIVATE)))
+    }
+
+    private val brain: LocalBrain by lazy {
+        val hosted = HostedPlanner(modes, key = { hostedSecrets.read() }, transport = AnthropicTransport())
+        LocalBrain(
+            PlannerRegistry(mapOf(
+                "offline-lite" to PlannerRegistry.offlineOnly().get("offline-lite")!!,
+                "hosted" to hosted,
+            )),
+            provider = { if (modes.state.value.mode == RunMode.Standalone) "hosted" else "offline-lite" },
+        )
+    }
+
+    fun cancelBrainTurn() = brain.cancel()
+
+    /** Only fresh, local observations can move the app into a network mode. No network-state permission is used. */
+    suspend fun refreshModes() {
+        val availability = withContext(Dispatchers.IO) {
+            val pc = pairedPcStore.load()
+            val sync = autoSync.status.value
+            val now = System.currentTimeMillis() / 1000
+            val reachable = pc != null && !sync.needsAttention && sync.lastSyncAtSeconds?.let { now - it in 0..120 } == true
+            val network = try {
+                NetworkInterface.getNetworkInterfaces()?.toList()?.any { it.isUp && !it.isLoopback } == true
+            } catch (_: Exception) { false }
+            ModeAvailability(pcTrusted = pc != null, pcReachable = reachable, networkAvailable = network,
+                hostedKeyConfigured = hostedSecrets.configured())
+        }
+        modes.availability(availability)
+    }
 
     /** The paired PC (public data only), read by sync and by requests for the PC to act. */
     val pairedPcStore: PairedPcStore by lazy { PairedPcStore(File(syncRoot, "paired_pc.json")) }
@@ -134,7 +181,7 @@ class AppContainer(private val context: Context) {
             recognizerFactory = { AndroidSpeechRecognizer(context) },
             replies = PolicyReplies(
                 registry, pc = pcRequests, phone = phoneActions,
-                local = KernelQueries(financeRepository), fallback = LocalBrain(PlannerRegistry.offlineOnly()),
+                local = KernelQueries(financeRepository), fallback = brain,
             ),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),

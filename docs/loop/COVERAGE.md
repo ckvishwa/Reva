@@ -50,7 +50,7 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-008 | R2 | S15 | PARTIAL | C2 | C2a/b/c: signed PC gateway, owner-set scopes, Windows pickup and executor, Android sender and native phone actions implemented and merged (`2e64bb8`); 10 security invariants verified against the real Domain Kernel (Python 97 passed) and on an API 36 emulator (Android unit 307, instrumented 34, .NET 833, Rust 95 passed); physical phone/PC acceptance NEEDS_HARDWARE |
 | AR-AND-009 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-010 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
-| AR-AND-011 | R3 | S21 | PARTIAL | C3 | C3a local planner registry and typed failure/unknown path; opt-in hosted provider, disclosure and per-domain consent pending C3b/c |
+| AR-AND-011 | R3 | S21 | PARTIAL | C3 | C3a local planner registry and typed failure/unknown path in PR #30; C3b opt-in hosted provider, visible modes, disclosure and strict both-domain egress consent implemented in worktree, pending PR/CI; paired open-question delegation remains open |
 | AR-AND-012 | R3 | S21 | PARTIAL | C3 | C3a read-only Today question uses local Rust Kernel and offline open questions explicitly say advanced reasoning is unavailable; full Finance summary and no-PC physical acceptance pending |
 | AR-AND-013 | R3 | S17 | NOT STARTED | D3 | Health Connect |
 | AR-AND-014 | R3 | S21 | NOT STARTED | C3/D6 | delete after reconnect in every domain |

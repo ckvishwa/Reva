@@ -50,6 +50,7 @@ import app.reva.voice.TalkLine
 import app.reva.voice.VoiceController
 import app.reva.voice.VoiceState
 import app.reva.voice.Who
+import app.reva.brain.ModeController
 
 /**
  * Talk: type or speak. Typing is always available. The mic button is the only thing that ever asks for the
@@ -62,6 +63,7 @@ fun TalkScreen(
     onOpenAppSettings: () -> Unit,
     pcRequests: PcRequestTracker? = null,
     phoneActions: PhoneActions? = null,
+    modes: ModeController? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -88,6 +90,9 @@ fun TalkScreen(
             color = RevaColors.Text,
             modifier = Modifier.semantics { heading() },
         )
+        modes?.state?.collectAsState()?.value?.let { mode ->
+            MutedText("${mode.label}: ${mode.reason}", Modifier.testTag("talk_mode"))
+        }
         val prefs = remember { context.getSharedPreferences("reva_voice", android.content.Context.MODE_PRIVATE) }
         var avatarOn by remember { mutableStateOf(prefs.getBoolean("avatar_enabled", true)) }
         // With the keyboard open there is little room: the avatar shrinks so the input row stays visible.
