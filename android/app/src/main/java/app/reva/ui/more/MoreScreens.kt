@@ -41,7 +41,14 @@ fun TalkUnavailableScreen(modifier: Modifier = Modifier) {
 private val comingSoon = listOf("Health", "Coach", "Career", "Learn", "Cyber", "Personal", "Memory")
 
 @Composable
-fun MoreScreen(versionName: String, modifier: Modifier = Modifier, devicesSummary: String? = null, onOpenDevices: (() -> Unit)? = null) {
+fun MoreScreen(
+    versionName: String,
+    modifier: Modifier = Modifier,
+    devicesSummary: String? = null,
+    onOpenDevices: (() -> Unit)? = null,
+    appsSummary: String? = null,
+    onOpenApps: (() -> Unit)? = null,
+) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("More", style = MaterialTheme.typography.headlineMedium, color = RevaColors.Text, modifier = Modifier.semantics { heading() }) }
         if (onOpenDevices != null) {
@@ -50,6 +57,15 @@ fun MoreScreen(versionName: String, modifier: Modifier = Modifier, devicesSummar
                     SectionTitle("Devices")
                     MutedText(devicesSummary ?: "Pair this phone with your PC to keep Finance in step. Nothing leaves your Wi-Fi.")
                     SecondaryButton(if (devicesSummary == null) "Pair with a PC" else "Manage", onOpenDevices, Modifier.testTag("open_devices"))
+                }
+            }
+        }
+        if (onOpenApps != null) {
+            item {
+                RevaCard(modifier = Modifier.testTag("more_apps")) {
+                    SectionTitle("Apps REVA may open")
+                    MutedText("Choose which apps on this phone REVA may open when you say \"open <name>\". ${appsSummary ?: ""}".trim())
+                    SecondaryButton("Choose apps", onOpenApps, Modifier.testTag("open_apps"))
                 }
             }
         }

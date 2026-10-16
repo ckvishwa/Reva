@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      UniFFI's Kotlin binding (generated, git-ignored, never hand-edited — see
+      tools/kernel/build_bindings.py) picks a cleanup strategy at class-init time: it calls
+      Class.forName("java.lang.ref.Cleaner") inside a try/catch and only instantiates
+      JavaLangRefCleaner (API 33+) if that lookup succeeds; a ClassNotFoundException on
+      API 31/32 falls back to the JNA-backed cleaner instead. The java.lang.ref.Cleaner
+      calls that Lint's static NewApi check flags here are therefore unreachable on this
+      module's minSdk 31/32 devices at runtime — a documented false positive in UniFFI's
+      generated Kotlin cleaner template, not a minSdk compatibility defect. Scoped to this
+      one generated path and this one rule only; it does not affect any hand-written source.
+    -->
+    <issue id="NewApi">
+        <ignore path="**/uniffi/reva_kernel/**" />
+    </issue>
+</lint>

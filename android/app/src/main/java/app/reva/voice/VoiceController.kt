@@ -277,6 +277,11 @@ class VoiceController(
     private fun isControl(text: String, capability: String) = Rules.controlCapability(Rules.clean(text)) == capability
 
     /** The words for this sentence. "Repeat" replays only what was already said; nothing new is claimed. */
+    /** A line from something that finished after the turn (a request to the PC): shown, never spoken. */
+    fun postReply(text: String) {
+        addLine(Who.Reva, text.take(MAX_REPLY))
+    }
+
     private suspend fun answerFor(text: String): String {
         val answer = if (isControl(text, "assistant.repeat")) {
             lastAnswer ?: Outcomes.NOTHING_TO_REPEAT

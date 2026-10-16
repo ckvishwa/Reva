@@ -76,7 +76,10 @@ class AuthorizeParityTest {
             assertEquals(label, want.getString("reason"), got.reason)
             assertEquals(label, want.stringOrNull("tier"), got.tier)
             assertEquals(label, want.getJSONArray("unresolved").strings(), got.unresolved)
-            assertEquals(label, want.getJSONArray("problems").strings(), got.problems)
+            // `problems` is documented as "for logs and tests, not in the contract" (authorize.py): its order
+            // follows Python dict iteration, which `org.json.JSONObject` does not preserve across the JSON
+            // round trip. Compare content, not order.
+            assertEquals(label, want.getJSONArray("problems").strings().sorted(), got.problems.sorted())
             val wantClarification = if (want.isNull("clarification")) null else Json.toMap(want.getJSONObject("clarification"))
             assertEquals(label, wantClarification, got.clarification)
         }
