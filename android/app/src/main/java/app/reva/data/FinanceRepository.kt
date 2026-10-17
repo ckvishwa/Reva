@@ -45,6 +45,9 @@ interface FinanceRepository {
 
     suspend fun today(): Outcome<TodaySummary>
 
+    /** Exact day totals and their contributing transaction IDs, computed by the local Kernel. */
+    suspend fun dailyAnalysis(asOf: String): Outcome<FinanceDailyAnalysis>
+
     /** Amounts this phone and the PC disagree about, not yet resolved. */
     suspend fun conflicts(): Outcome<List<Conflict>>
 

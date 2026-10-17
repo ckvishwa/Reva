@@ -48,5 +48,18 @@ fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier, syncStatus: S
                 state.error?.let { ErrorText(it) }
             }
         }
+        item {
+            RevaCard(radius = 14.dp, modifier = Modifier.testTag("daily_finance_card")) {
+                CaptionText("Daily Finance · exact records")
+                if (state.dailyRows.isEmpty() && state.dailyError == null) CaptionText("No transactions recorded today")
+                state.dailyRows.forEach { row ->
+                    Text("${row.currency} · In ${row.incomeText} · Out ${row.expenseText} · Net ${row.netText}",
+                        style = MaterialTheme.typography.bodyMedium, color = RevaColors.Text)
+                }
+                if (state.topSpendingText.isNotEmpty()) CaptionText("Top category · ${state.topSpendingText}")
+                if (state.dailyError == null) CaptionText("${state.dailySourceCount} source records")
+                state.dailyError?.let { ErrorText(it) }
+            }
+        }
     }
 }

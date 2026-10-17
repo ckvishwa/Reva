@@ -1,6 +1,7 @@
 package app.reva.data
 
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,6 +76,23 @@ class KernelFinanceRepository(
     override suspend fun netWorthSnapshots() = run { Json.snapshots(query(it, "list_networth_snapshots")) }
 
     override suspend fun today() = run { Json.today(kernelToday(listOf(it), asOf())) }
+
+    override suspend fun dailyAnalysis(asOf: String): Outcome<FinanceDailyAnalysis> {
+        val date = try { LocalDate.parse(asOf).toString() } catch (_: DateTimeParseException) {
+            return Outcome.Failed(FinanceError(ErrorKind.Validation, "Choose a valid date.", "as_of"))
+        }
+        return run { handle ->
+            val params = JSONObject().put("period", "$date..$date").put("as_of", date).toString()
+            val cashflow = handle.query("cashflow", params)
+            val spending = handle.query("spend_by_category", params)
+            FinanceDailyAnalysis(
+                date,
+                Json.dailyCashflow(cashflow.rowsJson),
+                Json.dailySpending(spending.rowsJson),
+                (cashflow.sourceIds + spending.sourceIds).distinct(),
+            )
+        }
+    }
 
     override suspend fun conflicts() = run { Json.conflicts(query(it, "conflicts")) }
 
