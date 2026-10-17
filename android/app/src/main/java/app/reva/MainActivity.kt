@@ -50,6 +50,10 @@ class MainActivity : ComponentActivity() {
                     pcRequests = container.pcRequests,
                     phoneActions = container.phoneActions,
                     phoneApps = container.approvedApps to container.intentPort,
+                    modes = container.modes,
+                    hostedSecrets = container.hostedSecrets,
+                    refreshModes = { container.refreshModes() },
+                    cancelBrainTurn = { container.cancelBrainTurn() },
                     onBeforeMicRequest = { container.micPermission.markAsked() },
                     onOpenAppSettings = {
                         startActivity(
