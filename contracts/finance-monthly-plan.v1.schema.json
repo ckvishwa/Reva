@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reva.local/schemas/finance-monthly-plan/1.0",
+  "title": "finance.monthly_plan v1 (future read-only report)",
+  "description": "An additive contract. Existing /v1/domains/finance APIs and transaction meanings are unchanged. Validation of cross-field arithmetic is required in addition to this structural schema.",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/response"}],
+  "$defs": {
+    "date": {"type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+    "money": {"type": "integer", "minimum": -9223372036854775808, "maximum": 9223372036854775807},
+    "nonnegative": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "unknownableMoney": {"oneOf": [{"$ref": "#/$defs/nonnegative"}, {"type": "null"}]},
+    "ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "scenarioFlow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "date", "account_id", "currency", "amount_minor"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "date": {"$ref": "#/$defs/date"},
+        "account_id": {"$ref": "#/$defs/id"}, "currency": {"$ref": "#/$defs/currency"},
+        "amount_minor": {"$ref": "#/$defs/money", "not": {"const": 0}}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["as_of", "horizon_days", "currency"],
+      "properties": {
+        "as_of": {"$ref": "#/$defs/date"},
+        "horizon_days": {"type": "integer", "minimum": 1, "maximum": 366},
+        "currency": {"$ref": "#/$defs/currency"},
+        "scenario": {"oneOf": [
+          {"type": "null"},
+          {"type": "object", "additionalProperties": false, "required": ["cash_flows"],
+           "properties": {"cash_flows": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/scenarioFlow"}}}}
+        ]}
+      }
+    },
+    "day": {
+      "type": "object", "additionalProperties": false,
+      "required": ["date", "cash_balance_minor", "cash_headroom_minor", "source_ids"],
+      "properties": {
+        "date": {"$ref": "#/$defs/date"},
+        "cash_balance_minor": {"oneOf": [{"$ref": "#/$defs/money"}, {"type": "null"}]},
+        "cash_headroom_minor": {"oneOf": [{"$ref": "#/$defs/money"}, {"type": "null"}]},
+        "source_ids": {"$ref": "#/$defs/ids"}
+      }
+    },
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["field", "source_ids"],
+      "properties": {
+        "field": {"enum": ["cash_available_minor", "confirmed_income_minor", "expected_income_minor", "scheduled_obligations_minor", "required_debt_payments_minor", "planned_savings_minor", "minimum_cash_reserve_minor", "minimum_projected_cash_headroom_minor", "safe_to_spend_minor", "projected_shortfall_minor"]},
+        "source_ids": {"$ref": "#/$defs/ids"}
+      }
+    },
+    "response": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "status", "as_of", "horizon_days", "currency", "hypothetical", "cash_available_minor", "confirmed_income_minor", "expected_income_minor", "scheduled_obligations_minor", "required_debt_payments_minor", "planned_savings_minor", "minimum_cash_reserve_minor", "projected_daily_cash_balances", "minimum_projected_cash_headroom_minor", "safe_to_spend_minor", "projected_shortfall_minor", "source_ids", "components", "assumptions", "missing_inputs", "engine_version"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "status": {"enum": ["ready", "provisional", "incomplete", "shortfall"]},
+        "as_of": {"$ref": "#/$defs/date"},
+        "horizon_days": {"type": "integer", "minimum": 1, "maximum": 366},
+        "currency": {"$ref": "#/$defs/currency"},
+        "hypothetical": {"type": "boolean"},
+        "cash_available_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "confirmed_income_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "expected_income_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "scheduled_obligations_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "required_debt_payments_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "planned_savings_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "minimum_cash_reserve_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "projected_daily_cash_balances": {"type": "array", "maxItems": 366, "items": {"$ref": "#/$defs/day"}},
+        "minimum_projected_cash_headroom_minor": {"oneOf": [{"$ref": "#/$defs/money"}, {"type": "null"}]},
+        "safe_to_spend_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "projected_shortfall_minor": {"$ref": "#/$defs/unknownableMoney"},
+        "source_ids": {"$ref": "#/$defs/ids"},
+        "components": {"type": "array", "items": {"$ref": "#/$defs/component"}},
+        "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "missing_inputs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}},
+        "engine_version": {"type": "string", "minLength": 1, "maxLength": 80}
+      }
+    }
+  }
+}
