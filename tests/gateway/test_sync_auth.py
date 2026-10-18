@@ -317,6 +317,7 @@ def test_a_request_in_flight_finishes_before_revoke_returns(env: Env) -> None:
     service = env.manager._service  # noqa: SLF001
     inside, release = threading.Event(), threading.Event()
     results: list[str] = []
+    replies: list[int] = []
 
     def slow_pull() -> None:
         original = service.pull
@@ -324,14 +325,17 @@ def test_a_request_in_flight_finishes_before_revoke_returns(env: Env) -> None:
         def held(grant, payload):
             inside.set()
             release.wait(5)
-            return original(grant, payload)
+            result = original(grant, payload)
+            # This runs under dispatch's lock. Client receipt happens later, outside it.
+            results.append("operation_finished")
+            return result
 
         service.pull = held
         try:
             reply = phone.signed(
                 "/sync/pull", {"domain": "finance", "limit": 5}, verify_reply=False
             )
-            results.append(f"pull:{reply.status}")
+            replies.append(reply.status)
         finally:
             service.pull = original
 
@@ -347,7 +351,9 @@ def test_a_request_in_flight_finishes_before_revoke_returns(env: Env) -> None:
     release.set()
     t.join(5)
     revoker.join(5)
-    assert results == ["pull:200", "revoked"]
+    assert not t.is_alive() and not revoker.is_alive()
+    assert results == ["operation_finished", "revoked"]
+    assert replies == [200]
     _unauthorized(phone.signed("/sync/pull", {"domain": "finance", "limit": 5}, verify_reply=False))
 
 

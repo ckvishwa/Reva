@@ -16,7 +16,7 @@ import sys
 from asyncio.subprocess import PIPE
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from reva_core.shared.errors import ProviderError, ProviderErrorKind
 from reva_core.shared.logging import get_logger
@@ -63,7 +63,7 @@ def worker_environment(base: Mapping[str, str]) -> dict[str, str]:
     return env
 
 
-if sys.platform == "win32":
+if sys.platform == "win32" or TYPE_CHECKING:
     import ctypes
     from ctypes import wintypes
 
@@ -105,7 +105,9 @@ if sys.platform == "win32":
             ("PeakJobMemoryUsed", ctypes.c_size_t),
         ]
 
-    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _kernel32: ctypes.CDLL
+    if sys.platform == "win32":
+        _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     _kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
     _kernel32.CreateJobObjectW.restype = ctypes.c_void_p
     _kernel32.SetInformationJobObject.argtypes = [
