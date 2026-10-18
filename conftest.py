@@ -5,14 +5,40 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
+import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+from reva_core.security.dpapi import DpapiProtector, Protector
 from tests.env_guard import DATA_DIR_VAR, check_env
 
 _session_data_dir: str | None = None
+
+
+@pytest.fixture
+def dialogue_protector_factory() -> Callable[[bytes], Protector]:
+    if sys.platform == "win32":
+        return DpapiProtector
+    from tests.fixtures.protection import TestProtector
+
+    key = os.urandom(32)
+    return lambda purpose: TestProtector(key, purpose)
+
+
+@pytest.fixture(autouse=True)
+def isolate_dialogue_protection(monkeypatch, dialogue_protector_factory):
+    """Only the dialogue consumer uses a double on Linux; native DPAPI stays untouched.
+
+    Windows deliberately runs every existing persistence/API test against real DPAPI.
+    Production never imports this fixture or selects a fallback based on pytest/env flags.
+    """
+    if sys.platform != "win32":
+        monkeypatch.setattr(
+            "reva_core.language.dialogue.DpapiProtector", dialogue_protector_factory
+        )
 
 
 def pytest_configure(config: pytest.Config) -> None:

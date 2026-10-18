@@ -18,7 +18,7 @@ from reva_core.language.dialogue import (
     Option,
     _encode,
 )
-from reva_core.security.dpapi import DpapiProtector, ProtectionError
+from reva_core.security.dpapi import ProtectionError
 
 T0 = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
 
@@ -275,11 +275,13 @@ def test_the_file_on_disk_is_encrypted_not_plain_json(tmp_path: Path) -> None:
     assert b"Therapy" not in raw and b"tx-1" not in raw and b"act-1" not in raw
 
 
-def test_a_file_protected_for_another_purpose_is_ignored(tmp_path: Path) -> None:
+def test_a_file_protected_for_another_purpose_is_ignored(
+    tmp_path: Path, dialogue_protector_factory
+) -> None:
     store = FileDialogueStore(tmp_path / "dialogue")
     tracker(store).accept_proposal("act-1")
     (path,) = list((tmp_path / "dialogue").glob("*.dat"))
-    other = DpapiProtector(b"some.other.purpose").protect(b"{}")
+    other = dialogue_protector_factory(b"some.other.purpose").protect(b"{}")
     path.write_bytes(FileDialogueStore._MAGIC + other)
 
     assert tracker(store).undo_target() is None

@@ -42,6 +42,8 @@ def _blob(data: bytes) -> tuple[_Blob, object]:
 class DpapiProtector:
     """DPAPI with a fixed `purpose` mixed in, so one REVA file type cannot be read as another."""
 
+    _purpose: bytes
+
     def __init__(self, purpose: bytes) -> None:
         if sys.platform != "win32":
             raise ProtectionError("DPAPI is only available on Windows")

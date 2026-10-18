@@ -48,6 +48,11 @@ jobs:
       - name: Security tests
         run: pytest tests/security -v
 
+      - name: Native Windows protection (no test double)
+        run: |
+          python -c "import sys; assert sys.platform == 'win32'"
+          python -m pytest tests/security/test_platform_protection.py -v -k native_dpapi
+
       - name: E2E tests
         run: pytest tests/e2e -v
 
@@ -70,6 +75,30 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+
+  python-linux:
+    # Portable tests inject only the dialogue protector. Windows above keeps real DPAPI.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Build Domain Kernel binding
+        run: python tools/kernel/build_bindings.py
+      - name: Lint and format check
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Native Linux type check
+        run: mypy reva_core
+      - name: Full portable suite (including security and contracts)
+        run: python -m pytest -q -ra
+      - name: Validate contracts
+        run: python tools/ci/check_contracts.py
 
   csharp-desktop:
     # windows-latest ships Visual Studio with the WinUI/Windows App SDK
