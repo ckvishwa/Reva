@@ -31,6 +31,9 @@ object Rules {
             "|show (?:me )?(?:my )?spending)(.*)$",
     )
     private val period = re("\\b(?:this |last |the )?(week|month|year)\\b")
+    private val healthWeek = re(
+        "^(?:how did i sleep this week|how was my sleep this week|show my health this week|health summary this week)$",
+    )
     private val remember = re("^(?:please\\s+)?(?:remember|note|make a note)(?: that)?\\s+(.{2,})$")
     private val recall = re(
         "^(?:what did i (?:say|tell you|note) about|do you remember|recall|remind me what i said about)\\s+(.{2,})$",
@@ -94,6 +97,7 @@ object Rules {
             val found = period.find(match.groupValues[1])
             return RuleHit("finance.summary", mapOf("period" to (found?.groupValues?.get(1)?.lowercase() ?: "month")))
         }
+        if (healthWeek.matches(cleaned)) return RuleHit("health.weekly", emptyMap())
         remember.matchEntire(cleaned)?.let { return RuleHit("memory.remember", mapOf("content" to clip(it.groupValues[1].trim()))) }
         recall.matchEntire(cleaned)?.let { return RuleHit("memory.recall", mapOf("query" to clip(it.groupValues[1].trim()))) }
         return null

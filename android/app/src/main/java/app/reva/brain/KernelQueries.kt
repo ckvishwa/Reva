@@ -2,17 +2,45 @@ package app.reva.brain
 
 import app.reva.core.Money
 import app.reva.data.FinanceRepository
+import app.reva.data.HealthRepository
 import app.reva.data.Outcome
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 
 /** Read-only local answers use the Android Finance repository, which queries the Rust Kernel on IO. */
-class KernelQueries(private val finance: FinanceRepository, private val today: () -> LocalDate = { LocalDate.now() }) {
+class KernelQueries(
+    private val finance: FinanceRepository,
+    private val health: HealthRepository? = null,
+    private val today: () -> LocalDate = { LocalDate.now() },
+) {
     companion object {
         const val LOCAL_UNAVAILABLE = "Local Finance data is unavailable right now. I don't know the answer."
     }
 
     suspend fun answer(capability: String, args: Map<String, Any?>): BrainResult? = when (capability) {
+        "health.weekly" -> {
+            val repo = health ?: return BrainResult.Failure("Local Health data is unavailable right now. I don't know the answer.")
+            when (val result = try {
+                repo.weekly(today().toString())
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                return BrainResult.Failure("Local Health data is unavailable right now. I don't know the answer.")
+            }) {
+                is Outcome.Failed -> BrainResult.Failure(result.error.message)
+                is Outcome.Ok -> {
+                    val data = result.value
+                    val sleep = if (data.sleepCount == 0) "No sleep sessions were recorded."
+                        else "${data.sleepMinutes} minutes across ${data.sleepCount} recorded sleep sessions."
+                    val workout = if (data.workoutCount == 0) "No workouts were recorded."
+                        else "${data.workoutMinutes} workout minutes across ${data.workoutCount} entries."
+                    BrainResult.Answer("For ${data.startDate} through ${data.endDate}: $sleep $workout " +
+                        "${data.mealCount} meals recorded. Medication marked taken ${data.medicationTaken} of " +
+                        "${data.medicationExpected} scheduled entries. ${data.sourceCount} source records. " +
+                        "This is a summary of your entries, not medical advice.", "kernel")
+                }
+            }
+        }
         "today.get" -> when (val result = try {
             finance.today()
         } catch (cancelled: CancellationException) {

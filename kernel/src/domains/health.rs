@@ -224,6 +224,81 @@ pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Val
     let params = object(params)?;
     fields(params, &["date"])?;
     let day = date(params, "date")?;
+    if name == "weekly_summary" {
+        let end = Date::parse(&day).ok_or_else(|| DomainError::validation("date", "invalid date"))?;
+        let start = end.add_days(-6).to_iso();
+        let mut stmt = conn.prepare(
+            "SELECT id,kind,date,data_json FROM health_records \
+            WHERE (date>=?1 AND date<=?2) OR (kind='medication_schedule' AND date<=?2) ORDER BY date,id",
+        )?;
+        let rows = stmt
+            .query_map(params![start, day], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut workout_minutes = 0_i64;
+        let mut workout_count = 0;
+        let mut sleep_minutes = 0_i64;
+        let mut sleep_count = 0;
+        let mut meal_count = 0;
+        let mut scheduled = Vec::new();
+        let mut taken = Vec::new();
+        let mut ids = Vec::new();
+        for (id, kind, record_day, data_json) in rows {
+            let data: Value = serde_json::from_str(&data_json)?;
+            match kind.as_str() {
+                "workout" => {
+                    workout_count += 1;
+                    workout_minutes += data["duration_minutes"]
+                        .as_i64()
+                        .ok_or_else(|| DomainError::validation("duration_minutes", "corrupt workout"))?;
+                    ids.push(id);
+                }
+                "sleep" => {
+                    sleep_count += 1;
+                    sleep_minutes += data["duration_minutes"]
+                        .as_i64()
+                        .ok_or_else(|| DomainError::validation("duration_minutes", "corrupt sleep"))?;
+                    ids.push(id);
+                }
+                "meal" => {
+                    meal_count += 1;
+                    ids.push(id);
+                }
+                "medication_schedule" => {
+                    scheduled.push((id.clone(), record_day.clone()));
+                    ids.push(id);
+                }
+                "medication_taken" => {
+                    if let Some(schedule_id) = data["schedule_id"].as_str() {
+                        taken.push((schedule_id.to_string(), record_day.clone(), id));
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut medication_expected = 0_i64;
+        let mut medication_taken = 0_i64;
+        for (schedule_id, schedule_start) in &scheduled {
+            let active_start = schedule_start.max(&start);
+            let start_date =
+                Date::parse(active_start).ok_or_else(|| DomainError::validation("date", "invalid schedule"))?;
+            medication_expected += end.to_days() - start_date.to_days() + 1;
+            let mut days = BTreeSet::new();
+            for (id, taken_day, record_id) in &taken {
+                if id == schedule_id && taken_day >= active_start && days.insert(taken_day) {
+                    medication_taken += 1;
+                    ids.push(record_id.clone());
+                }
+            }
+        }
+        return Ok((
+            json!([{"start_date":start,"end_date":day,"workout_minutes":workout_minutes,
+            "workout_count":workout_count,"sleep_minutes":sleep_minutes,"sleep_count":sleep_count,
+            "meal_count":meal_count,"medication_expected":medication_expected,"medication_taken":medication_taken}]),
+            ids,
+        ));
+    }
     let mut stmt = conn.prepare("SELECT id,kind,date,data_json FROM health_records WHERE date=?1 OR (kind='medication_schedule' AND date<=?1) ORDER BY date,id")?;
     let mut records = Vec::new();
     for row in stmt.query_map([&day], |r| {

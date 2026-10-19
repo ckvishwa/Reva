@@ -143,7 +143,7 @@ class AppContainer(private val context: Context) {
             recognizerFactory = { AndroidSpeechRecognizer(context) },
             replies = PolicyReplies(
                 registry, pc = pcRequests, phone = phoneActions,
-                local = KernelQueries(financeRepository), fallback = LocalBrain(PlannerRegistry.offlineOnly()),
+                local = KernelQueries(financeRepository, healthRepository), fallback = LocalBrain(PlannerRegistry.offlineOnly()),
             ),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),

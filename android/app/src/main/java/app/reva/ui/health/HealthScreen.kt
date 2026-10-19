@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import app.reva.data.HealthDaily
 import app.reva.data.HealthRecord
 import app.reva.data.HealthRepository
+import app.reva.data.HealthWeekly
 import app.reva.data.MedicationSchedule
 import app.reva.data.Outcome
 import app.reva.ui.CaptionText
@@ -37,6 +38,7 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
     var day by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var refresh by remember { mutableIntStateOf(0) }
     var daily by remember { mutableStateOf<HealthDaily?>(null) }
+    var weekly by remember { mutableStateOf<HealthWeekly?>(null) }
     var records by remember { mutableStateOf<List<HealthRecord>>(emptyList()) }
     var schedules by remember { mutableStateOf<List<MedicationSchedule>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -50,9 +52,14 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
 
     LaunchedEffect(day, refresh, repository) {
         daily = null
+        weekly = null
         error = null
         when (val result = repository.daily(day)) {
             is Outcome.Ok -> daily = result.value
+            is Outcome.Failed -> error = result.error.message
+        }
+        when (val result = repository.weekly(day)) {
+            is Outcome.Ok -> weekly = result.value
             is Outcome.Failed -> error = result.error.message
         }
         when (val result = repository.records(day)) {
@@ -89,6 +96,17 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
                     CaptionText("${it.sourceCount} source records")
                 } ?: CaptionText("No verified daily summary available")
                 error?.let { ErrorText(it) }
+            }
+        }
+        item {
+            RevaCard {
+                CaptionText("Seven days ending $day")
+                weekly?.let {
+                    Text("Sleep ${if (it.sleepCount == 0) "not recorded" else "${it.sleepMinutes} min in ${it.sleepCount} sessions"}")
+                    Text("Workout ${if (it.workoutCount == 0) "not recorded" else "${it.workoutMinutes} min in ${it.workoutCount} entries"} · Meals recorded ${it.mealCount}")
+                    Text("Medication marked taken ${it.medicationTaken} of ${it.medicationExpected} scheduled entries")
+                    CaptionText("${it.sourceCount} source records")
+                } ?: CaptionText("No verified seven-day summary available")
             }
         }
         item {

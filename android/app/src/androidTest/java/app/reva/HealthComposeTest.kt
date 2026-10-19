@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.reva.data.HealthDaily
 import app.reva.data.HealthRecord
 import app.reva.data.HealthRepository
+import app.reva.data.HealthWeekly
 import app.reva.data.MedicationSchedule
 import app.reva.data.Outcome
 import app.reva.ui.health.HealthScreen
@@ -30,6 +31,7 @@ class HealthComposeTest {
         val repo = object : HealthRepository {
             val commands = mutableListOf<Pair<String, String>>()
             override suspend fun daily(date: String) = Outcome.Ok(HealthDaily(date, 35, 440, 1, 72500, 1, 1, 6, 1, 1))
+            override suspend fun weekly(endDate: String) = Outcome.Ok(HealthWeekly("2026-10-10", endDate, 35, 1, 440, 1, 1, 7, 1, 6))
             override suspend fun records(date: String) = Outcome.Ok(emptyList<HealthRecord>())
             override suspend fun schedules(date: String) = Outcome.Ok(emptyList<MedicationSchedule>())
             override suspend fun command(kind: String, payload: JSONObject): Outcome<Unit> {

@@ -73,3 +73,22 @@ fn medication_taken_is_unique_per_day_and_deleting_schedule_removes_its_history(
         h.query("daily_summary".into(), json!({"date":"2026-10-16"}).to_string()).unwrap().rows_json
     );
 }
+
+#[test]
+fn weekly_summary_uses_only_the_seven_days_ending_on_requested_day() {
+    let dir = tempfile::tempdir().unwrap();
+    let h = open_domain("health".into(), MemKeys::new(), dir.path().to_string_lossy().into()).unwrap();
+    for (day, minutes) in [("2026-10-12", 420), ("2026-10-18", 480), ("2026-10-11", 600)] {
+        h.command("sleep.log".into(), json!({"date":day,"duration_minutes":minutes}).to_string()).unwrap();
+    }
+    h.command("workout.log".into(), json!({"date":"2026-10-18","activity":"Walk","duration_minutes":30}).to_string())
+        .unwrap();
+    let result = h.query("weekly_summary".into(), json!({"date":"2026-10-18"}).to_string()).unwrap();
+    let rows: Value = serde_json::from_str(&result.rows_json).unwrap();
+    assert_eq!(rows[0]["start_date"], "2026-10-12");
+    assert_eq!(rows[0]["end_date"], "2026-10-18");
+    assert_eq!(rows[0]["sleep_minutes"], 900);
+    assert_eq!(rows[0]["sleep_count"], 2);
+    assert_eq!(rows[0]["workout_minutes"], 30);
+    assert_eq!(result.source_ids.len(), 3);
+}

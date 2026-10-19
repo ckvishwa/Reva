@@ -24,10 +24,30 @@ data class HealthDaily(
     val sleepCount: Int = 0,
 )
 
+data class HealthWeekly(
+    val startDate: String,
+    val endDate: String,
+    val workoutMinutes: Long,
+    val workoutCount: Int,
+    val sleepMinutes: Long,
+    val sleepCount: Int,
+    val mealCount: Int,
+    val medicationExpected: Int,
+    val medicationTaken: Int,
+    val sourceCount: Int,
+)
+
 data class HealthRecord(val id: String, val kind: String, val date: String, val label: String, val scheduleId: String? = null)
 data class MedicationSchedule(val id: String, val name: String)
 
 object HealthJson {
+    fun weekly(day: String, rowsJson: String, sourceIds: List<String>): HealthWeekly {
+        val row = JSONArray(rowsJson).getJSONObject(0)
+        return HealthWeekly(row.getString("start_date"), day, row.getLong("workout_minutes"),
+            row.getInt("workout_count"), row.getLong("sleep_minutes"), row.getInt("sleep_count"),
+            row.getInt("meal_count"), row.getInt("medication_expected"), row.getInt("medication_taken"),
+            sourceIds.distinct().size)
+    }
     fun daily(day: String, rowsJson: String, sourceIds: List<String>): HealthDaily {
         val row = JSONArray(rowsJson).getJSONObject(0)
         return HealthDaily(day, row.getLong("workout_minutes"), row.getLong("sleep_minutes"), row.getInt("meal_count"),
@@ -39,6 +59,7 @@ object HealthJson {
 
 interface HealthRepository {
     suspend fun daily(date: String): Outcome<HealthDaily>
+    suspend fun weekly(endDate: String): Outcome<HealthWeekly>
     suspend fun records(date: String): Outcome<List<HealthRecord>>
     suspend fun schedules(date: String): Outcome<List<MedicationSchedule>>
     suspend fun command(kind: String, payload: JSONObject): Outcome<Unit>
@@ -72,6 +93,14 @@ class KernelHealthRepository(
         return run { h ->
             val result = h.query("daily_summary", JSONObject().put("date", day).toString())
             HealthJson.daily(day, result.rowsJson, result.sourceIds)
+        }
+    }
+
+    override suspend fun weekly(endDate: String): Outcome<HealthWeekly> {
+        val day = validDate(endDate) ?: return Outcome.Failed(FinanceError(ErrorKind.Validation, "Choose a valid date."))
+        return run { h ->
+            val result = h.query("weekly_summary", JSONObject().put("date", day).toString())
+            HealthJson.weekly(day, result.rowsJson, result.sourceIds)
         }
     }
 
