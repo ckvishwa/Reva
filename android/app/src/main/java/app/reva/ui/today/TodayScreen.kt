@@ -7,8 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -21,11 +25,25 @@ import app.reva.ui.RevaCard
 import app.reva.ui.UsageBar
 import app.reva.ui.theme.RevaColors
 import app.reva.ui.theme.RevaText
+import app.reva.data.HealthDaily
+import app.reva.data.HealthRepository
+import app.reva.data.Outcome
+import java.time.LocalDate
 
 /** Today: budget left this month and the bills due in the next 7 days. */
 @Composable
-fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier, syncStatus: String? = null) {
+fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier, syncStatus: String? = null, healthRepository: HealthRepository? = null) {
     val state by vm.state.collectAsState()
+    var health by remember(healthRepository) { mutableStateOf<HealthDaily?>(null) }
+    var healthError by remember(healthRepository) { mutableStateOf<String?>(null) }
+    LaunchedEffect(healthRepository) {
+        if (healthRepository != null) {
+            when (val result = healthRepository.daily(LocalDate.now().toString())) {
+                is Outcome.Ok -> health = result.value
+                is Outcome.Failed -> healthError = result.error.message
+            }
+        }
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -59,6 +77,19 @@ fun TodayScreen(vm: TodayViewModel, modifier: Modifier = Modifier, syncStatus: S
                 if (state.topSpendingText.isNotEmpty()) CaptionText("Top category · ${state.topSpendingText}")
                 if (state.dailyError == null) CaptionText("${state.dailySourceCount} source records")
                 state.dailyError?.let { ErrorText(it) }
+            }
+        }
+        if (healthRepository != null) item {
+            RevaCard(radius = 14.dp, modifier = Modifier.testTag("daily_health_card")) {
+                CaptionText("Today · Health")
+                health?.let {
+                    Text("Workout ${if (it.workoutCount == 0) "not recorded" else "${it.workoutMinutes} min"} · " +
+                        "Sleep ${if (it.sleepCount == 0) "not recorded" else "${it.sleepMinutes} min"} · Meals ${it.mealCount}",
+                        style = MaterialTheme.typography.bodyMedium, color = RevaColors.Text)
+                    CaptionText("Weight ${it.weightGrams?.let { grams -> "${grams / 1000.0} kg" } ?: "not recorded"} · Medication ${it.medicationsTaken}/${it.medicationsScheduled} taken")
+                    CaptionText("${it.sourceCount} source records")
+                } ?: CaptionText("Health summary unavailable")
+                healthError?.let { ErrorText(it) }
             }
         }
     }
