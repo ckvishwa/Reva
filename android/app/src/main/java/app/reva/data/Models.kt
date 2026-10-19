@@ -77,6 +77,13 @@ data class FinanceDailyAnalysis(
     val sourceIds: List<String>,
 )
 
+data class FinancePeriodAnalysis(
+    val period: String,
+    val cashflow: List<DailyCashflow>,
+    val spending: List<DailySpendCategory>,
+    val sourceIds: List<String>,
+)
+
 data class ImportRow(
     val row: Long,
     val status: String,

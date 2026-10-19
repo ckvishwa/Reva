@@ -87,7 +87,7 @@ class KernelHealthRepository(
                     "sleep" -> "Sleep · ${row.getLong("duration_minutes")} min"
                     "meal" -> "Meal · ${row.getString("description")}"
                     "weight" -> "Weight · ${row.getLong("weight_grams")} g"
-                    "medication_taken" -> "Medication taken · ${row.getString("schedule_id")}" 
+                    "medication_taken" -> "Medication taken · ${row.getString("schedule_id")}"
                     else -> kind
                 }
                 HealthRecord(row.getString("id"), kind, row.getString("date"), label,

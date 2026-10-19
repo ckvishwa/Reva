@@ -61,6 +61,7 @@ fun FinanceScreen(
     onExport: (format: String) -> Unit,
     modifier: Modifier = Modifier,
     syncStatus: String? = null,
+    onManage: () -> Unit = {},
 ) {
     val state by vm.state.collectAsState()
     LazyColumn(
@@ -93,6 +94,7 @@ fun FinanceScreen(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton("Add transaction", onAddTransaction, Modifier.testTag("add_transaction"), enabled = state.hasAccounts)
                 SecondaryButton("Add account", onAddAccount, Modifier.testTag("add_account"), enabled = !state.isLocked)
+                SecondaryButton("Budgets & bills", onManage, Modifier.testTag("finance_manage_open"), enabled = !state.isLocked)
                 SecondaryButton("Import", onImport, Modifier.testTag("import"), enabled = state.hasAccounts)
                 ExportMenu(enabled = !state.isLocked && !state.isBusy, onExport = onExport)
             }

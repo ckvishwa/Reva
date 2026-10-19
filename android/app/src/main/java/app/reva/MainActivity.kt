@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
             RevaTheme {
                 RevaRoot(
                     repository = container.financeRepository,
+                    healthRepository = container.healthRepository,
                     versionName = BuildConfig.VERSION_NAME,
                     onShare = { format, bytes -> ExportShare.share(this, format, bytes) },
                     sync = container.syncService,

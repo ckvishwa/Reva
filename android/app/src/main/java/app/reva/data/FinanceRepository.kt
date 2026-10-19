@@ -48,6 +48,9 @@ interface FinanceRepository {
     /** Exact day totals and their contributing transaction IDs, computed by the local Kernel. */
     suspend fun dailyAnalysis(asOf: String): Outcome<FinanceDailyAnalysis>
 
+    /** Exact Kernel totals for a reviewed period, with contributing transaction IDs. */
+    suspend fun periodAnalysis(period: String, asOf: String): Outcome<FinancePeriodAnalysis>
+
     /** Amounts this phone and the PC disagree about, not yet resolved. */
     suspend fun conflicts(): Outcome<List<Conflict>>
 
@@ -57,6 +60,15 @@ interface FinanceRepository {
     suspend fun addTransaction(request: NewTransaction): Outcome<Unit>
 
     suspend fun addAccount(request: NewAccount): Outcome<Unit>
+
+    suspend fun addCategory(name: String): Outcome<Unit>
+
+    suspend fun setBudget(request: NewBudget): Outcome<Unit>
+
+    suspend fun addBill(request: NewBill): Outcome<Unit>
+
+    /** Records a user-reported payment; it does not transfer money or write a bank transaction. */
+    suspend fun markBillPaid(id: String, paidDate: String): Outcome<Unit>
 
     suspend fun takeSnapshot(): Outcome<Unit>
 

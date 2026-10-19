@@ -6,6 +6,9 @@ import app.reva.data.FinanceRepository
 import app.reva.data.Outcome
 import app.reva.data.TodayBudgetLeft
 import app.reva.data.TodaySummary
+import app.reva.data.FinancePeriodAnalysis
+import app.reva.data.DailyCashflow
+import app.reva.data.DailySpendCategory
 import app.reva.language.PolicyReplies
 import app.reva.policy.loadRegistry
 import app.reva.testing.FakeFinanceRepository
@@ -20,6 +23,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalBrainTest {
+    @Test fun spending_question_uses_exact_kernel_period_totals_and_cites_records() = runBlocking {
+        val repo = FakeFinanceRepository().apply {
+            periodAnalysis = FinancePeriodAnalysis("this_month",
+                listOf(DailyCashflow("USD", 10000, 2500, 7500)),
+                listOf(DailySpendCategory("food", "Food", "USD", 2500, 2)),
+                listOf("tx-1", "tx-2"))
+        }
+        val replies = PolicyReplies(loadRegistry(), local = KernelQueries(repo))
+
+        val answer = replies.reply("how much did I spend this month")
+
+        assertTrue(answer.text.contains("$25.00"))
+        assertTrue(answer.text.contains("Food"))
+        assertTrue(answer.text.contains("2 source records"))
+        assertTrue(repo.calls.any { it.startsWith("periodAnalysis:this_month") })
+    }
     @Test fun today_is_read_from_the_local_kernel_repository_without_a_pc_or_provider() = runBlocking {
         val repo = FakeFinanceRepository().apply {
             todaySummary = TodaySummary(
