@@ -1,37 +1,70 @@
-# Android Finance and Health recovery checkpoint
+# Android Finance and Health progress
 
-Updated 2026-10-19. Work is isolated in `D:\Projects\Reva-finance-health` on `feat/android-daily-finance-health`; the original `D:\Projects\Reva` checkout is untouched. Base: `origin/main` `df7a3dc2451243713e9f02362141e54e1e8087fb`. Feature commits: `d53dc86`, `31d5a4e`, `b2b1ec9`, `ea8b9cc`, `774e814`.
+Updated 2026-10-19. Work is isolated in `D:\Projects\Reva-finance-health` on `feat/android-daily-finance-health`; the original `D:\Projects\Reva` checkout is untouched. Base: `origin/main` `df7a3dc2451243713e9f02362141e54e1e8087fb`.
 
-Draft PR: https://github.com/ckvishwa/Reva/pull/37. It remains draft until full-scope checks and hardware evidence are complete; do not merge on the preview APK evidence alone.
-Latest preview APK code head: `8785585bb8011c4f1a70f69825c0b3e6610e8bc7`. The later PR #37 CI run `39199829346` on `a90e54d` had six passing lanes (Android, Android unit, avatar, Claude review, contracts, C# desktop) and two failures (Kernel, Python). Both failures were the same stale cross-binding assertion that `health` was an unknown domain. The test now checks a genuinely unknown domain, confirms Health opens through UniFFI, and confirms unsupported Health commands fail closed; local cross-binding run: 8 passed. CI for the correction commit is pending. C3b/C3c PRs #31/#32 are separate drafts and have not been merged into this base.
+Draft PR: https://github.com/ckvishwa/Reva/pull/37. **It stays draft**: the code scope is implemented and CI is green, but physical-device acceptance (Health Connect, permissions, voice, pairing, interruption) has not been run because no Android device was attached. Do not merge or tag on build evidence alone.
+
+## Verdict
+
+- Code scope in this file: implemented and tested on JVM, Rust and Python.
+- Release candidate: a **debug-signed preview APK** from source `77f10e4065456a459f6d7af3de538d1a6b88ecb8`. It is not production-signed and not hardware-accepted.
+- Ready to merge: **no**, until the owner checklist below passes on a real phone.
 
 ## Implemented on this branch
 
-- Finance Today shows exact daily totals by currency with Kernel source IDs. The Finance screen can create categories, budgets and bill/recurring reminders, and mark a bill paid after explicit confirmation. The mark-paid flow records a ledger fact; it does not transfer money.
-- Offline Finance period questions use Kernel totals and source records.
-- A separate encrypted Health Kernel domain stores manual workouts, sleep, meals, weight, medication schedules and taken events. It supports daily records/summary, deletion, projection replay and JSON export.
-- Android Health forms and Today summary use local Kernel calls. Urgent Health phrases receive a fixed safety response before the planner/network path.
-- A seven-day Health summary ending on the selected date uses only local Kernel records. Android shows sleep/workout/meal and medication adherence counts with source-record count. The shared Python/Android rule path maps explicit weekly Health questions to the read-only `health.weekly` capability; Android answers from the Kernel without calling a hosted planner.
-- Manual steps per day and heart-rate samples are available in Android. The Kernel bounds inputs, reports recorded counts/ranges without interpretation, and rejects a second local steps entry for the same date.
+- Finance Today: exact daily totals by currency with Kernel source IDs; categories, budgets, bill/recurring reminders; mark-paid records a ledger fact and moves no money. Offline Finance period questions use Kernel totals.
+- **Finance reports (new):** Kernel `recurring_summary` (exact yearly totals per currency from weekly ×52, biweekly ×26, monthly ×12, quarterly ×4, yearly ×1; one-off bills excluded; inactive bills drop out; due-in-30-days totals) and `networth_report` (live net worth from balances plus each snapshot's change from the previous one). Android Finance shows a recurring card and "Now, from current balances" with the last three snapshot changes. The stale footer "there is no internet permission" was corrected (INTERNET exists for the paired PC only).
+- **Fresh-install restore:** a Finance JSON backup restored into a fresh install gives identical digests and identical `recurring_summary`, `networth_report`, `cashflow`, `spend_by_category`, `account_balances`, `upcoming_bills` and `budget_status` (`kernel/tests/finance_reports.rs`).
+- Health domain: encrypted manual workouts, sleep, meals, weight, steps, heart-rate readings, medication schedules and taken events; daily and seven-day summaries; urgent phrases get a fixed safety reply.
+- **Health provenance and backup (new):** records carry `source` (`manual` or `health_connect`) and `origins`. `import_data("json")` restores a `reva-health-v1` backup with every row accepted, duplicate or rejected with a reason; deleted (tombstoned) records are never restored; schedules restore before taken entries. Android Health has "Share a Health backup" (unencrypted-file warning first) and "Restore from a backup file" (dry run, counts, then confirm).
+- **Health Connect, read only (new):** steps and heart-rate daily aggregates, one READ permission per type, rationale screen (+ system-only Android 14 alias), grants rechecked on resume, after the permission sheet and before every import, mid-read revocation reported, last 30 days only, no write/history/background permission. One deterministic record per day and type, so repeated imports are duplicates or updates and steps are never double-counted; a deleted day is never re-imported; "Delete everything copied from Health Connect" (`source.delete`). Same-day manual vs Health Connect steps: totals use the manual entry, both values are shown as a conflict on the Health screen, in the weekly card and in the weekly voice answer. Design and security notes: `docs/android/health-connect.md`.
+- **More screen:** Health is listed as "on its own tab", no longer "coming soon".
 
-## Verification so far
+## Verification (local, Windows 11, 2026-10-19)
 
-- Android debug unit suite: 325 passed, 0 failed, 0 skipped. `lintDebug` and `compileDebugAndroidTestKotlin` passed; instrumented UI tests were compiled but not run because `adb devices -l` showed no device.
-- Rust tests passed, including three Health tests; one pre-existing performance test ignored. Strict Clippy and `cargo fmt --check` passed.
-- After the weekly slice: Android unit suite 328 passed, 0 failed, 0 skipped; Android instrumented-test compilation passed. Rust Health tests 4 passed, full Rust suite and strict Clippy passed. Python language-rule tests 75 passed and policy fixture checks 2 passed. Physical UI tests remain pending.
-- After the steps/heart-rate slice: Android unit suite 329 passed, 0 failed, 0 skipped; Android lint and instrumented-test compilation passed. Rust Health tests 5 passed; full Rust suite, strict Clippy and fmt passed (one pre-existing ignored performance test). CI on PR #37 must be rebound to the new head after push.
-- The Android Kernel cross-build passed for arm64-v8a and x86_64 with architecture, UniFFI symbol and static-OpenSSL checks. The first attempt failed while OpenSSL invoked a Windows backslash compiler path through Git's Unix shell; `tools/kernel/build_android.py` now invokes Cargo directly per target on Windows with NDK tools on `PATH`.
-- `python tools/android/build_apk.py` passed again at source SHA `8785585bb8011c4f1a70f69825c0b3e6610e8bc7`. Current preview debug APK: `D:\Projects\Reva-finance-health\android\app\build\outputs\apk\debug\app-debug.apk` (62,222,947 bytes), SHA-256 `fc92c0c6f8dfbde70abd1ab9788079d5639c47999dfad37db4ad7397e583b40d`. ZIP integrity passed; inspection found both `libreva_kernel.so` ABIs, `assets/avatar/index.html` and `assets/avatar/placeholder.vrm`. `apksigner verify` passed with one debug signer using APK Signature Scheme v2. `D:\reva-releases\v2.0.0-alpha.12` does not exist, so nothing was staged. No device was attached to `adb`; this is not hardware acceptance or a finished release.
+- Rust Kernel: `cargo test -p reva-kernel` 112 passed, 0 failed, 1 ignored (pre-existing perf test). New: `health_import.rs` 8, `finance_reports.rs` 4. `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean.
+- Android JVM: `:app:testDebugUnitTest` 346 passed, 0 failed, 0 skipped (was 329). New: `SensitiveEgressTest` 4, `HealthConnectImporterTest` 5, `FinanceReportsTest` 3, `HealthJsonTest` +2, `ManifestTest` +2, `LocalBrainTest` +1. `:app:lintDebug` and `:app:compileDebugAndroidTestKotlin` passed. Instrumented tests (including the new Health Connect Compose test) were compiled, **not run**: no device.
+- Kotlin JVM Kernel conformance: 97 steps passed, host checks passed.
+- Python: full `python -m pytest -q` 1705 passed, 20 skipped. Cross-binding 9 passed (new Health backup/Health Connect test through the Python binding). `python tools/ci/check_contracts.py`: 9 schemas, 0 problems. `ruff check`/`ruff format --check` clean on the edited test file.
+- Safety/egress tests: Health and Finance questions, dosing, diagnosis, urgent and money-movement phrases never reach a planner (recording planner stays empty); Health/Health Connect/Finance report code has no network, PC-request or WebView use; Health is not in any sync scope; Kernel Health commands and summaries contain no diagnosis/dosing/rating vocabulary and reject `dose`/`frequency` fields.
+- Dependencies: `androidx.health.connect:connect-client:1.1.0` (Apache-2.0); Guava `31.1-android` declared for compilation because Health Connect's runtime Guava replaces CameraX's ListenableFuture artifact with an empty stub (first build failed in `QrScanner.kt` with "Cannot access class ListenableFuture" until this was declared). The library's exported `HealthDataSdkService` checks the caller is `com.google.android.apps.healthdata`; it is named in `ManifestTest`'s exported-component allowlist.
 
-## Still required for full Finance and Health APK scope
+## CI (PR #37)
 
-- Health Connect import, richer trends across periods, and broader safe data-backed question answering. Manual steps/heart-rate and a factual seven-day summary with medication adherence counts are implemented. Cross-device same-day steps conflicts still need explicit UI treatment.
-- Health Connect read-only import with per-type permission requests, rationale, grant recheck and revocation behavior. No Health Connect writes.
-- Google recommends Health Connect aggregation for cumulative steps to avoid double-counting; an import path must store provenance and handle repeated reads and same-day conflicts before the permission UI is exposed. Official guidance: https://developer.android.com/health-and-fitness/health-connect/read-data and https://developer.android.com/health-and-fitness/health-connect/ui/permissions.
-- Health export/import roundtrip, duplicate handling, file UI and deletion/privacy verification.
-- Finish Finance recurring and net-worth UI/reporting plus import/export flows and confirm totals across a fresh install.
-- Health safety and Finance accuracy evaluations, sensitive-domain egress tests, a verified APK, and physical Android UI/voice checks. No medical diagnosis, dosing/treatment advice, payment execution or bank login capability.
+- Run `39297297472` on `d4c2e13`: csharp-desktop, contracts, android, android-unit, python, kernel, avatar all success.
+- Run `39301658722` on `77f10e4` (the APK source): csharp-desktop, contracts, android, android-unit, python, kernel, avatar all success. Claude Code Review run `39301658778`: success, no review comments posted.
+- The docs-only commit after `77f10e4` (this file, ledger, coverage, CLAUDE.md) changes no APK input; its own CI run is listed on the PR.
 
-## Next action
+## APK (debug-signed preview, not a production release)
 
-From `D:\Projects\Reva-finance-health` on `feat/android-daily-finance-health`: inspect `gh pr checks 37 --repo ckvishwa/Reva`, implement Health import/provenance before Health Connect permissions, finish Finance/Health UI and safety/privacy checks, then rebuild the Kernel and APK from the final code commit, run all relevant CI and on-device acceptance, and record fresh hashes. Owner action is needed for physical Android tests and any personally configured hosted-provider key. Do not label this preview a finished release.
+- Source SHA: `77f10e4065456a459f6d7af3de538d1a6b88ecb8`, clean tree. Native build `python tools/kernel/build_android.py`: arm64-v8a 8,526,440 bytes and x86_64 8,638,080 bytes, both export `open_domain`, OpenSSL linked statically. Then `python tools/android/build_apk.py` (first attempt failed only because a running pytest held `reva_kernel.dll` open; re-run after the suite finished passed).
+- Path: `D:\Projects\Reva-finance-health\android\app\build\outputs\apk\debug\app-debug.apk`, 60,204,553 bytes, SHA-256 `86ad3fdff0dcfffbfbe48ecf4a5087eeb0a54488a7ef73f42fb261410cb55ea3`.
+- Checks: ZIP integrity OK; `lib/arm64-v8a` and `lib/x86_64` `libreva_kernel.so` stored uncompressed; `zipalign -c -P 16 4` OK; avatar `index.html`/`placeholder.vrm` and `capability-registry.v2.json` present. `apksigner verify`: one signer, v2 only, `CN=Android Debug` (debug key). `aapt2 dump badging`: `app.reva.android`, versionCode 1, versionName 0.1.0, compile/target SDK 36, debuggable, permissions exactly INTERNET, CAMERA, RECORD_AUDIO, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, health.READ_STEPS, health.READ_HEART_RATE and the AndroidX internal receiver permission.
+- `D:\reva-releases\v2.0.0-alpha.12` does not exist, so nothing was staged. The older preview from `8785585` (SHA-256 `fc92c0c6…b40d`) is superseded.
+
+## NEEDS_HARDWARE: owner checklist (in order)
+
+`adb devices -l` showed no device. Nothing below has been observed. Use an Android 14+ phone with Health Connect and at least one app writing steps and heart rate; turn on airplane mode only where noted.
+
+1. `adb install -r "D:\Projects\Reva-finance-health\android\app\build\outputs\apk\debug\app-debug.apk"`; confirm `sha256sum` of the file first matches `86ad3fdf…5ea3`.
+2. Open REVA. More: Health shows "on its own tab"; no section says Health is coming soon.
+3. Health tab, Health Connect card: "Allow steps" opens the system sheet for steps only. Tap the rationale link in that sheet: REVA's "How REVA uses Health Connect" screen opens. Allow steps only.
+4. Card shows "Steps: allowed", "Heart rate: not allowed". Tap "Copy the last 30 days": result names steps only. Compare today's steps with the Health Connect app's own total for today (must match, not exceed).
+5. Tap "Copy the last 30 days" again: "0 new … unchanged" (or "updated" only for today if you walked). Weekly steps total does not grow.
+6. Log a manual steps entry for today with a different number: the conflict message shows both values; weekly card lists today; ask by voice "show my health this week" and hear the conflict sentence.
+7. In Health Connect settings revoke steps, return to REVA: card shows "not allowed" and the "Access was turned off" note; import reads nothing.
+8. "Delete everything copied from Health Connect" → confirm; Health Connect days disappear, manual entries remain; re-grant and import: deleted days are reported skipped.
+9. Health backup: share to Files, delete one entry, restore the file: preview shows the deleted entry as not restorable; restore adds nothing deleted.
+10. Finance: add a monthly bill and a weekly subscription; recurring card yearly totals equal amount×12 and amount×52. Take a snapshot; "Now, from current balances" matches the account cards. Export Finance JSON, uninstall, reinstall, restore: same totals.
+11. Voice: mic button opens the mic indicator only after tap; "how did I sleep this week" answers from local data; "how many mg of ibuprofen should I take" is refused with no number.
+12. Pairing: pair with the PC, sync Finance; confirm Health does not appear on the PC.
+13. Interruption: during a Health Connect import and during voice, switch apps / lock screen / take a call; app returns without a crash and without claiming an import that did not finish.
+14. Airplane mode: Health, Finance and voice weekly answers still work; record any battery or thermal observation only if you measured it.
+
+## Not done / risks
+
+- Physical acceptance above (Health Connect permission UI, voice, pairing, interruption, battery/thermal) is NEEDS_HARDWARE.
+- Instrumented Compose tests compiled only.
+- Health Connect reads cover steps and heart rate only (no sleep/exercise sessions: their cross-app de-duplication is not provided by aggregation the same way).
+- A Health Connect day the user deleted can never be re-imported (conservative privacy choice, documented).
+- APK is debug-signed. Production signing (F2) is out of scope. No Phase D or cloud work was started.
