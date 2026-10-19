@@ -2,6 +2,7 @@ package app.reva.language
 
 import app.reva.policy.loadRegistry
 import app.reva.voice.UnavailableReplies
+import app.reva.voice.ReplySource
 import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -42,5 +43,19 @@ class PolicyRepliesTest {
             for (word in success) assertFalse("'$reply' contains '$word'", Regex("\b$word\b").containsMatchIn(reply))
         }
         assertTrue(true)
+    }
+
+    @Test fun urgent_health_phrases_get_fixed_advice_without_contacting_a_planner() = runBlocking {
+        var forwarded = 0
+        val source = PolicyReplies(loadRegistry(), fallback = object : ReplySource {
+            override suspend fun reply(text: String): ReplySource.Reply {
+                forwarded++
+                return ReplySource.Reply("model", "model")
+            }
+        })
+        for (text in listOf("I have chest pain", "I am having trouble breathing", "possible stroke signs", "I overdosed", "I want to harm myself")) {
+            assertEquals(HealthSafety.URGENT_MESSAGE, source.reply(text).text)
+        }
+        assertEquals(0, forwarded)
     }
 }
