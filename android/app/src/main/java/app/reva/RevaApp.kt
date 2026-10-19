@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import app.reva.data.FinanceRepository
 import app.reva.data.KernelFinanceRepository
+import app.reva.data.HealthRepository
+import app.reva.data.KernelHealthRepository
 import app.reva.data.KeystoreKeyProvider
 import app.reva.sync.KeystoreDeviceSigner
 import app.reva.sync.PairedPcStore
@@ -62,6 +64,13 @@ class AppContainer(private val context: Context) {
     }
 
     val financeRepository: FinanceRepository get() = kernelRepository
+
+    val healthRepository: HealthRepository by lazy {
+        KernelHealthRepository(openHandle = {
+            val dir = File(domainRoot, "health").also { it.mkdirs() }
+            openDomain("health", KeystoreKeyProvider(keyRoot), dir.absolutePath)
+        })
+    }
 
     /** The paired PC (public data only), read by sync and by requests for the PC to act. */
     val pairedPcStore: PairedPcStore by lazy { PairedPcStore(File(syncRoot, "paired_pc.json")) }
@@ -134,7 +143,7 @@ class AppContainer(private val context: Context) {
             recognizerFactory = { AndroidSpeechRecognizer(context) },
             replies = PolicyReplies(
                 registry, pc = pcRequests, phone = phoneActions,
-                local = KernelQueries(financeRepository), fallback = LocalBrain(PlannerRegistry.offlineOnly()),
+                local = KernelQueries(financeRepository, healthRepository), fallback = LocalBrain(PlannerRegistry.offlineOnly()),
             ),
             speaker = AndroidTtsSpeaker(context),
             service = AndroidServiceLauncher(context),

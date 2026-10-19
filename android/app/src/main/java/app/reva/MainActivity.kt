@@ -8,7 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import app.reva.healthconnect.AndroidHealthConnectGateway
 import app.reva.ui.ExportShare
+import app.reva.ui.health.HealthConnectUi
 import app.reva.ui.RevaRoot
 import app.reva.ui.theme.RevaTheme
 import java.lang.ref.WeakReference
@@ -38,10 +40,18 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.parseColor("#121519")),
         )
         val container = (application as RevaApp).container
+        val healthConnect = HealthConnectUi(
+            gateway = AndroidHealthConnectGateway(applicationContext),
+            permissionFor = AndroidHealthConnectGateway::permission,
+            requestContract = AndroidHealthConnectGateway.requestContract(),
+            openSettings = { runCatching { startActivity(AndroidHealthConnectGateway.settingsIntent()) } },
+        )
         setContent {
             RevaTheme {
                 RevaRoot(
                     repository = container.financeRepository,
+                    healthRepository = container.healthRepository,
+                    healthConnect = healthConnect,
                     versionName = BuildConfig.VERSION_NAME,
                     onShare = { format, bytes -> ExportShare.share(this, format, bytes) },
                     sync = container.syncService,

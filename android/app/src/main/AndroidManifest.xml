@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        Five permissions. Two are for pairing and syncing with the user's OWN PC (SYNC-1d), three are for voice (C1):
+        Seven permissions. Two are for pairing and syncing with the user's OWN PC (SYNC-1d), three are for voice (C1):
         - INTERNET: HTTPS to the PC's pairing gateway on the local network. The gateway's TLS key is pinned
           from the QR code, cleartext is refused (network_security_config), and no server of ours is involved.
         - CAMERA: only to read the pairing QR code on the PC; asked for when the user taps "Scan the code".
@@ -11,6 +11,9 @@
           recognised on the phone itself and never sent anywhere.
         - FOREGROUND_SERVICE and FOREGROUND_SERVICE_MICROPHONE: the voice service runs only while the
           microphone is open, started from that tap, with a notification and a Stop action.
+        - health.READ_STEPS and health.READ_HEART_RATE: READ-ONLY Health Connect access, each asked for separately from
+          the Health screen and only after a tap. Daily aggregates are copied into the encrypted Health Kernel on this
+          phone. No Health Connect write, history or background permission is declared.
         POST_NOTIFICATIONS is deliberately not requested: Android still lists the running service in its task
         manager and shows the microphone indicator without it.
         ACCESS_NETWORK_STATE is not needed (plain sockets), and the "local network" permission Android
@@ -22,6 +25,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -30,6 +35,8 @@
         others (a launcher icon, an alarm, a new calendar event, plain-text sharing). No package is named.
     -->
     <queries>
+        <!-- Health Connect's provider app on Android 12 and 13 (on 14+ it is part of the system). -->
+        <package android:name="com.google.android.apps.healthdata" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -69,6 +76,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Health Connect permission rationale. Health Connect refuses to show REVA's permission sheet unless this
+            screen exists: Android 12/13 open it with ACTION_SHOW_PERMISSIONS_RATIONALE, Android 14+ through the alias
+            below, which only the system (START_VIEW_PERMISSION_USAGE) may start. It shows static text only.
+        -->
+        <activity
+            android:name=".healthconnect.HealthPermissionsRationaleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".healthconnect.HealthPermissionsRationaleActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Microphone foreground service: not exported, started only by this app from the mic button. -->
         <service

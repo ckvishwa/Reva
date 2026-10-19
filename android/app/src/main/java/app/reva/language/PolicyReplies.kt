@@ -35,6 +35,7 @@ class PolicyReplies(
     private val local: KernelQueries? = null,
 ) : ReplySource {
     override suspend fun reply(text: String): ReplySource.Reply {
+        if (HealthSafety.isUrgent(text)) return ReplySource.Reply(HealthSafety.URGENT_MESSAGE, "template")
         PcPhrases.parse(text)?.let { return forPc(it) }
         phone?.handle(text)?.let { return it }
         val hit = Rules.parse(text) ?: return fallback.reply(text)

@@ -7,10 +7,14 @@ import app.reva.data.Category
 import app.reva.data.Conflict
 import app.reva.data.CsvMapping
 import app.reva.data.FinanceError
+import app.reva.data.FinanceDailyAnalysis
+import app.reva.data.FinancePeriodAnalysis
 import app.reva.data.FinanceRepository
 import app.reva.data.ImportReport
 import app.reva.data.NetWorthSnapshot
 import app.reva.data.NewAccount
+import app.reva.data.NewBill
+import app.reva.data.NewBudget
 import app.reva.data.NewTransaction
 import app.reva.data.Outcome
 import app.reva.data.TodaySummary
@@ -50,6 +54,8 @@ class FakeFinanceRepository : FinanceRepository {
     var conflicts = mutableListOf<Conflict>()
     val resolved = mutableListOf<Pair<Long, Boolean>>()
     var todaySummary = TodaySummary("2026-10-12", emptyList(), emptyList())
+    var dailyAnalysis = FinanceDailyAnalysis("2026-10-12", emptyList(), emptyList(), emptyList())
+    var periodAnalysis = FinancePeriodAnalysis("this_month", emptyList(), emptyList(), emptyList())
     var importResponder: (Boolean) -> ImportReport = { dry -> ImportReport(0, 0, 0, emptyList(), dry) }
 
     /** Method name -> error to return instead of doing the work (names are the function names). */
@@ -61,6 +67,10 @@ class FakeFinanceRepository : FinanceRepository {
     val calls = mutableListOf<String>()
     val addedTransactions = mutableListOf<NewTransaction>()
     val addedAccounts = mutableListOf<NewAccount>()
+    val addedCategories = mutableListOf<String>()
+    val addedBills = mutableListOf<NewBill>()
+    val setBudgets = mutableListOf<NewBudget>()
+    val paidBills = mutableListOf<Pair<String, String>>()
     val imports = mutableListOf<ImportCall>()
     var exportBytes = byteArrayOf(1, 2, 3)
 
@@ -88,6 +98,12 @@ class FakeFinanceRepository : FinanceRepository {
     override suspend fun netWorthSnapshots() = call("netWorthSnapshots") { snapshots.toList() }
 
     override suspend fun today() = call("today") { todaySummary }
+
+    override suspend fun dailyAnalysis(asOf: String) = call("dailyAnalysis") { dailyAnalysis.copy(asOf = asOf) }
+
+    override suspend fun periodAnalysis(period: String, asOf: String) = call("periodAnalysis", "periodAnalysis:$period:$asOf") {
+        periodAnalysis.copy(period = period)
+    }
 
     override suspend fun conflicts() = call("conflicts") { conflicts.toList() }
 
@@ -119,6 +135,14 @@ class FakeFinanceRepository : FinanceRepository {
         )
         markChanged()
     }
+
+    override suspend fun addCategory(name: String) = call("addCategory") { addedCategories += name; markChanged() }
+
+    override suspend fun setBudget(request: NewBudget) = call("setBudget") { setBudgets += request; markChanged() }
+
+    override suspend fun addBill(request: NewBill) = call("addBill") { addedBills += request; markChanged() }
+
+    override suspend fun markBillPaid(id: String, paidDate: String) = call("markBillPaid") { paidBills += id to paidDate; markChanged() }
 
     override suspend fun takeSnapshot() = call("takeSnapshot") { Unit }
 

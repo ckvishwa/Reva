@@ -62,6 +62,28 @@ data class TodayBudgetLeft(val currency: String, val budgetMinor: Long, val spen
 
 data class TodaySummary(val asOf: String, val budgetLeft: List<TodayBudgetLeft>, val billsDue: List<Bill>)
 
+/** Exact minor-unit totals from the Kernel. A currency is never converted or combined with another. */
+data class DailyCashflow(val currency: String, val incomeMinor: Long, val expenseMinor: Long, val netMinor: Long)
+
+data class DailySpendCategory(
+    val categoryId: String?, val category: String, val currency: String,
+    val spentMinor: Long, val transactions: Long,
+)
+
+data class FinanceDailyAnalysis(
+    val asOf: String,
+    val cashflow: List<DailyCashflow>,
+    val spending: List<DailySpendCategory>,
+    val sourceIds: List<String>,
+)
+
+data class FinancePeriodAnalysis(
+    val period: String,
+    val cashflow: List<DailyCashflow>,
+    val spending: List<DailySpendCategory>,
+    val sourceIds: List<String>,
+)
+
 data class ImportRow(
     val row: Long,
     val status: String,
@@ -129,6 +151,15 @@ data class Conflict(
 )
 
 object Json {
+    fun dailyCashflow(rowsJson: String): List<DailyCashflow> = JSONArray(rowsJson).mapObjects {
+        DailyCashflow(it.getString("currency"), it.getLong("income_minor"), it.getLong("expense_minor"), it.getLong("net_minor"))
+    }
+
+    fun dailySpending(rowsJson: String): List<DailySpendCategory> = JSONArray(rowsJson).mapObjects {
+        DailySpendCategory(it.optStringOrNull("category_id"), it.getString("category"), it.getString("currency"),
+            it.getLong("spent_minor"), it.getLong("transactions"))
+    }
+
     fun conflicts(rowsJson: String): List<Conflict> = JSONArray(rowsJson).mapObjects {
         Conflict(
             it.getLong("id"),

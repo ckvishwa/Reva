@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -43,12 +44,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.reva.data.FinanceRepository
+import app.reva.data.HealthRepository
 import app.reva.data.Outcome
 import app.reva.ui.finance.AddAccountForm
 import app.reva.ui.finance.AddAccountViewModel
 import app.reva.ui.finance.AddTransactionForm
 import app.reva.ui.finance.AddTransactionViewModel
 import app.reva.ui.finance.FinanceScreen
+import app.reva.ui.finance.FinanceManageForm
+import app.reva.ui.health.HealthConnectUi
+import app.reva.ui.health.HealthScreen
 import app.reva.ui.finance.FinanceViewModel
 import app.reva.ui.finance.FormSheet
 import app.reva.ui.finance.ImportForm
@@ -74,11 +79,12 @@ import kotlinx.coroutines.withContext
 private enum class Tab(val label: String, val icon: ImageVector, val tag: String) {
     Today("Today", Icons.Filled.Home, "tab_today"),
     Finance("Finance", Icons.AutoMirrored.Filled.List, "tab_finance"),
+    Health("Health", Icons.Filled.Favorite, "tab_health"),
     Talk("Talk", Icons.Filled.Face, "tab_talk"),
     More("More", Icons.Filled.Menu, "tab_more"),
 }
 
-private enum class Sheet { None, AddTransaction, AddAccount, Import }
+private enum class Sheet { None, AddTransaction, AddAccount, Import, ManageFinance }
 
 private class RootViewModels(private val repository: FinanceRepository) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -95,6 +101,8 @@ fun RevaRoot(
     repository: FinanceRepository,
     versionName: String,
     onShare: (format: String, bytes: ByteArray) -> Unit,
+    healthRepository: HealthRepository? = null,
+    healthConnect: HealthConnectUi? = null,
     sync: SyncService? = null,
     autoSync: AutoSyncController? = null,
     voice: VoiceController? = null,
@@ -137,6 +145,7 @@ fun RevaRoot(
         when (Tab.entries[tab]) {
             Tab.Today -> today.refresh()
             Tab.Finance -> finance.refresh()
+            Tab.Health -> Unit
             else -> Unit
         }
     }
@@ -173,15 +182,21 @@ fun RevaRoot(
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (Tab.entries[tab]) {
-                Tab.Today -> TodayScreen(today, syncStatus = syncStatus)
+                Tab.Today -> TodayScreen(today, syncStatus = syncStatus, healthRepository = healthRepository)
                 Tab.Finance -> FinanceScreen(
                     vm = finance,
                     onAddTransaction = { sheet = Sheet.AddTransaction },
                     onAddAccount = { sheet = Sheet.AddAccount },
                     onImport = { sheet = Sheet.Import },
+                    onManage = { sheet = Sheet.ManageFinance },
                     onExport = { pendingExport = it },
                     syncStatus = syncStatus,
                 )
+                Tab.Health -> if (healthRepository != null) {
+                    HealthScreen(healthRepository, healthConnect = healthConnect, onShareBackup = { bytes -> onShare(ExportShare.HEALTH_JSON, bytes) })
+                } else {
+                    Text("Health unavailable")
+                }
                 Tab.Talk ->
                     if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests, phoneActions) else TalkUnavailableScreen()
                 Tab.More -> MoreHost(
@@ -212,6 +227,9 @@ fun RevaRoot(
             }
             // An import may have saved rows even if the sheet is closed afterwards, so closing always reloads.
             ImportForm(vm, onChooseFile = { picker.launch(arrayOf("*/*")) }, onClose = { saved() })
+        }
+        Sheet.ManageFinance -> FormSheet(onDismiss = { saved() }) {
+            FinanceManageForm(repository)
         }
     }
 

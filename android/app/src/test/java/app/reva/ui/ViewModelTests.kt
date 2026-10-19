@@ -3,6 +3,9 @@
 package app.reva.ui
 
 import app.reva.data.ErrorKind
+import app.reva.data.DailyCashflow
+import app.reva.data.DailySpendCategory
+import app.reva.data.FinanceDailyAnalysis
 import app.reva.data.FinanceError
 import app.reva.data.ImportReport
 import app.reva.data.ImportRow
@@ -642,6 +645,28 @@ class TodayViewModelTest : MainDispatcherTest() {
     private fun vm(summary: TodaySummary? = null, repo: FakeFinanceRepository = FakeFinanceRepository()): Pair<TodayViewModel, FakeFinanceRepository> {
         summary?.let { repo.todaySummary = it }
         return TodayViewModel(repo) { TODAY } to repo
+    }
+
+    @Test fun daily_finance_uses_exact_kernel_totals_and_shows_the_records_count() = runTest {
+        val repo = FakeFinanceRepository().apply {
+            dailyAnalysis = FinanceDailyAnalysis(
+                "2026-10-12",
+                listOf(DailyCashflow("USD", 12000, 3499, 8501), DailyCashflow("EUR", 0, 100, -100)),
+                listOf(DailySpendCategory("food", "Food", "USD", 3499, 2)),
+                listOf("tx-1", "tx-2"),
+            )
+        }
+        val (vm, _) = vm(repo = repo)
+
+        vm.refreshNow()
+
+        assertEquals(2, vm.state.value.dailyRows.size)
+        val byCurrency = vm.state.value.dailyRows.associateBy { it.currency }
+        assertEquals("$120.00", byCurrency.getValue("USD").incomeText)
+        assertEquals("$34.99", byCurrency.getValue("USD").expenseText)
+        assertEquals("€1.00", byCurrency.getValue("EUR").expenseText)
+        assertEquals("Food $34.99", vm.state.value.topSpendingText)
+        assertEquals(2, vm.state.value.dailySourceCount)
     }
 
     @Test fun shows_budget_left_and_bills_in_seven_days() = runTest {

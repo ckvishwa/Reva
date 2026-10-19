@@ -12,9 +12,16 @@ import java.time.LocalDate
  * unencrypted copy, which the confirmation dialog says before anything is shared.
  */
 object ExportShare {
-    fun fileName(format: String, today: LocalDate): String = "reva-finance-$today.${if (format == "json") "json" else "csv"}"
+    /** Format of the Health backup (`reva-health-v1` JSON); Finance uses `json` and `csv`. */
+    const val HEALTH_JSON = "health_json"
 
-    fun mimeType(format: String): String = if (format == "json") "application/json" else "text/csv"
+    fun fileName(format: String, today: LocalDate): String = when (format) {
+        HEALTH_JSON -> "reva-health-$today.json"
+        "json" -> "reva-finance-$today.json"
+        else -> "reva-finance-$today.csv"
+    }
+
+    fun mimeType(format: String): String = if (format == "json" || format == HEALTH_JSON) "application/json" else "text/csv"
 
     /** Removes every shared export from [cacheDir]. Called at every app start so a plain copy never lingers. */
     fun clear(cacheDir: File) {
@@ -35,6 +42,7 @@ object ExportShare {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(send, "Share Finance export").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val title = if (format == HEALTH_JSON) "Share Health backup" else "Share Finance export"
+        context.startActivity(Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

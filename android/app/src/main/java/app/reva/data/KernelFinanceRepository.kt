@@ -1,6 +1,7 @@
 package app.reva.data
 
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,7 +75,47 @@ class KernelFinanceRepository(
 
     override suspend fun netWorthSnapshots() = run { Json.snapshots(query(it, "list_networth_snapshots")) }
 
+    override suspend fun recurringSummary(asOf: String) = run {
+        FinanceReportsJson.recurring(query(it, "recurring_summary", JSONObject().put("as_of", asOf)))
+    }
+
+    override suspend fun netWorthReport(asOf: String) = run {
+        FinanceReportsJson.netWorth(query(it, "networth_report", JSONObject().put("as_of", asOf)))
+    }
+
     override suspend fun today() = run { Json.today(kernelToday(listOf(it), asOf())) }
+
+    override suspend fun dailyAnalysis(asOf: String): Outcome<FinanceDailyAnalysis> {
+        val date = try { LocalDate.parse(asOf).toString() } catch (_: DateTimeParseException) {
+            return Outcome.Failed(FinanceError(ErrorKind.Validation, "Choose a valid date.", "as_of"))
+        }
+        return run { handle ->
+            val params = JSONObject().put("period", "$date..$date").put("as_of", date).toString()
+            val cashflow = handle.query("cashflow", params)
+            val spending = handle.query("spend_by_category", params)
+            FinanceDailyAnalysis(
+                date,
+                Json.dailyCashflow(cashflow.rowsJson),
+                Json.dailySpending(spending.rowsJson),
+                (cashflow.sourceIds + spending.sourceIds).distinct(),
+            )
+        }
+    }
+
+    override suspend fun periodAnalysis(period: String, asOf: String): Outcome<FinancePeriodAnalysis> {
+        if (period !in setOf("this_month", "last_7_days", "this_year"))
+            return Outcome.Failed(FinanceError(ErrorKind.Validation, "Choose a supported period."))
+        val date = try { LocalDate.parse(asOf).toString() } catch (_: DateTimeParseException) {
+            return Outcome.Failed(FinanceError(ErrorKind.Validation, "Choose a valid date."))
+        }
+        return run { handle ->
+            val params = JSONObject().put("period", period).put("as_of", date).toString()
+            val cashflow = handle.query("cashflow", params)
+            val spending = handle.query("spend_by_category", params)
+            FinancePeriodAnalysis(period, Json.dailyCashflow(cashflow.rowsJson), Json.dailySpending(spending.rowsJson),
+                (cashflow.sourceIds + spending.sourceIds).distinct())
+        }
+    }
 
     override suspend fun conflicts() = run { Json.conflicts(query(it, "conflicts")) }
 
@@ -106,6 +147,30 @@ class KernelFinanceRepository(
             .put("currency", request.currency)
             .put("opening_balance_minor", request.openingBalanceMinor)
         it.command("account.create", body.toString())
+        Unit
+    }
+
+    override suspend fun addCategory(name: String) = write {
+        it.command("category.create", JSONObject().put("name", name).put("kind", "expense").toString())
+        Unit
+    }
+
+    override suspend fun setBudget(request: NewBudget) = write {
+        it.command("budget.set", JSONObject().put("category_id", request.categoryId).put("currency", request.currency)
+            .put("amount_minor", request.amountMinor).put("start_month", request.startMonth).toString())
+        Unit
+    }
+
+    override suspend fun addBill(request: NewBill) = write {
+        it.command("bill.create", JSONObject().put("name", request.name).put("kind", "bill")
+            .put("amount_minor", request.amountMinor).put("currency", request.currency)
+            .put("due_date", request.dueDate).put("recurrence", request.recurrence).toString())
+        Unit
+    }
+
+    override suspend fun markBillPaid(id: String, paidDate: String) = write {
+        it.command("bill.mark_paid", JSONObject().put("id", id).put("paid_date", paidDate)
+            .put("record_transaction", false).toString())
         Unit
     }
 
