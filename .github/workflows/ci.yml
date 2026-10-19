@@ -289,7 +289,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --no-daemon
+          ./gradlew :app:testDebugUnitTest --rerun --no-daemon
 
   avatar:
     # three.js + three-vrm page: unit tests (events, mood faces, stale epochs, frame cap, lip-sync offset)

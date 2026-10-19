@@ -26,20 +26,27 @@ for name in (
     "ANDROID_NDK_LATEST_HOME",
 ):
     fingerprint.update(f"{name}={os.environ.get(name, '')}\n".encode())
-for pattern in (
-    "Cargo.lock",
-    "**/Cargo.toml",
-    "**/*.rs",
-    ".cargo/*",
-    "rust-toolchain*",
-    "tools/kernel/*.py",
-    ".github/actions/rust-cache/*",
-    ".github/workflows/ci.yml",
-):
-    for path in sorted(Path().glob(pattern)):
-        if path.is_file() and "target" not in path.parts:
-            fingerprint.update(path.as_posix().encode())
-            fingerprint.update(path.read_bytes())
+# Tracked inputs only: do not traverse restored target artifacts or runtime state.
+tracked = subprocess.check_output(  # noqa: S603,S607
+    [  # noqa: S607 - fixed git executable on CI runner
+        "git",
+        "ls-files",
+        "-z",
+        "Cargo.*",
+        "kernel",
+        ".cargo",
+        "rust-toolchain*",
+        "tools/kernel",
+        "tools/ci/rust_cache_key.py",
+        ".github/actions/rust-cache",
+        ".github/workflows/ci.yml",
+    ]
+)
+for filename in sorted(tracked.decode().split("\0")):
+    if filename:
+        path = Path(filename)
+        fingerprint.update(path.as_posix().encode())
+        fingerprint.update(path.read_bytes())
 for name in ("ANDROID_NDK_HOME", "ANDROID_NDK_LATEST_HOME"):
     if os.environ.get(name):
         properties = Path(os.environ[name]) / "source.properties"
