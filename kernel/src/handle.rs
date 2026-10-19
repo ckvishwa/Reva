@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::civil;
 use crate::domains::finance::{self, commands, project, queries};
+use crate::domains::health;
 use crate::error::{DomainError, DomainResult};
 use crate::events::{self, Event, EventCtx, InsertOutcome};
 use crate::export;
@@ -96,6 +97,7 @@ pub fn open_domain(
 ) -> Result<Arc<DomainHandle>, DomainError> {
     let migrations = match domain.as_str() {
         finance::DOMAIN => finance::migrations(),
+        health::DOMAIN => vec![health::MIGRATION],
         other => {
             return Err(DomainError::validation("domain", format!("domain {other:?} is not available in this build")));
         }
@@ -143,7 +145,8 @@ impl DomainHandle {
 
     /// Names of every command this domain accepts (the registry the absence tests inspect).
     pub fn command_names(&self) -> Vec<String> {
-        commands::COMMANDS.iter().map(|s| s.to_string()).collect()
+        let names = if self.domain == health::DOMAIN { health::COMMANDS } else { commands::COMMANDS };
+        names.iter().map(|s| s.to_string()).collect()
     }
 
     pub fn command(&self, kind: String, payload_json: String) -> Result<CommitResult, DomainError> {
@@ -154,11 +157,19 @@ impl DomainHandle {
         let (device_id, tag_key) = (store.device_id.clone(), store.tag_key().to_vec());
         let ctx = EventCtx { domain: &self.domain, device_id: &device_id, tag_key: &tag_key };
         let tx = store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let drafts = commands::handle(&tx, &kind, &payload)?;
+        let drafts = if self.domain == health::DOMAIN {
+            health::command(&tx, &kind, &payload)?
+        } else {
+            commands::handle(&tx, &kind, &payload)?
+        };
         let mut primary: Option<Event> = None;
         for draft in drafts {
             let event = events::append_local(&tx, &ctx, draft)?;
-            project::apply(&tx, &event)?;
+            if self.domain == health::DOMAIN {
+                health::apply(&tx, &event)?;
+            } else {
+                project::apply(&tx, &event)?;
+            }
             if primary.is_none() {
                 primary = Some(event);
             }
@@ -176,12 +187,20 @@ impl DomainHandle {
                 .map_err(|e| DomainError::validation("params", format!("not valid JSON: {e}")))?
         };
         let guard = self.lock();
-        let out = queries::run(&guard.store.conn, &name, &params)?;
-        Ok(QueryResult { rows_json: serde_json::to_string(&out.rows)?, source_ids: out.source_ids })
+        if self.domain == health::DOMAIN {
+            let (rows, source_ids) = health::query(&guard.store.conn, &name, &params)?;
+            Ok(QueryResult { rows_json: serde_json::to_string(&rows)?, source_ids })
+        } else {
+            let out = queries::run(&guard.store.conn, &name, &params)?;
+            Ok(QueryResult { rows_json: serde_json::to_string(&out.rows)?, source_ids: out.source_ids })
+        }
     }
 
     pub fn export(&self, format: String) -> Result<Vec<u8>, DomainError> {
         let guard = self.lock();
+        if self.domain == health::DOMAIN {
+            return health::export(&guard.store.conn, &format);
+        }
         export::export(&guard.store.conn, &format)
     }
 
@@ -193,6 +212,9 @@ impl DomainHandle {
         data: Vec<u8>,
         options_json: String,
     ) -> Result<ImportReport, DomainError> {
+        if self.domain == health::DOMAIN {
+            return Err(DomainError::validation("format", "Health import is unavailable; use validated manual entry"));
+        }
         let options = import::parse_options(&options_json)?;
         let mut guard = self.lock();
         let store = &mut guard.store;
@@ -337,7 +359,7 @@ impl DomainHandle {
             }
             sync::verify_event(&tx, event, &self.domain)?;
         }
-        let report = apply_in_tx(&tx, &mut incoming)?;
+        let report = apply_in_tx(&tx, &mut incoming, &self.domain)?;
         sync::note_received(&tx, &peer_device_id, batch.cursor_to)?;
         tx.commit()?;
         Ok(report)
@@ -352,7 +374,7 @@ impl DomainHandle {
     pub fn rebuild_projections(&self) -> Result<u64, DomainError> {
         let mut guard = self.lock();
         let tx = guard.store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let n = project::rebuild(&tx)?;
+        let n = if self.domain == health::DOMAIN { health::rebuild(&tx)? } else { project::rebuild(&tx)? };
         tx.commit()?;
         Ok(n)
     }
@@ -361,6 +383,13 @@ impl DomainHandle {
     pub fn projection_digest(&self) -> Result<String, DomainError> {
         let guard = self.lock();
         let mut hasher = Sha256::new();
+        if self.domain == health::DOMAIN {
+            for (id, data) in health::digest_rows(&guard.store.conn)? {
+                hasher.update(id.as_bytes());
+                hasher.update(events::canonical(&serde_json::from_str::<Value>(&data)?).as_bytes());
+            }
+            return Ok(hex::encode(hasher.finalize()));
+        }
         for table in finance::schema::TABLES {
             let rows = finance::schema::select(&guard.store.conn, table.aggregate_type, "ORDER BY id", vec![])?;
             hasher.update(table.name.as_bytes());
@@ -420,7 +449,7 @@ impl DomainHandle {
         }
         let mut guard = self.lock();
         let tx = guard.store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let report = apply_in_tx(&tx, &mut incoming)?;
+        let report = apply_in_tx(&tx, &mut incoming, &self.domain)?;
         tx.commit()?;
         Ok(report)
     }
@@ -436,7 +465,7 @@ impl DomainHandle {
 
 /// Insert and project events in `(lamport, origin_device_id)` order inside the caller's transaction.
 /// A tombstone always applies, whatever its clock: deleted records never come back.
-fn apply_in_tx(tx: &Transaction<'_>, incoming: &mut [Event]) -> DomainResult<ApplyReport> {
+fn apply_in_tx(tx: &Transaction<'_>, incoming: &mut [Event], domain: &str) -> DomainResult<ApplyReport> {
     incoming.sort_by(|a, b| (a.lamport, &a.origin_device_id).cmp(&(b.lamport, &b.origin_device_id)));
     let mut report = ApplyReport { applied: 0, duplicates: 0, conflicts: Vec::new() };
     for event in incoming.iter() {
@@ -446,7 +475,11 @@ fn apply_in_tx(tx: &Transaction<'_>, incoming: &mut [Event]) -> DomainResult<App
                 report.applied += 1;
                 detect_conflicts(tx, event, &mut report.conflicts)?;
                 if event.tombstone || events::is_aggregate_head(tx, event)? {
-                    project::apply(tx, event)?;
+                    if domain == health::DOMAIN {
+                        health::apply(tx, event)?;
+                    } else {
+                        project::apply(tx, event)?;
+                    }
                 }
             }
         }
