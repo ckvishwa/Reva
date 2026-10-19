@@ -1,0 +1,28 @@
+name: Isolated Rust build cache
+description: Exact build-input cache; no cross-platform or fallback restores
+inputs:
+  target:
+    description: Native or explicit cross-build targets
+    default: native
+outputs:
+  key:
+    description: Exact compiler and build-input fingerprint
+    value: ${{ steps.fingerprint.outputs.key }}
+runs:
+  using: composite
+  steps:
+    - name: Fingerprint compiler and build environment
+      id: fingerprint
+      shell: bash
+      env:
+        REVA_CACHE_TARGET: ${{ inputs.target }}
+      run: python tools/ci/rust_cache_key.py
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/registry/src
+          ~/.cargo/git/db
+          target
+        key: rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ steps.fingerprint.outputs.key }}
