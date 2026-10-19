@@ -55,6 +55,31 @@ Coverage comparison is exact: cold XML has 9,091/9,785 lines and 2,000/2,418 bra
 
 Per-job timestamps and completed-step timestamps are preserved in [`baseline.json`](baseline.json) and [`cold.json`](cold.json). The coverage/JUnit/collection artifacts are available from the cold run link above.
 
-## Measurements and verdict
+## Warm measurements
 
-Two warm runs are pending. Performance targets are not promises; merge readiness requires all platform/security checks, collection equivalence and coverage comparison in addition to faster runtime.
+Both warm samples used the same workflow commit `caf1005da2fceaabfe047d6933b010591ce602de`; attempt 1 and attempt 2 of [run 39193587304](https://github.com/ckvishwa/Reva/actions/runs/39193587304). All eight CI jobs passed in both attempts; Claude review passed on this PR head. Exact job and step durations are in [`warm1.json`](warm1.json) and [`warm2.json`](warm2.json).
+
+| Job | Baseline min | Cold min | Warm 1 min | Warm 2 min |
+|---|---:|---:|---:|---:|
+| python | 26.65 | 22.42 | 11.60 | 12.07 |
+| python-linux | 6.55 | 7.00 | 5.15 | 4.90 |
+| android-unit | 4.60 | 4.83 | 1.47 | 1.45 |
+| android | 4.37 | 3.53 | 0.93 | 0.90 |
+| kernel | 3.77 | 3.58 | 1.27 | 1.63 |
+| avatar | 2.05 | 1.27 | 1.27 | 2.00 |
+| csharp-desktop | 1.82 | 2.63 | 2.43 | 2.40 |
+| contracts | 0.15 | 0.22 | 0.15 | 0.15 |
+| **Total runner-minutes** | **49.95** | **45.48** | **24.27** | **25.50** |
+| **Wall-clock minutes** | **26.67** | **22.42** | **11.62** | **12.07** |
+
+Two-warm mean: **24.88 runner-minutes** (50.2% below baseline), **11.84 minutes wall-clock** (55.6% below baseline). Windows Python mean is **11.83 minutes**, 55.6% below baseline. Both warm runs meet the 15-minute wall and 35 runner-minute targets. Warm 1 met Windows's 12-minute target at 11m36s; warm 2 was 12m04s, four seconds over. Windows warm coverage test execution was 8m29s and 8m43s versus baseline 9m22s. Binding compilation fell from 9m32s cold to 6–9 seconds on warm exact Rust-cache hits. The first warm Windows cache restore took about 15 seconds.
+
+All Rust job caches, cargo-ndk, pip, and Gradle caches missed and saved on the cold run; all exact-key entries hit in both warm attempts. Android warm jobs: native cross-build 56s/54s; Kotlin unit job 1m28s/1m27s, with Gradle test tasks executed (`--rerun`). Linux full portable suite: 3m08s and 2m58s, same 1,690 passes / 35 skips and identical skip reasons as baseline. Cache hits do not skip Cargo work, Android ELF inspection, Python tests, or Gradle tests.
+
+Each Windows run collected 1,725 IDs; all 1,581 former directory-suite IDs plus both native IDs were present, along with 144 gateway/cross-binding/additional IDs. Both DPAPI tests passed on Windows in each run. All Windows runs: 1,704 passed, 21 skipped, zero failures. Coverage is unchanged across baseline/cold/warm: 9,091/9,785 statements (92.91%) and 2,000/2,418 branches (82.71%). Linux/platform skips and C# UI opt-in skips are unchanged.
+
+No unsafe or unsuccessful cache configuration was shipped. Initial exploratory CI at `f30213f8ce2f0ab926b3dd89c9f96a29298c157a` was superseded after forcing Android test task execution and tightening cache fingerprint inputs; its incomplete timings are excluded. Local native Rust measurement was unavailable because this workspace lacks `rustc`; hosted cold and warm builds provide those measurements.
+
+## Readiness
+
+Both warm runs met the 15-minute wall and 35 runner-minute targets; Windows met 12 minutes once and missed by four seconds on the second run. Test and coverage equivalence were exact. Repository ruleset and branch-protection inspection returned HTTP 403, so required-check configuration cannot be independently verified; all existing eight job names, events, and review checks remain present. Keep this as a draft pending owner review of required checks and normal PR approval. No merge was performed.
