@@ -72,12 +72,31 @@ def main() -> int:
     env = dict(os.environ, ANDROID_NDK_HOME=str(ndk))
     if sys.platform.startswith("win"):
         env = windows_env(env)
-    cmd = ["cargo", "ndk"]
-    for abi in ABIS:
-        cmd += ["-t", abi]
-    cmd += ["-P", "26", "build", "-p", "reva-kernel", "--release"]
-    print("+", " ".join(cmd), flush=True)
-    subprocess.run(cmd, cwd=ROOT, env=env, check=True)  # noqa: S603 - fixed argv
+    if sys.platform.startswith("win"):
+        # cargo-ndk exports absolute Windows CC paths. OpenSSL's Unix make runs
+        # those through sh, which strips backslashes and cannot find clang.
+        bin_dir = next((ndk / "toolchains" / "llvm" / "prebuilt").iterdir()) / "bin"
+        env["PATH"] = os.pathsep.join([str(bin_dir), env["PATH"]])
+        for _, (triple, _) in ABIS.items():
+            target_env = dict(env)
+            suffix = triple.replace("-", "_")
+            target_env[f"CC_{suffix}"] = "clang.exe"
+            target_env[f"AR_{suffix}"] = "llvm-ar.exe"
+            target_env[f"RANLIB_{suffix}"] = "llvm-ranlib.exe"
+            target_env[f"CFLAGS_{suffix}"] = f"--target={triple}26"
+            target_env[f"CARGO_TARGET_{suffix.upper()}_LINKER"] = str(
+                bin_dir / f"{triple}26-clang.cmd"
+            )
+            cmd = ["cargo", "build", "-p", "reva-kernel", "--release", "--target", triple]
+            print("+", " ".join(cmd), flush=True)
+            subprocess.run(cmd, cwd=ROOT, env=target_env, check=True)  # noqa: S603 - fixed argv
+    else:
+        cmd = ["cargo", "ndk"]
+        for abi in ABIS:
+            cmd += ["-t", abi]
+        cmd += ["-P", "26", "build", "-p", "reva-kernel", "--release"]
+        print("+", " ".join(cmd), flush=True)
+        subprocess.run(cmd, cwd=ROOT, env=env, check=True)  # noqa: S603 - fixed argv
 
     prebuilt = next((ndk / "toolchains" / "llvm" / "prebuilt").iterdir())
     readelf = (
