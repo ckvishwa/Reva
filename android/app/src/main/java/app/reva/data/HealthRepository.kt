@@ -22,6 +22,11 @@ data class HealthDaily(
     val sourceCount: Int,
     val workoutCount: Int = 0,
     val sleepCount: Int = 0,
+    val steps: Long? = null,
+    val stepsCount: Int = 0,
+    val heartRateCount: Int = 0,
+    val heartRateMinBpm: Long? = null,
+    val heartRateMaxBpm: Long? = null,
 )
 
 data class HealthWeekly(
@@ -35,6 +40,11 @@ data class HealthWeekly(
     val medicationExpected: Int,
     val medicationTaken: Int,
     val sourceCount: Int,
+    val stepsTotal: Long = 0,
+    val stepsDays: Int = 0,
+    val heartRateCount: Int = 0,
+    val heartRateMinBpm: Long? = null,
+    val heartRateMaxBpm: Long? = null,
 )
 
 data class HealthRecord(val id: String, val kind: String, val date: String, val label: String, val scheduleId: String? = null)
@@ -46,14 +56,21 @@ object HealthJson {
         return HealthWeekly(row.getString("start_date"), day, row.getLong("workout_minutes"),
             row.getInt("workout_count"), row.getLong("sleep_minutes"), row.getInt("sleep_count"),
             row.getInt("meal_count"), row.getInt("medication_expected"), row.getInt("medication_taken"),
-            sourceIds.distinct().size)
+            sourceIds.distinct().size, row.getLong("steps_total"), row.getInt("steps_days"),
+            row.getInt("heart_rate_count"),
+            if (row.isNull("heart_rate_min_bpm")) null else row.getLong("heart_rate_min_bpm"),
+            if (row.isNull("heart_rate_max_bpm")) null else row.getLong("heart_rate_max_bpm"))
     }
     fun daily(day: String, rowsJson: String, sourceIds: List<String>): HealthDaily {
         val row = JSONArray(rowsJson).getJSONObject(0)
         return HealthDaily(day, row.getLong("workout_minutes"), row.getLong("sleep_minutes"), row.getInt("meal_count"),
             if (row.isNull("weight_grams")) null else row.getLong("weight_grams"),
             row.getInt("medications_scheduled"), row.getInt("medications_taken"), sourceIds.distinct().size,
-            row.getInt("workout_count"), row.getInt("sleep_count"))
+            row.getInt("workout_count"), row.getInt("sleep_count"),
+            if (row.isNull("steps")) null else row.getLong("steps"), row.getInt("steps_count"),
+            row.getInt("heart_rate_count"),
+            if (row.isNull("heart_rate_min_bpm")) null else row.getLong("heart_rate_min_bpm"),
+            if (row.isNull("heart_rate_max_bpm")) null else row.getLong("heart_rate_max_bpm"))
     }
 }
 
@@ -116,6 +133,8 @@ class KernelHealthRepository(
                     "sleep" -> "Sleep · ${row.getLong("duration_minutes")} min"
                     "meal" -> "Meal · ${row.getString("description")}"
                     "weight" -> "Weight · ${row.getLong("weight_grams")} g"
+                    "steps_day" -> "Steps · ${row.getLong("steps")}"
+                    "heart_rate_sample" -> "Heart rate · ${row.getLong("bpm")} bpm"
                     "medication_taken" -> "Medication taken · ${row.getString("schedule_id")}"
                     else -> kind
                 }

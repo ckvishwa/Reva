@@ -34,8 +34,12 @@ class KernelQueries(
                         else "${data.sleepMinutes} minutes across ${data.sleepCount} recorded sleep sessions."
                     val workout = if (data.workoutCount == 0) "No workouts were recorded."
                         else "${data.workoutMinutes} workout minutes across ${data.workoutCount} entries."
+                    val steps = if (data.stepsDays == 0) "No steps were recorded."
+                        else "${data.stepsTotal} steps across ${data.stepsDays} recorded days."
+                    val heartRate = if (data.heartRateCount == 0) "No heart-rate readings were recorded."
+                        else "Recorded heart-rate range ${data.heartRateMinBpm} to ${data.heartRateMaxBpm} bpm across ${data.heartRateCount} readings."
                     BrainResult.Answer("For ${data.startDate} through ${data.endDate}: $sleep $workout " +
-                        "${data.mealCount} meals recorded. Medication marked taken ${data.medicationTaken} of " +
+                        "$steps $heartRate ${data.mealCount} meals recorded. Medication marked taken ${data.medicationTaken} of " +
                         "${data.medicationExpected} scheduled entries. ${data.sourceCount} source records. " +
                         "This is a summary of your entries, not medical advice.", "kernel")
                 }

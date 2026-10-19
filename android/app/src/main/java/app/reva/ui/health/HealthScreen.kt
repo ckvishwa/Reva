@@ -47,6 +47,8 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
     var sleepMinutes by rememberSaveable { mutableStateOf("") }
     var meal by rememberSaveable { mutableStateOf("") }
     var weightKg by rememberSaveable { mutableStateOf("") }
+    var steps by rememberSaveable { mutableStateOf("") }
+    var heartRate by rememberSaveable { mutableStateOf("") }
     var medicationName by rememberSaveable { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -92,6 +94,8 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
                     Text("Workout ${if (it.workoutCount == 0) "not recorded" else "${it.workoutMinutes} min"} · " +
                         "Sleep ${if (it.sleepCount == 0) "not recorded" else "${it.sleepMinutes} min"} · Meals ${it.mealCount}")
                     Text("Weight ${it.weightGrams?.let { grams -> "${grams / 1000.0} kg" } ?: "not recorded"}")
+                    Text("Steps ${if (it.stepsCount == 0) "not recorded" else it.steps.toString()}")
+                    Text("Heart rate ${if (it.heartRateCount == 0) "not recorded" else "${it.heartRateMinBpm}-${it.heartRateMaxBpm} bpm in ${it.heartRateCount} samples"}")
                     Text("Medication taken ${it.medicationsTaken} of ${it.medicationsScheduled} scheduled")
                     CaptionText("${it.sourceCount} source records")
                 } ?: CaptionText("No verified daily summary available")
@@ -105,6 +109,8 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
                     Text("Sleep ${if (it.sleepCount == 0) "not recorded" else "${it.sleepMinutes} min in ${it.sleepCount} sessions"}")
                     Text("Workout ${if (it.workoutCount == 0) "not recorded" else "${it.workoutMinutes} min in ${it.workoutCount} entries"} · Meals recorded ${it.mealCount}")
                     Text("Medication marked taken ${it.medicationTaken} of ${it.medicationExpected} scheduled entries")
+                    Text("Steps ${if (it.stepsDays == 0) "not recorded" else "${it.stepsTotal} across ${it.stepsDays} days"}")
+                    Text("Heart rate ${if (it.heartRateCount == 0) "not recorded" else "${it.heartRateMinBpm}-${it.heartRateMaxBpm} bpm in ${it.heartRateCount} samples"}")
                     CaptionText("${it.sourceCount} source records")
                 } ?: CaptionText("No verified seven-day summary available")
             }
@@ -148,6 +154,28 @@ fun HealthScreen(repository: HealthRepository, modifier: Modifier = Modifier) {
                     if (grams == null) error = "Enter weight in kilograms, up to three decimal places."
                     else submit("weight.log", JSONObject().put("date", day).put("weight_grams", grams)) { weightKg = "" }
                 }, modifier = Modifier.testTag("health_log_weight")) { Text("Save weight") }
+            }
+        }
+        item {
+            RevaCard {
+                CaptionText("Log steps for this day")
+                OutlinedTextField(steps, { steps = it }, label = { Text("Steps counted") })
+                Button(onClick = {
+                    val count = steps.toLongOrNull()
+                    if (count == null) error = "Enter a whole step count."
+                    else submit("steps.log", JSONObject().put("date", day).put("steps", count)) { steps = "" }
+                }, modifier = Modifier.testTag("health_log_steps")) { Text("Save steps") }
+            }
+        }
+        item {
+            RevaCard {
+                CaptionText("Log a heart-rate reading · no medical interpretation")
+                OutlinedTextField(heartRate, { heartRate = it }, label = { Text("Beats per minute") })
+                Button(onClick = {
+                    val bpm = heartRate.toLongOrNull()
+                    if (bpm == null) error = "Enter whole beats per minute."
+                    else submit("heart_rate.log", JSONObject().put("date", day).put("bpm", bpm)) { heartRate = "" }
+                }, modifier = Modifier.testTag("health_log_heart_rate")) { Text("Save reading") }
             }
         }
         item {

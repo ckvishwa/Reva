@@ -1,7 +1,7 @@
 //! Manual Health records. The Kernel stores facts and computes summaries; it does not diagnose,
 //! recommend medication doses, or send health data to a network service.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{params, Connection};
 use serde_json::{json, Map, Value};
@@ -17,6 +17,8 @@ pub const COMMANDS: &[&str] = &[
     "sleep.log",
     "meal.log",
     "weight.log",
+    "steps.log",
+    "heart_rate.log",
     "medication.schedule",
     "medication.mark_taken",
     "record.delete",
@@ -65,6 +67,15 @@ fn positive(map: &Map<String, Value>, field: &str, max: i64) -> DomainResult<i64
     Ok(value)
 }
 
+fn nonnegative(map: &Map<String, Value>, field: &str, max: i64) -> DomainResult<i64> {
+    let value =
+        map.get(field).and_then(Value::as_i64).ok_or_else(|| DomainError::validation(field, "required integer"))?;
+    if !(0..=max).contains(&value) {
+        return Err(DomainError::validation(field, "out of range"));
+    }
+    Ok(value)
+}
+
 fn draft(kind: &str, date: String, mut data: Map<String, Value>) -> EventDraft {
     let id = uuid::Uuid::new_v4().to_string();
     data.insert("id".into(), json!(id));
@@ -102,6 +113,25 @@ pub fn command(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<V
         "weight.log" => {
             fields(map, &["date", "weight_grams"])?;
             ("weight", date(map, "date")?, json!({"weight_grams":positive(map,"weight_grams",1_000_000)?}))
+        }
+        "steps.log" => {
+            fields(map, &["date", "steps"])?;
+            let day = date(map, "date")?;
+            let existing: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM health_records WHERE kind='steps_day' AND date=?1",
+                [&day],
+                |r| r.get(0),
+            )?;
+            if existing != 0 {
+                return Err(DomainError::conflict(
+                    "steps already recorded for this day; delete the old entry before replacing it",
+                ));
+            }
+            ("steps_day", day, json!({"steps":nonnegative(map,"steps",200_000)?}))
+        }
+        "heart_rate.log" => {
+            fields(map, &["date", "bpm"])?;
+            ("heart_rate_sample", date(map, "date")?, json!({"bpm":positive(map,"bpm",300)?}))
         }
         "medication.schedule" => {
             fields(map, &["name", "start_date"])?;
@@ -194,6 +224,14 @@ pub fn apply(conn: &Connection, event: &Event) -> DomainResult<()> {
             fields(payload, &["id", "kind", "date", "created_at", "weight_grams"])?;
             positive(payload, "weight_grams", 1_000_000)?;
         }
+        "steps_day" => {
+            fields(payload, &["id", "kind", "date", "created_at", "steps"])?;
+            nonnegative(payload, "steps", 200_000)?;
+        }
+        "heart_rate_sample" => {
+            fields(payload, &["id", "kind", "date", "created_at", "bpm"])?;
+            positive(payload, "bpm", 300)?;
+        }
         "medication_schedule" => {
             fields(payload, &["id", "kind", "date", "created_at", "name"])?;
             text(payload, "name", 120)?;
@@ -241,6 +279,10 @@ pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Val
         let mut sleep_minutes = 0_i64;
         let mut sleep_count = 0;
         let mut meal_count = 0;
+        let mut steps_by_day = BTreeMap::<String, (String, String, i64)>::new();
+        let mut heart_rate_count = 0;
+        let mut heart_rate_min_bpm: Option<i64> = None;
+        let mut heart_rate_max_bpm: Option<i64> = None;
         let mut scheduled = Vec::new();
         let mut taken = Vec::new();
         let mut ids = Vec::new();
@@ -263,6 +305,28 @@ pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Val
                 }
                 "meal" => {
                     meal_count += 1;
+                    ids.push(id);
+                }
+                "steps_day" => {
+                    let count =
+                        data["steps"].as_i64().ok_or_else(|| DomainError::validation("steps", "corrupt steps"))?;
+                    let stamp = data["created_at"]
+                        .as_str()
+                        .ok_or_else(|| DomainError::validation("created_at", "corrupt steps"))?
+                        .to_string();
+                    let replace = steps_by_day
+                        .get(&record_day)
+                        .is_none_or(|(old_stamp, old_id, _)| (&stamp, &id) > (old_stamp, old_id));
+                    if replace {
+                        steps_by_day.insert(record_day, (stamp, id, count));
+                    }
+                }
+                "heart_rate_sample" => {
+                    let bpm =
+                        data["bpm"].as_i64().ok_or_else(|| DomainError::validation("bpm", "corrupt heart rate"))?;
+                    heart_rate_count += 1;
+                    heart_rate_min_bpm = Some(heart_rate_min_bpm.map_or(bpm, |old| old.min(bpm)));
+                    heart_rate_max_bpm = Some(heart_rate_max_bpm.map_or(bpm, |old| old.max(bpm)));
                     ids.push(id);
                 }
                 "medication_schedule" => {
@@ -292,10 +356,16 @@ pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Val
                 }
             }
         }
+        let steps_days = steps_by_day.len();
+        let steps_total: i64 = steps_by_day.values().map(|(_, _, count)| count).sum();
+        ids.extend(steps_by_day.into_values().map(|(_, id, _)| id));
         return Ok((
             json!([{"start_date":start,"end_date":day,"workout_minutes":workout_minutes,
             "workout_count":workout_count,"sleep_minutes":sleep_minutes,"sleep_count":sleep_count,
-            "meal_count":meal_count,"medication_expected":medication_expected,"medication_taken":medication_taken}]),
+            "meal_count":meal_count,"steps_total":steps_total,"steps_days":steps_days,
+            "heart_rate_count":heart_rate_count,"heart_rate_min_bpm":heart_rate_min_bpm,
+            "heart_rate_max_bpm":heart_rate_max_bpm,
+            "medication_expected":medication_expected,"medication_taken":medication_taken}]),
             ids,
         ));
     }
@@ -350,6 +420,16 @@ pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Val
                 .sum();
             let sleep_count = current.iter().filter(|(_, k, _, _)| k == "sleep").count();
             let meal_count = current.iter().filter(|(_, k, _, _)| k == "meal").count();
+            let step_records: Vec<_> = current.iter().filter(|(_, k, _, _)| k == "steps_day").collect();
+            let steps = step_records
+                .iter()
+                .max_by(|a, b| (a.3["created_at"].as_str(), &a.0).cmp(&(b.3["created_at"].as_str(), &b.0)))
+                .and_then(|(_, _, _, v)| v["steps"].as_i64());
+            let heart_rates: Vec<i64> = current
+                .iter()
+                .filter(|(_, k, _, _)| k == "heart_rate_sample")
+                .filter_map(|(_, _, _, v)| v["bpm"].as_i64())
+                .collect();
             let weight_grams = current
                 .iter()
                 .filter(|(_, k, _, _)| k == "weight")
@@ -376,6 +456,7 @@ pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Val
                 .collect();
             Ok((
                 json!([{"date":day,"workout_minutes":workout_minutes,"workout_count":workout_count,"sleep_minutes":sleep_minutes,"sleep_count":sleep_count,"meal_count":meal_count,
+                "steps":steps,"steps_count":step_records.len(),"heart_rate_count":heart_rates.len(),"heart_rate_min_bpm":heart_rates.iter().min(),"heart_rate_max_bpm":heart_rates.iter().max(),
                 "weight_grams":weight_grams,"medications_scheduled":medications_scheduled,"medications_taken":medications_taken}]),
                 ids,
             ))

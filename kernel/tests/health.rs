@@ -92,3 +92,26 @@ fn weekly_summary_uses_only_the_seven_days_ending_on_requested_day() {
     assert_eq!(rows[0]["workout_minutes"], 30);
     assert_eq!(result.source_ids.len(), 3);
 }
+
+#[test]
+fn manual_steps_and_heart_rate_are_factual_and_bounded() {
+    let dir = tempfile::tempdir().unwrap();
+    let h = open_domain("health".into(), MemKeys::new(), dir.path().to_string_lossy().into()).unwrap();
+    h.command("steps.log".into(), json!({"date":"2026-10-18","steps":0}).to_string()).unwrap();
+    h.command("heart_rate.log".into(), json!({"date":"2026-10-18","bpm":62}).to_string()).unwrap();
+    h.command("heart_rate.log".into(), json!({"date":"2026-10-18","bpm":88}).to_string()).unwrap();
+    assert!(h.command("steps.log".into(), json!({"date":"2026-10-18","steps":100}).to_string()).is_err());
+    assert!(h.command("heart_rate.log".into(), json!({"date":"2026-10-18","bpm":0}).to_string()).is_err());
+    let daily = h.query("daily_summary".into(), json!({"date":"2026-10-18"}).to_string()).unwrap();
+    let rows: Value = serde_json::from_str(&daily.rows_json).unwrap();
+    assert_eq!(rows[0]["steps"], 0);
+    assert_eq!(rows[0]["steps_count"], 1);
+    assert_eq!(rows[0]["heart_rate_count"], 2);
+    assert_eq!(rows[0]["heart_rate_min_bpm"], 62);
+    assert_eq!(rows[0]["heart_rate_max_bpm"], 88);
+    let weekly = h.query("weekly_summary".into(), json!({"date":"2026-10-18"}).to_string()).unwrap();
+    let week_rows: Value = serde_json::from_str(&weekly.rows_json).unwrap();
+    assert_eq!(week_rows[0]["steps_total"], 0);
+    assert_eq!(week_rows[0]["steps_days"], 1);
+    assert_eq!(week_rows[0]["heart_rate_count"], 2);
+}
