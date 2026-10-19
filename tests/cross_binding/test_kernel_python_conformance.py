@@ -129,6 +129,31 @@ def test_health_domain_is_available_through_python_binding(data_dir):
         handle.command("unsupported.command", "{}")
 
 
+def test_health_backup_and_health_connect_import_through_python_binding(tmp_path):
+    import json
+
+    source = binding.open_domain("health", _Vault(), str(tmp_path / "a"))
+    source.command("steps.log", '{"date":"2026-10-18","steps":5000}')
+    days = {
+        "format": "reva-health-connect-v1",
+        "days": [
+            {"date": "2026-10-18", "type": "steps", "steps": 7000, "origins": ["com.example.watch"]}
+        ],
+    }
+    first = source.import_data("health_connect", json.dumps(days).encode(), "{}")
+    again = source.import_data("health_connect", json.dumps(days).encode(), "{}")
+    assert (first.accepted, again.accepted, again.duplicates) == (1, 0, 1)
+    summary = json.loads(source.query("daily_summary", '{"date":"2026-10-18"}').rows_json)[0]
+    assert summary["steps"] == 5000, "the manual entry is used and never added to Health Connect's"
+    assert summary["steps_conflict"] is True
+    assert summary["steps_health_connect"] == 7000
+
+    restored = binding.open_domain("health", _Vault(), str(tmp_path / "b"))
+    report = restored.import_data("json", source.export("json"), "{}")
+    assert (report.accepted, len(report.rejected)) == (2, 0)
+    assert restored.projection_digest() == source.projection_digest()
+
+
 def test_validation_errors_carry_field_and_reason(data_dir):
     handle = binding.open_domain("finance", _Vault(), data_dir)
     with pytest.raises(binding.DomainError.Validation) as caught:

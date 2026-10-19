@@ -212,9 +212,6 @@ impl DomainHandle {
         data: Vec<u8>,
         options_json: String,
     ) -> Result<ImportReport, DomainError> {
-        if self.domain == health::DOMAIN {
-            return Err(DomainError::validation("format", "Health import is unavailable; use validated manual entry"));
-        }
         let options = import::parse_options(&options_json)?;
         let mut guard = self.lock();
         let store = &mut guard.store;
@@ -223,6 +220,7 @@ impl DomainHandle {
         let tx = store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let now = civil::now_iso();
         let report = match format.as_str() {
+            _ if self.domain == health::DOMAIN => health::import(&tx, &ctx, &format, &data, &options, &now)?,
             "json" => json_format::run(&tx, &ctx, &data, &options, &now)?,
             _ => import::run_statement(&tx, &ctx, &format, &data, &options, &now)?,
         };
