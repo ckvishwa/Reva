@@ -112,8 +112,21 @@ def test_wrong_and_missing_keys_are_typed_through_the_binding(data_dir):
 
 
 def test_unknown_domains_are_refused(data_dir):
+    with pytest.raises(binding.DomainError.Validation) as caught:
+        binding.open_domain("unknown-domain", _Vault(), data_dir)
+    assert caught.value.field == "domain"
+
+
+def test_health_domain_is_available_through_python_binding(data_dir):
+    import json
+
+    handle = binding.open_domain("health", _Vault(), data_dir)
+    summary = json.loads(handle.query("daily_summary", '{"date":"2026-10-19"}').rows_json)
+    assert len(summary) == 1
+    assert summary[0]["date"] == "2026-10-19"
+    assert summary[0]["workout_count"] == 0
     with pytest.raises(binding.DomainError.Validation):
-        binding.open_domain("health", _Vault(), data_dir)
+        handle.command("unsupported.command", "{}")
 
 
 def test_validation_errors_carry_field_and_reason(data_dir):

@@ -3,7 +3,7 @@
 Updated 2026-10-19. Work is isolated in `D:\Projects\Reva-finance-health` on `feat/android-daily-finance-health`; the original `D:\Projects\Reva` checkout is untouched. Base: `origin/main` `df7a3dc2451243713e9f02362141e54e1e8087fb`. Feature commits: `d53dc86`, `31d5a4e`, `b2b1ec9`, `ea8b9cc`, `774e814`.
 
 Draft PR: https://github.com/ckvishwa/Reva/pull/37. It remains draft until full-scope checks and hardware evidence are complete; do not merge on the preview APK evidence alone.
-Latest code head before this documentation update: `8785585bb8011c4f1a70f69825c0b3e6610e8bc7`. CI run `39199570772` is pending for that head; read its final result before relying on it. C3b/C3c PRs #31/#32 are separate drafts and have not been merged into this base.
+Latest preview APK code head: `8785585bb8011c4f1a70f69825c0b3e6610e8bc7`. The later PR #37 CI run `39199829346` on `a90e54d` had six passing lanes (Android, Android unit, avatar, Claude review, contracts, C# desktop) and two failures (Kernel, Python). Both failures were the same stale cross-binding assertion that `health` was an unknown domain. The test now checks a genuinely unknown domain, confirms Health opens through UniFFI, and confirms unsupported Health commands fail closed; local cross-binding run: 8 passed. CI for the correction commit is pending. C3b/C3c PRs #31/#32 are separate drafts and have not been merged into this base.
 
 ## Implemented on this branch
 
