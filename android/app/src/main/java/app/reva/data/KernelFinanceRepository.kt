@@ -75,6 +75,14 @@ class KernelFinanceRepository(
 
     override suspend fun netWorthSnapshots() = run { Json.snapshots(query(it, "list_networth_snapshots")) }
 
+    override suspend fun recurringSummary(asOf: String) = run {
+        FinanceReportsJson.recurring(query(it, "recurring_summary", JSONObject().put("as_of", asOf)))
+    }
+
+    override suspend fun netWorthReport(asOf: String) = run {
+        FinanceReportsJson.netWorth(query(it, "networth_report", JSONObject().put("as_of", asOf)))
+    }
+
     override suspend fun today() = run { Json.today(kernelToday(listOf(it), asOf())) }
 
     override suspend fun dailyAnalysis(asOf: String): Outcome<FinanceDailyAnalysis> {

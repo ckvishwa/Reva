@@ -52,6 +52,7 @@ import app.reva.ui.finance.AddTransactionForm
 import app.reva.ui.finance.AddTransactionViewModel
 import app.reva.ui.finance.FinanceScreen
 import app.reva.ui.finance.FinanceManageForm
+import app.reva.ui.health.HealthConnectUi
 import app.reva.ui.health.HealthScreen
 import app.reva.ui.finance.FinanceViewModel
 import app.reva.ui.finance.FormSheet
@@ -101,6 +102,7 @@ fun RevaRoot(
     versionName: String,
     onShare: (format: String, bytes: ByteArray) -> Unit,
     healthRepository: HealthRepository? = null,
+    healthConnect: HealthConnectUi? = null,
     sync: SyncService? = null,
     autoSync: AutoSyncController? = null,
     voice: VoiceController? = null,
@@ -190,7 +192,11 @@ fun RevaRoot(
                     onExport = { pendingExport = it },
                     syncStatus = syncStatus,
                 )
-                Tab.Health -> if (healthRepository != null) HealthScreen(healthRepository) else Text("Health unavailable")
+                Tab.Health -> if (healthRepository != null) {
+                    HealthScreen(healthRepository, healthConnect = healthConnect, onShareBackup = { bytes -> onShare(ExportShare.HEALTH_JSON, bytes) })
+                } else {
+                    Text("Health unavailable")
+                }
                 Tab.Talk ->
                     if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests, phoneActions) else TalkUnavailableScreen()
                 Tab.More -> MoreHost(

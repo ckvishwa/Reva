@@ -43,6 +43,14 @@ interface FinanceRepository {
 
     suspend fun netWorthSnapshots(): Outcome<List<NetWorthSnapshot>>
 
+    /** Kernel yearly totals of active recurring bills, subscriptions and income, per currency, as of [asOf]. */
+    suspend fun recurringSummary(asOf: String): Outcome<List<RecurringSummary>> =
+        Outcome.Failed(FinanceError(ErrorKind.Validation, "Recurring summary is unavailable."))
+
+    /** Kernel net worth from live balances as of [asOf], plus every snapshot with its change. */
+    suspend fun netWorthReport(asOf: String): Outcome<NetWorthReport> =
+        Outcome.Failed(FinanceError(ErrorKind.Validation, "Net worth report is unavailable."))
+
     suspend fun today(): Outcome<TodaySummary>
 
     /** Exact day totals and their contributing transaction IDs, computed by the local Kernel. */

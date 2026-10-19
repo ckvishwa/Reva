@@ -35,7 +35,9 @@ class KernelQueries(
                     val workout = if (data.workoutCount == 0) "No workouts were recorded."
                         else "${data.workoutMinutes} workout minutes across ${data.workoutCount} entries."
                     val steps = if (data.stepsDays == 0) "No steps were recorded."
-                        else "${data.stepsTotal} steps across ${data.stepsDays} recorded days."
+                        else "${data.stepsTotal} steps across ${data.stepsDays} recorded days." +
+                            if (data.stepsConflictDates.isEmpty()) "" else
+                                " On ${data.stepsConflictDates.size} of those days your entry and Health Connect differ; your entry was used."
                     val heartRate = if (data.heartRateCount == 0) "No heart-rate readings were recorded."
                         else "Recorded heart-rate range ${data.heartRateMinBpm} to ${data.heartRateMaxBpm} bpm across ${data.heartRateCount} readings."
                     BrainResult.Answer("For ${data.startDate} through ${data.endDate}: $sleep $workout " +

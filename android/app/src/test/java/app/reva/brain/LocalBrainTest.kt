@@ -51,6 +51,21 @@ class LocalBrainTest {
         assertTrue(result.text.contains("4 source records"))
         assertEquals(0, providerCalls)
     }
+
+    @Test fun weekly_health_answer_says_when_health_connect_and_an_entry_disagree() = runBlocking {
+        val health = object : HealthRepository {
+            override suspend fun daily(date: String) = Outcome.Ok(HealthDaily(date, 0, 0, 0, null, 0, 0, 0))
+            override suspend fun weekly(endDate: String) =
+                Outcome.Ok(HealthWeekly("2026-10-12", endDate, 0, 0, 0, 0, 0, 0, 0, 2, 5000, 1, stepsConflictDates = listOf(endDate)))
+            override suspend fun records(date: String) = Outcome.Ok(emptyList<HealthRecord>())
+            override suspend fun schedules(date: String) = Outcome.Ok(emptyList<MedicationSchedule>())
+            override suspend fun command(kind: String, payload: JSONObject) = Outcome.Ok(Unit)
+        }
+        val replies = PolicyReplies(loadRegistry(), local = KernelQueries(FakeFinanceRepository(), health,
+            today = { java.time.LocalDate.parse("2026-10-18") }))
+        val text = replies.reply("show my health this week").text
+        assertTrue(text, text.contains("5000 steps across 1 recorded days. On 1 of those days your entry and Health Connect differ"))
+    }
     @Test fun spending_question_uses_exact_kernel_period_totals_and_cites_records() = runBlocking {
         val repo = FakeFinanceRepository().apply {
             periodAnalysis = FinancePeriodAnalysis("this_month",
