@@ -2,8 +2,8 @@
   "serial": "emulator-5554",
   "receipt_before": {
     "stats": {
-      "ACTIVE": "01:38",
-      "ELAPSED": "01:45",
+      "ACTIVE": "01:49",
+      "ELAPSED": "01:57",
       "PAUSED": "00:07",
       "EXERCISES": "1",
       "WORKING SETS": "3",
@@ -12,15 +12,15 @@
     "sets": {
       "Set 1": [
         "55 lb x 10",
-        "20:08"
+        "20:28"
       ],
       "Set 2": [
         "55 lb x 9",
-        "20:08"
+        "20:28"
       ],
       "Set 3": [
         "55 lb x 8",
-        "20:08"
+        "20:29"
       ]
     },
     "notes": [
@@ -29,14 +29,14 @@
     ],
     "header": "Workout receipt \u00b7 plan v1",
     "date": "2026-10-22",
-    "range": "20:08 - 20:09 UTC",
+    "range": "20:28 - 20:30 UTC",
     "volume": "1485 lb"
   },
   "backup_bytes": 17905,
   "receipt_after": {
     "stats": {
-      "ACTIVE": "01:38",
-      "ELAPSED": "01:45",
+      "ACTIVE": "01:49",
+      "ELAPSED": "01:57",
       "PAUSED": "00:07",
       "EXERCISES": "1",
       "WORKING SETS": "3",
@@ -45,15 +45,15 @@
     "sets": {
       "Set 1": [
         "55 lb x 10",
-        "20:08"
+        "20:28"
       ],
       "Set 2": [
         "55 lb x 9",
-        "20:08"
+        "20:28"
       ],
       "Set 3": [
         "55 lb x 8",
-        "20:08"
+        "20:29"
       ]
     },
     "notes": [
@@ -62,7 +62,7 @@
     ],
     "header": "Workout receipt \u00b7 plan v1",
     "date": "2026-10-22",
-    "range": "20:08 - 20:09 UTC",
+    "range": "20:28 - 20:30 UTC",
     "volume": "1485 lb"
   },
   "passed": 39,
@@ -79,15 +79,15 @@
       "detail": {
         "Set 1": [
           "55 lb x 10",
-          "20:08"
+          "20:28"
         ],
         "Set 2": [
           "55 lb x 9",
-          "20:08"
+          "20:28"
         ],
         "Set 3": [
           "55 lb x 8",
-          "20:08"
+          "20:29"
         ]
       }
     },
@@ -108,8 +108,8 @@
       "check": "fixture: pause recorded",
       "pass": true,
       "detail": {
-        "ACTIVE": "01:38",
-        "ELAPSED": "01:45",
+        "ACTIVE": "01:49",
+        "ELAPSED": "01:57",
         "PAUSED": "00:07",
         "EXERCISES": "1",
         "WORKING SETS": "3",
@@ -214,7 +214,7 @@
     {
       "check": "restored receipt matches: range",
       "pass": true,
-      "detail": "20:08 - 20:09 UTC"
+      "detail": "20:28 - 20:30 UTC"
     },
     {
       "check": "restored receipt matches: volume",
@@ -235,15 +235,15 @@
       "detail": {
         "Set 1": [
           "55 lb x 10",
-          "20:08"
+          "20:28"
         ],
         "Set 2": [
           "55 lb x 9",
-          "20:08"
+          "20:28"
         ],
         "Set 3": [
           "55 lb x 8",
-          "20:08"
+          "20:29"
         ]
       }
     },
@@ -251,8 +251,8 @@
       "check": "restored receipt matches: stats",
       "pass": true,
       "detail": {
-        "ACTIVE": "01:38",
-        "ELAPSED": "01:45",
+        "ACTIVE": "01:49",
+        "ELAPSED": "01:57",
         "PAUSED": "00:07",
         "EXERCISES": "1",
         "WORKING SETS": "3",
