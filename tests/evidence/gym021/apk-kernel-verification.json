@@ -1,0 +1,35 @@
+{
+  "apk": "android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+  "newest_kernel_source": "kernel\\src\\domains\\health\\gym.rs",
+  "abis": {
+    "arm64-v8a": {
+      "packaged_sha256": "95b24acf85a124096c3014f5ef0e2af360f9f1e4a2d0c419f5d7f619bbc7b566",
+      "packaged_bytes": 7285624,
+      "built_bytes": 8730240,
+      "code_fingerprint": "da4fd48dc871b65db09742e73bca3732a066fa0a5a38ec35d8c4e9bac388ccce",
+      "built_at": 1792698810.986046,
+      "newest_source_at": 1792693677.040218,
+      "checks": {
+        "packaged_code_equals_built_code": true,
+        "built_after_newest_source": true,
+        "contains_expected_string": true
+      },
+      "pass": true
+    },
+    "x86_64": {
+      "packaged_sha256": "0afbffccaa9e699f9803d43657e8df17b8956f2d6aed2108bc16b1695bd09f12",
+      "packaged_bytes": 7990568,
+      "built_bytes": 8875040,
+      "code_fingerprint": "a399e08de1ead8f9e8558d44d8331120af3de64461736082cd1d79c438521b4b",
+      "built_at": 1792698856.2295675,
+      "newest_source_at": 1792693677.040218,
+      "checks": {
+        "packaged_code_equals_built_code": true,
+        "built_after_newest_source": true,
+        "contains_expected_string": true
+      },
+      "pass": true
+    }
+  },
+  "pass": true
+}

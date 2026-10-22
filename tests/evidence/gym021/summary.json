@@ -1,0 +1,319 @@
+{
+  "serial": "emulator-5554",
+  "receipt_before": {
+    "stats": {
+      "ACTIVE": "01:38",
+      "ELAPSED": "01:45",
+      "PAUSED": "00:07",
+      "EXERCISES": "1",
+      "WORKING SETS": "3",
+      "PLANNED": "16"
+    },
+    "sets": {
+      "Set 1": [
+        "55 lb x 10",
+        "20:08"
+      ],
+      "Set 2": [
+        "55 lb x 9",
+        "20:08"
+      ],
+      "Set 3": [
+        "55 lb x 8",
+        "20:08"
+      ]
+    },
+    "notes": [
+      "Felt strong",
+      "Right elbow tight"
+    ],
+    "header": "Workout receipt \u00b7 plan v1",
+    "date": "2026-10-22",
+    "range": "20:08 - 20:09 UTC",
+    "volume": "1485 lb"
+  },
+  "backup_bytes": 17905,
+  "receipt_after": {
+    "stats": {
+      "ACTIVE": "01:38",
+      "ELAPSED": "01:45",
+      "PAUSED": "00:07",
+      "EXERCISES": "1",
+      "WORKING SETS": "3",
+      "PLANNED": "16"
+    },
+    "sets": {
+      "Set 1": [
+        "55 lb x 10",
+        "20:08"
+      ],
+      "Set 2": [
+        "55 lb x 9",
+        "20:08"
+      ],
+      "Set 3": [
+        "55 lb x 8",
+        "20:08"
+      ]
+    },
+    "notes": [
+      "Felt strong",
+      "Right elbow tight"
+    ],
+    "header": "Workout receipt \u00b7 plan v1",
+    "date": "2026-10-22",
+    "range": "20:08 - 20:09 UTC",
+    "volume": "1485 lb"
+  },
+  "passed": 39,
+  "failed": 0,
+  "checks": [
+    {
+      "check": "airplane mode is irrelevant: nothing here touches the network",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "fixture: three sets 55 lb x 10, 9, 8",
+      "pass": true,
+      "detail": {
+        "Set 1": [
+          "55 lb x 10",
+          "20:08"
+        ],
+        "Set 2": [
+          "55 lb x 9",
+          "20:08"
+        ],
+        "Set 3": [
+          "55 lb x 8",
+          "20:08"
+        ]
+      }
+    },
+    {
+      "check": "fixture: volume is 1485 lb",
+      "pass": true,
+      "detail": "1485 lb"
+    },
+    {
+      "check": "fixture: notes recorded",
+      "pass": true,
+      "detail": [
+        "Felt strong",
+        "Right elbow tight"
+      ]
+    },
+    {
+      "check": "fixture: pause recorded",
+      "pass": true,
+      "detail": {
+        "ACTIVE": "01:38",
+        "ELAPSED": "01:45",
+        "PAUSED": "00:07",
+        "EXERCISES": "1",
+        "WORKING SETS": "3",
+        "PLANNED": "16"
+      }
+    },
+    {
+      "check": "fixture: session is on plan v1",
+      "pass": true,
+      "detail": "Workout receipt \u00b7 plan v1"
+    },
+    {
+      "check": "fixture: the program is now plan v2",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "the export provider is not readable by another process without the share's grant",
+      "pass": true,
+      "detail": "Error while accessing provider:app.reva.android.exports\r\njava.lang.SecurityException: Permission Denial: opening provider androidx.core.cont"
+    },
+    {
+      "check": "the share target saved the backup to Downloads",
+      "pass": true,
+      "detail": "reva-health-2026-10-22.json"
+    },
+    {
+      "check": "the receiver read the stream through the share's grant",
+      "pass": true,
+      "detail": "OK 17905 bytes as reva-health-2026-10-22.json from app.reva.android.exports"
+    },
+    {
+      "check": "backup format is reva-health-v2",
+      "pass": true,
+      "detail": "reva-health-v2"
+    },
+    {
+      "check": "backup holds 1 program, 1 session, 3 sets, no deletions",
+      "pass": true,
+      "detail": {
+        "deleted": 0,
+        "programs": 1,
+        "sessions": 1,
+        "sets": 3
+      }
+    },
+    {
+      "check": "backup: program is plan v2, session is plan v1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "backup: sets are 55000 milli-lb x 10, 9, 8",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "backup: notes and pause interval",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "fresh store: no plan, no workouts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "preview: 5 new records, nothing else",
+      "pass": true,
+      "detail": "This file has 5 new records, 0 already here and 0 that cannot be restored."
+    },
+    {
+      "check": "no success line before confirming",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "result reports the Kernel's commit",
+      "pass": true,
+      "detail": "Restored 5 records; 0 were already here; 0 skipped."
+    },
+    {
+      "check": "restored plan is v2",
+      "pass": true,
+      "detail": "REVA Base Program \u00b7 rotation from 2026-10-22 \u00b7 plan v2"
+    },
+    {
+      "check": "restored Day 2 keeps the edited name",
+      "pass": true,
+      "detail": "Pull A: Lat Width + Biceps edited"
+    },
+    {
+      "check": "restored receipt matches: header",
+      "pass": true,
+      "detail": "Workout receipt \u00b7 plan v1"
+    },
+    {
+      "check": "restored receipt matches: date",
+      "pass": true,
+      "detail": "2026-10-22"
+    },
+    {
+      "check": "restored receipt matches: range",
+      "pass": true,
+      "detail": "20:08 - 20:09 UTC"
+    },
+    {
+      "check": "restored receipt matches: volume",
+      "pass": true,
+      "detail": "1485 lb"
+    },
+    {
+      "check": "restored receipt matches: notes",
+      "pass": true,
+      "detail": [
+        "Felt strong",
+        "Right elbow tight"
+      ]
+    },
+    {
+      "check": "restored receipt matches: sets",
+      "pass": true,
+      "detail": {
+        "Set 1": [
+          "55 lb x 10",
+          "20:08"
+        ],
+        "Set 2": [
+          "55 lb x 9",
+          "20:08"
+        ],
+        "Set 3": [
+          "55 lb x 8",
+          "20:08"
+        ]
+      }
+    },
+    {
+      "check": "restored receipt matches: stats",
+      "pass": true,
+      "detail": {
+        "ACTIVE": "01:38",
+        "ELAPSED": "01:45",
+        "PAUSED": "00:07",
+        "EXERCISES": "1",
+        "WORKING SETS": "3",
+        "PLANNED": "16"
+      }
+    },
+    {
+      "check": "repeat: 0 new records, 5 already here",
+      "pass": true,
+      "detail": "This file has 0 new records, 5 already here and 0 that cannot be restored."
+    },
+    {
+      "check": "repeat: confirm is disabled",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "cancelled picker: no preview and no result line",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "reva-bad-json.json: refused with a reason",
+      "pass": true,
+      "detail": "field=file, reason=not valid JSON: key must be a string at line 1 column 2"
+    },
+    {
+      "check": "reva-bad-json.json: nothing to confirm",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "reva-wrong-format.json: refused with a reason",
+      "pass": true,
+      "detail": "field=format, reason=not a REVA Health backup"
+    },
+    {
+      "check": "reva-wrong-format.json: nothing to confirm",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "tampered: the altered set cannot be restored, the rest are already here",
+      "pass": true,
+      "detail": "This file has 0 new records, 4 already here and 1 that cannot be restored."
+    },
+    {
+      "check": "tampered: confirm is disabled",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "after repeat, cancel, invalid and tampered files the receipt is unchanged",
+      "pass": true,
+      "detail": true
+    },
+    {
+      "check": "exactly one workout in Recent workouts",
+      "pass": true,
+      "detail": 1
+    }
+  ],
+  "screenshots": 18
+}
