@@ -55,7 +55,7 @@ fun SessionDetailsScreen(state: GymUiState, vm: GymViewModel, modifier: Modifier
             Spacer(Modifier.height(12.dp))
             GymHeader(detail.session.label, "Workout receipt · plan v${detail.session.planVersion}", { vm.openPlan() })
         }
-        item { GymStatusStrip(state.phase, state.savedNote, state.error) }
+        item { GymStatusSlot(state.phase, state.savedNote, state.error) }
         item { ReceiptHeader(detail) }
         item { SummaryCards(detail) }
         item { GymSectionTitle("Exercise breakdown") }

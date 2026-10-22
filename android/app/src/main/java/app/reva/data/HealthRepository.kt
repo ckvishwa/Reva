@@ -124,7 +124,10 @@ interface HealthRepository {
     suspend fun schedules(date: String): Outcome<List<MedicationSchedule>>
     suspend fun command(kind: String, payload: JSONObject): Outcome<Unit>
 
-    /** The `reva-health-v1` JSON backup: a plain, unencrypted copy of every Health record. */
+    /**
+     * The `reva-health-v2` JSON backup: a plain, unencrypted copy of every Health record and,
+     * since GYM-02, of the gym programs, workouts and sets that share this domain.
+     */
     suspend fun exportJson(): Outcome<ByteArray> = Outcome.Failed(FinanceError(ErrorKind.Validation, "Health export is unavailable."))
 
     /** `format` is `json` (a Health backup) or `health_connect` (daily aggregates read from Health Connect). */

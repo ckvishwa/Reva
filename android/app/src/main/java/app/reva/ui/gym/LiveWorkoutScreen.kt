@@ -85,12 +85,14 @@ fun LiveWorkoutScreen(state: GymUiState, vm: GymViewModel, modifier: Modifier = 
             GymHeader(session.label, "Plan v${session.planVersion} · day ${session.snapshot?.dayIndex ?: "-"}", { vm.openPlan() })
         }
         item { SessionHeaderCard(state, seconds, vm) }
-        item { GymStatusStrip(state.phase, state.savedNote, state.error) }
+        item { ExerciseNavigator(state, block, vm) }
+        item { SetLogger(state, vm) }
+        // Below the logger, and in a slot that keeps its height: a save notice or a rest timer
+        // appearing must never move the weight and reps fields under the user's thumb (GYM-02).
+        item { GymStatusSlot(state.phase, state.savedNote, state.error) }
         if (state.restTimer.active) {
             item { RestTimerCard(state, vm) }
         }
-        item { ExerciseNavigator(state, block, vm) }
-        item { SetLogger(state, vm) }
         if (block != null && block.sets.isNotEmpty()) {
             item { GymSectionTitle("Logged this exercise") }
             items(block.sets, key = { it.id }) { set -> LoggedSetRow(set, state, vm) }
@@ -239,6 +241,8 @@ private fun ExerciseNavigator(state: GymUiState, block: GymExerciseBlock?, vm: G
                     state.previous?.summary ?: if (state.previousLoaded) "No previous record." else "Reading history...",
                     style = RevaText.Amount,
                     color = RevaColors.GymSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.testTag("gym_previous"),
                 )
                 Text(

@@ -238,6 +238,44 @@ class GymComposeTest {
         assertEquals(90, reopened.state.value.program!!.days.sumOf { it.plannedWorkingSets })
     }
 
+    /**
+     * GYM-02: logging a set shows a save notice and may start the rest timer. Neither may move the
+     * weight and reps fields, which is what made a hand-driven run type into the wrong field.
+     */
+    @Test fun the_set_logger_does_not_move_when_a_set_is_saved() {
+        val repository = newRepository()
+        val vm = GymViewModel(repository)
+        rule.setContent { GymUnderTest(vm) }
+        vm.load()
+        rule.waitUntil(15_000) { vm.state.value.phase.name != "Loading" }
+        rule.onNodeWithTag("gym_create_plan").performClick()
+        rule.waitUntil(20_000) { vm.state.value.program != null }
+        onPlan("gym_day_day-2").performClick()
+        onPlan("gym_start_workout").performClick()
+        rule.waitUntil(20_000) { vm.state.value.session != null }
+        // The rest timer is on, so both the save notice and the timer card are in play.
+        onLive("gym_rest_enabled").performClick()
+        rule.waitForIdle()
+
+        val before = onLive("gym_input_load").fetchSemanticsNode().boundsInRoot
+        val repsBefore = onLive("gym_input_reps").fetchSemanticsNode().boundsInRoot
+        logSet("55", "10")
+        rule.waitUntil(10_000) { vm.state.value.session?.metrics?.workingSetsCompleted == 1 }
+        rule.waitForIdle()
+
+        assertEquals("the saved notice moved the weight field", before, rule.onNodeWithTag("gym_input_load").fetchSemanticsNode().boundsInRoot)
+        assertEquals("the saved notice moved the reps field", repsBefore, rule.onNodeWithTag("gym_input_reps").fetchSemanticsNode().boundsInRoot)
+        assertTrue("the save notice is shown", vm.state.value.savedNote != null)
+        assertTrue("the rest timer started", vm.state.value.restTimer.remainingSeconds > 0)
+
+        // A refused write shows an error in the same slot, and still does not move the fields.
+        onLive("gym_input_reps").performTextClearance()
+        onLive("gym_input_load").performTextClearance()
+        onLive("gym_input_load").performTextInput("55")
+        rule.waitForIdle()
+        assertEquals(before, rule.onNodeWithTag("gym_input_load").fetchSemanticsNode().boundsInRoot)
+    }
+
     @Test fun a_warm_up_set_is_kept_out_of_the_working_set_count_on_the_receipt() {
         val repository = newRepository()
         val vm = GymViewModel(repository)

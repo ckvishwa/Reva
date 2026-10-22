@@ -12,7 +12,7 @@ import java.time.LocalDate
  * unencrypted copy, which the confirmation dialog says before anything is shared.
  */
 object ExportShare {
-    /** Format of the Health backup (`reva-health-v1` JSON); Finance uses `json` and `csv`. */
+    /** Format of the Health backup (`reva-health-v2` JSON, gym training included); Finance uses `json` and `csv`. */
     const val HEALTH_JSON = "health_json"
 
     fun fileName(format: String, today: LocalDate): String = when (format) {

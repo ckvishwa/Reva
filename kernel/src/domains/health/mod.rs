@@ -50,7 +50,10 @@ pub fn command_names() -> Vec<String> {
 }
 
 /// The Health backup file written by `export("json")` and read back by `import_data("json")`.
-pub const EXPORT_FORMAT: &str = "reva-health-v1";
+/// v2 adds the `gym` section (GYM-02); a v1 file, which carries health records only, still restores.
+pub const EXPORT_FORMAT: &str = "reva-health-v2";
+/// The first backup format: health records, no gym training. Accepted on import, never written.
+pub const EXPORT_FORMAT_V1: &str = "reva-health-v1";
 /// Daily aggregates read from Health Connect on Android (`import_data("health_connect")`).
 pub const HEALTH_CONNECT_FORMAT: &str = "reva-health-connect-v1";
 const HEALTH_CONNECT: &str = "health_connect";
@@ -686,7 +689,7 @@ pub fn export(conn: &Connection, format: &str) -> DomainResult<Vec<u8>> {
     }
     let records: Vec<Value> =
         digest_rows(conn)?.into_iter().map(|(_, v)| serde_json::from_str(&v)).collect::<Result<_, _>>()?;
-    Ok(serde_json::to_vec_pretty(&json!({"format":EXPORT_FORMAT,"records":records}))?)
+    Ok(serde_json::to_vec_pretty(&json!({"format":EXPORT_FORMAT,"records":records,"gym":gym::export_section(conn)?}))?)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -790,15 +793,23 @@ fn restore_refusal(conn: &Connection, kind: &str, day: &str, raw: &Value) -> Dom
 }
 
 fn restore(conn: &Connection, ctx: &EventCtx, top: &Map<String, Value>) -> DomainResult<Vec<RowResult>> {
-    fields(top, &["format", "records"])?;
-    if top.get("format").and_then(Value::as_str) != Some(EXPORT_FORMAT) {
-        return Err(DomainError::validation("format", "not a REVA Health backup"));
-    }
+    fields(top, &["format", "records", "gym"])?;
+    let gym_section = match top.get("format").and_then(Value::as_str) {
+        Some(EXPORT_FORMAT) => top.get("gym"),
+        // A backup written before gym training existed. It restores as it always did.
+        Some(EXPORT_FORMAT_V1) if !top.contains_key("gym") => None,
+        Some(EXPORT_FORMAT_V1) => return Err(DomainError::validation("gym", "a v1 backup carries no gym training")),
+        _ => return Err(DomainError::validation("format", "not a REVA Health backup")),
+    };
     let records = top
         .get("records")
         .and_then(Value::as_array)
         .ok_or_else(|| DomainError::validation("records", "must be a list"))?;
-    if records.len() > import::MAX_ROWS {
+    let gym_rows = match gym_section {
+        Some(section) => gym::section_len(section)?,
+        None => 0,
+    };
+    if records.len() + gym_rows > import::MAX_ROWS {
         return Err(DomainError::validation("records", "too many records"));
     }
     // Schedules first, so taken entries can be checked against them whatever order the file uses.
@@ -838,6 +849,10 @@ fn restore(conn: &Connection, ctx: &EventCtx, top: &Map<String, Value>) -> Domai
         }
         append(conn, ctx, &id, &kind, "created", raw.clone())?;
         out.push(row(n, "accepted", None, &info, raw));
+    }
+    // Gym training continues the same row numbering, so one report still covers the whole file.
+    if let Some(section) = gym_section {
+        out.extend(gym::restore(conn, ctx, section, records.len() as u64)?);
     }
     out.sort_by_key(|r| r.row);
     Ok(out)

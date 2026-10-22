@@ -53,7 +53,9 @@ fn backup_restores_into_a_fresh_install_with_identical_state_and_reimport_is_all
     seed(&a);
     let backup = a.export("json".into()).unwrap();
     let parsed: Value = serde_json::from_slice(&backup).unwrap();
-    assert_eq!(parsed["format"], "reva-health-v1");
+    // GYM-02 deliberately moved the written format to v2, which adds the gym section. A v1 file
+    // still restores; a_backup_written_before_gym_training_still_restores in gym_backup.rs covers it.
+    assert_eq!(parsed["format"], "reva-health-v2");
 
     let b = health(b_dir.path());
     let dry = b.import_data("json".into(), backup.clone(), r#"{"dry_run":true}"#.into()).unwrap();

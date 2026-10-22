@@ -69,7 +69,7 @@ private fun EmptyPlan(state: GymUiState, vm: GymViewModel, modifier: Modifier = 
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         GymHeader("Training Plan", "No plan on this device yet", onBack = null)
-        GymStatusStrip(state.phase, state.savedNote, state.error)
+        GymStatusSlot(state.phase, state.savedNote, state.error)
         GymCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PixelGlyph(PixelIcon.Dumbbell, size = 20.dp, tint = RevaColors.GymAccent)
@@ -115,7 +115,7 @@ private fun PlanContent(state: GymUiState, program: GymProgram, vm: GymViewModel
                 )
             }
         }
-        item { GymStatusStrip(state.phase, state.savedNote, state.error) }
+        item { GymStatusSlot(state.phase, state.savedNote, state.error) }
         item { DayStrip(program.days, state.selectedDayId ?: day?.dayId, vm::selectDay) }
         if (day == null) {
             item { Text("Choose a day", color = RevaColors.GymSecondary) }

@@ -20,7 +20,8 @@ use serde_json::{json, Map, Value};
 
 use crate::civil::{self, Date};
 use crate::error::{DomainError, DomainResult};
-use crate::events::{self, Event, EventDraft};
+use crate::events::{self, Event, EventCtx, EventDraft};
+use crate::import::RowResult;
 use crate::store::Migration;
 
 use super::{fields, object, ranged, text};
@@ -1473,6 +1474,213 @@ fn detail(session: &Value, sets: &[Value]) -> DomainResult<Value> {
         "metrics": metrics(session, sets)?,
         "exercises": breakdown(session, sets),
     }))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Backup and restore (GYM-02). Gym training travels inside the Health backup, in its own `gym`
+// section, so one file is still the whole domain. Every record is the Kernel's own stored payload,
+// so a restore revalidates it with the same rules that let it be written in the first place:
+// loads stay exact integers, units and equipment variants stay as recorded, and a session keeps
+// its own plan snapshot, timestamps and pause intervals.
+
+/// Which projection table holds an aggregate type.
+fn table_of(aggregate_type: &str) -> DomainResult<&'static str> {
+    match aggregate_type {
+        "gym_program" => Ok("gym_programs"),
+        "gym_session" => Ok("gym_sessions"),
+        "gym_set" => Ok("gym_sets"),
+        other => Err(DomainError::validation("aggregate_type", format!("not a gym aggregate: {other}"))),
+    }
+}
+
+fn payloads(conn: &Connection, table: &str) -> DomainResult<Vec<Value>> {
+    let mut stmt = conn.prepare(&format!("SELECT data_json FROM {table} ORDER BY id"))?;
+    let raw: Vec<String> = stmt.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    raw.iter().map(|text| Ok(serde_json::from_str(text)?)).collect()
+}
+
+/// What this device has deleted. Carried so a restore can keep a deleted workout deleted instead
+/// of letting an older copy of the file bring it back.
+fn deletions(conn: &Connection) -> DomainResult<Vec<Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT aggregate_type, aggregate_id, deleted_at FROM tombstones \
+         WHERE aggregate_type IN ('gym_program','gym_session','gym_set') \
+         ORDER BY aggregate_type, aggregate_id",
+    )?;
+    let rows: Vec<(String, String, String)> =
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<Result<_, _>>()?;
+    Ok(rows
+        .into_iter()
+        .map(|(aggregate_type, id, deleted_at)| {
+            json!({"aggregate_type": aggregate_type, "id": id, "deleted_at": deleted_at})
+        })
+        .collect())
+}
+
+/// The `gym` section of the Health backup.
+pub fn export_section(conn: &Connection) -> DomainResult<Value> {
+    Ok(json!({
+        "programs": payloads(conn, "gym_programs")?,
+        "sessions": payloads(conn, "gym_sessions")?,
+        "sets": payloads(conn, "gym_sets")?,
+        "deleted": deletions(conn)?,
+    }))
+}
+
+fn list<'a>(map: &'a Map<String, Value>, key: &str) -> DomainResult<&'a [Value]> {
+    match map.get(key) {
+        None | Some(Value::Null) => Ok(&[]),
+        Some(Value::Array(items)) => Ok(items.as_slice()),
+        Some(_) => Err(DomainError::validation(key, "must be a list")),
+    }
+}
+
+/// How many records a `gym` section holds, counted before anything is written.
+pub fn section_len(section: &Value) -> DomainResult<usize> {
+    let map = object(section)?;
+    fields(map, &["programs", "sessions", "sets", "deleted"])?;
+    let mut total = 0;
+    for key in ["programs", "sessions", "sets", "deleted"] {
+        total += list(map, key)?.len();
+    }
+    Ok(total)
+}
+
+fn current_payload(conn: &Connection, aggregate_type: &str, id: &str) -> DomainResult<Option<Value>> {
+    load_json(conn, &format!("SELECT data_json FROM {} WHERE id=?1", table_of(aggregate_type)?), id)
+}
+
+/// Restore the `gym` section. Row numbers continue after the health records, so one import report
+/// still accounts for every line of the file exactly once.
+pub fn restore(conn: &Connection, ctx: &EventCtx, section: &Value, offset: u64) -> DomainResult<Vec<RowResult>> {
+    let map = object(section)?;
+    fields(map, &["programs", "sessions", "sets", "deleted"])?;
+    let mut out = Vec::new();
+    let mut n = offset;
+    // Programs, then sessions, then sets: a set is read after the workout it belongs to.
+    for (key, aggregate_type) in [("programs", "gym_program"), ("sessions", "gym_session"), ("sets", "gym_set")] {
+        for raw in list(map, key)? {
+            n += 1;
+            out.push(restore_record(conn, ctx, aggregate_type, raw, n)?);
+        }
+    }
+    for raw in list(map, "deleted")? {
+        n += 1;
+        out.push(restore_deletion(conn, ctx, raw, n)?);
+    }
+    Ok(out)
+}
+
+fn gym_row(
+    n: u64,
+    status: &str,
+    reason: Option<&str>,
+    aggregate_type: &str,
+    id: &str,
+    date: Option<String>,
+    raw: &Value,
+) -> RowResult {
+    RowResult {
+        row: n,
+        status: status.to_string(),
+        reason: reason.map(str::to_string),
+        date,
+        amount_minor: None,
+        description: Some(aggregate_type.to_string()),
+        record_id: if id.is_empty() { None } else { Some(id.to_string()) },
+        warning: None,
+        raw: raw.to_string().chars().take(300).collect(),
+    }
+}
+
+fn restore_record(
+    conn: &Connection,
+    ctx: &EventCtx,
+    aggregate_type: &str,
+    raw: &Value,
+    n: u64,
+) -> DomainResult<RowResult> {
+    let id = raw.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+    let date = raw.get("date").and_then(Value::as_str).map(str::to_string);
+    // The same validation that guards a live write, so a hand-edited backup cannot widen a rule.
+    let checked = object(raw).and_then(|map| {
+        super::record_id(&id)?;
+        match aggregate_type {
+            "gym_program" => validate_program(&id, map).map(|_| ()),
+            "gym_session" => validate_session(&id, map).map(|_| ()),
+            _ => validate_set(&id, map).map(|_| ()),
+        }
+    });
+    if let Err(error) = checked {
+        return Ok(gym_row(n, "rejected", Some(&error.to_string()), aggregate_type, &id, date, raw));
+    }
+    if events::is_tombstoned(conn, aggregate_type, &id)? {
+        return Ok(gym_row(
+            n,
+            "rejected",
+            Some("deleted on this device; not restored"),
+            aggregate_type,
+            &id,
+            date,
+            raw,
+        ));
+    }
+    if let Some(current) = current_payload(conn, aggregate_type, &id)? {
+        return Ok(if events::canonical(&current) == events::canonical(raw) {
+            gym_row(n, "duplicate", None, aggregate_type, &id, date, raw)
+        } else {
+            gym_row(
+                n,
+                "rejected",
+                Some("a different record with this id already exists"),
+                aggregate_type,
+                &id,
+                date,
+                raw,
+            )
+        });
+    }
+    let event = events::append_local(conn, ctx, draft(aggregate_type, &id, "imported", raw.clone()))?;
+    apply(conn, &event)?;
+    Ok(gym_row(n, "accepted", None, aggregate_type, &id, date, raw))
+}
+
+/// A deletion recorded in the file. It is never allowed to remove a workout this device still
+/// holds: restoring a backup must not be a way to destroy data. It only keeps a record that is
+/// already absent from coming back later.
+fn restore_deletion(conn: &Connection, ctx: &EventCtx, raw: &Value, n: u64) -> DomainResult<RowResult> {
+    let map = match object(raw) {
+        Ok(map) => map,
+        Err(error) => return Ok(gym_row(n, "rejected", Some(&error.to_string()), "gym_deleted", "", None, raw)),
+    };
+    let checked = (|| -> DomainResult<(String, String)> {
+        fields(map, &["aggregate_type", "id", "deleted_at"])?;
+        let aggregate_type = one_of(map, "aggregate_type", AGGREGATES)?;
+        let id = super::record_id(&text(map, "id", 64)?)?;
+        timestamp(map, "deleted_at")?;
+        Ok((aggregate_type, id))
+    })();
+    let (aggregate_type, id) = match checked {
+        Ok(pair) => pair,
+        Err(error) => return Ok(gym_row(n, "rejected", Some(&error.to_string()), "gym_deleted", "", None, raw)),
+    };
+    if events::is_tombstoned(conn, &aggregate_type, &id)? {
+        return Ok(gym_row(n, "duplicate", None, &aggregate_type, &id, None, raw));
+    }
+    if current_payload(conn, &aggregate_type, &id)?.is_some() {
+        return Ok(gym_row(
+            n,
+            "rejected",
+            Some("still recorded on this device; restoring a backup never deletes a workout"),
+            &aggregate_type,
+            &id,
+            None,
+            raw,
+        ));
+    }
+    let event = events::append_local(conn, ctx, tombstone(&aggregate_type, id.clone()))?;
+    apply(conn, &event)?;
+    Ok(gym_row(n, "accepted", None, &aggregate_type, &id, None, raw))
 }
 
 #[cfg(test)]

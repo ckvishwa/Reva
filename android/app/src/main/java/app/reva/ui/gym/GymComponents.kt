@@ -229,6 +229,20 @@ fun GymIconButton(
     }
 }
 
+/**
+ * A fixed-height place for the status line. The slot keeps its height whether or not there is
+ * anything to say, so a save notice can never move the field the user is typing in (GYM-02).
+ */
+@Composable
+fun GymStatusSlot(phase: GymPhase, savedNote: String?, error: String?, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().height(STATUS_SLOT_HEIGHT)) {
+        GymStatusStrip(phase, savedNote, error)
+    }
+}
+
+/** Two lines of bodySmall plus the strip's own padding and border. */
+private val STATUS_SLOT_HEIGHT = 56.dp
+
 /** One line of truth about the last action: saving, saved, or refused. Never "saved" before a commit. */
 @Composable
 fun GymStatusStrip(phase: GymPhase, savedNote: String?, error: String?, modifier: Modifier = Modifier) {
@@ -255,7 +269,7 @@ fun GymStatusStrip(phase: GymPhase, savedNote: String?, error: String?, modifier
             tint = color,
             size = 14.dp,
         )
-        Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = color, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
