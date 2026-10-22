@@ -71,6 +71,11 @@ data class HealthImportReport(
     val duplicates: Int,
     val rejected: List<String>,
     val dryRun: Boolean,
+    /**
+     * Deletions the file carries that this phone applied. They are not records: counting them as
+     * "added" made a file of 10 records and 2 deletions read as 12 records (GYM-02.1).
+     */
+    val deletions: Int = 0,
 )
 data class MedicationSchedule(val id: String, val name: String)
 
@@ -103,13 +108,16 @@ object HealthJson {
     fun importReport(rowsJson: String, dryRun: Boolean): HealthImportReport {
         val rows = JSONArray(rowsJson)
         val statuses = (0 until rows.length()).map { rows.getJSONObject(it) }
+        // The Kernel names a restored deletion `<aggregate>.deleted`; every other row is a record.
+        fun isDeletion(row: JSONObject) = row.optString("description", "").endsWith(".deleted")
         return HealthImportReport(
-            added = statuses.count { it.getString("status") == "accepted" },
+            added = statuses.count { it.getString("status") == "accepted" && !isDeletion(it) },
             updated = statuses.count { it.getString("status") == "updated" },
             duplicates = statuses.count { it.getString("status") == "duplicate" },
             rejected = statuses.filter { it.getString("status") == "rejected" }
                 .map { "Row ${it.getLong("row")}: ${it.optString("reason", "rejected")}" },
             dryRun = dryRun,
+            deletions = statuses.count { it.getString("status") == "accepted" && isDeletion(it) },
         )
     }
 

@@ -421,3 +421,98 @@ fn a_restored_device_can_carry_on_training_from_the_backup() {
     assert_eq!(newest["session_id"], next);
     assert_eq!(newest["sets"][0]["load_milli"], 57_500);
 }
+
+/// How many programs a device holds, read from its own backup file (no query lists them all).
+fn program_count(h: &DomainHandle) -> usize {
+    let file: Value = serde_json::from_slice(&backup(h)).unwrap();
+    file["gym"]["programs"].as_array().unwrap().len()
+}
+
+#[test]
+fn restoring_onto_a_device_with_its_own_plan_never_leaves_two_active_plans() {
+    let (a_dir, b_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let keys = MemKeys::new();
+    let a = open(a_dir.path(), &keys);
+    let session = seed(&a);
+    let file = backup(&a);
+
+    // B has been used: it created its own default plan before the restore.
+    let b = open(b_dir.path(), &keys);
+    cmd(&b, "gym.program.create_default", json!({"anchor_date": "2026-11-01"}));
+    let own_plan = one(&b, "active_program", json!({}))["id"].as_str().unwrap().to_string();
+
+    let report = import(&b, &file);
+    assert_eq!(program_count(&b), 1, "a restore must not add a second active plan");
+    assert_eq!(one(&b, "active_program", json!({}))["id"], own_plan, "the device keeps its own plan");
+    let reasons: Vec<String> = report.rejected.iter().map(|r| r.reason.clone()).collect();
+    assert_eq!(reasons.len(), 1, "{reasons:?}");
+    assert!(reasons[0].contains("already has a training plan"), "{reasons:?}");
+
+    // The workout and its sets still restore: the session carries its own plan snapshot, so the
+    // receipt reads the same without the plan it was started from.
+    let detail = one(&b, "session_details", json!({"session_id": session}));
+    assert_eq!(detail["metrics"]["working_sets_completed"], 6);
+    assert_eq!(detail["session"]["plan_version"], 1);
+    assert_eq!(detail["session"]["label"], "Pull A: Lat Width + Biceps");
+
+    // A repeat import changes nothing and reports the same single refusal.
+    let digest = b.projection_digest().unwrap();
+    let again = import(&b, &file);
+    assert_eq!((again.accepted, again.rejected.len()), (0, 1));
+    assert_eq!(b.projection_digest().unwrap(), digest);
+    assert_eq!(program_count(&b), 1);
+}
+
+/// Import report rows counted by what they describe.
+fn kinds(report: &ImportReport) -> std::collections::BTreeMap<String, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    for row in serde_json::from_str::<Value>(&report.rows_json).unwrap().as_array().unwrap() {
+        *counts.entry(row["description"].as_str().unwrap_or("?").to_string()).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// GYM-02 listed 11 gym entries in the file and reported 12 imports. Both were right: the 11 were
+/// only the gym section, and the 12th was the sleep record. Two of the 12 were deletions, which
+/// were reported under the same name as the records they delete. This pins the whole breakdown.
+#[test]
+fn the_twelve_imported_rows_are_ten_records_and_two_deletions_and_say_so() {
+    let (a_dir, b_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let keys = MemKeys::new();
+    let a = open(a_dir.path(), &keys);
+    seed(&a);
+    let file = backup(&a);
+
+    let parsed: Value = serde_json::from_slice(&file).unwrap();
+    let listed_gym = ["programs", "sessions", "sets", "deleted"]
+        .iter()
+        .map(|k| parsed["gym"][*k].as_array().unwrap().len())
+        .sum::<usize>();
+    let listed_health = parsed["records"].as_array().unwrap().len();
+    assert_eq!((listed_gym, listed_health), (11, 1), "11 gym entries plus the 1 health record");
+
+    let b = open(b_dir.path(), &keys);
+    let report = import(&b, &file);
+    assert_eq!(report.accepted, 12, "11 + 1");
+    let counts = kinds(&report);
+    let expected: std::collections::BTreeMap<String, usize> = [
+        ("sleep", 1),
+        ("gym_program", 1),
+        ("gym_session", 1),
+        ("gym_set", 7),
+        ("gym_session.deleted", 1),
+        ("gym_set.deleted", 1),
+    ]
+    .iter()
+    .map(|(k, v)| (k.to_string(), *v))
+    .collect();
+    assert_eq!(counts, expected);
+    let deletions: usize = counts.iter().filter(|(k, _)| k.ends_with(".deleted")).map(|(_, v)| v).sum();
+    assert_eq!(counts.values().sum::<usize>() - deletions, 10, "ten restored records");
+    assert_eq!(deletions, 2, "and two deletions");
+
+    // Repeated, the same twelve rows are all duplicates and are still named by kind.
+    let again = import(&b, &file);
+    assert_eq!((again.accepted, again.duplicates), (0, 12));
+    assert_eq!(kinds(&again), expected);
+}

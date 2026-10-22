@@ -1640,6 +1640,24 @@ fn restore_record(
             )
         });
     }
+    // One active plan per device. A backup never replaces the plan this device is using, and never
+    // sits beside it either: two active plans would make which one the screen shows an accident of
+    // id order. The workouts still restore; each carries the plan day it was run against.
+    if aggregate_type == "gym_program" && raw.get("status").and_then(Value::as_str) == Some("active") {
+        if let Some(own) = active_program_row(conn)? {
+            if own.get("id").and_then(Value::as_str) != Some(id.as_str()) {
+                return Ok(gym_row(
+                    n,
+                    "rejected",
+                    Some("this device already has a training plan; restoring a backup never replaces it"),
+                    aggregate_type,
+                    &id,
+                    date,
+                    raw,
+                ));
+            }
+        }
+    }
     let event = events::append_local(conn, ctx, draft(aggregate_type, &id, "imported", raw.clone()))?;
     apply(conn, &event)?;
     Ok(gym_row(n, "accepted", None, aggregate_type, &id, date, raw))
@@ -1664,15 +1682,16 @@ fn restore_deletion(conn: &Connection, ctx: &EventCtx, raw: &Value, n: u64) -> D
         Ok(pair) => pair,
         Err(error) => return Ok(gym_row(n, "rejected", Some(&error.to_string()), "gym_deleted", "", None, raw)),
     };
+    let kind = format!("{aggregate_type}.deleted");
     if events::is_tombstoned(conn, &aggregate_type, &id)? {
-        return Ok(gym_row(n, "duplicate", None, &aggregate_type, &id, None, raw));
+        return Ok(gym_row(n, "duplicate", None, &kind, &id, None, raw));
     }
     if current_payload(conn, &aggregate_type, &id)?.is_some() {
         return Ok(gym_row(
             n,
             "rejected",
             Some("still recorded on this device; restoring a backup never deletes a workout"),
-            &aggregate_type,
+            &kind,
             &id,
             None,
             raw,
@@ -1680,7 +1699,7 @@ fn restore_deletion(conn: &Connection, ctx: &EventCtx, raw: &Value, n: u64) -> D
     }
     let event = events::append_local(conn, ctx, tombstone(&aggregate_type, id.clone()))?;
     apply(conn, &event)?;
-    Ok(gym_row(n, "accepted", None, &aggregate_type, &id, None, raw))
+    Ok(gym_row(n, "accepted", None, &format!("{aggregate_type}.deleted"), &id, None, raw))
 }
 
 #[cfg(test)]

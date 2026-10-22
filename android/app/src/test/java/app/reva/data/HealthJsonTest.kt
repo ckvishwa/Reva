@@ -74,5 +74,26 @@ class HealthJsonTest {
         assertEquals(1, report.duplicates)
         assertEquals(listOf("Row 4: deleted on this device; not restored"), report.rejected)
         assertEquals(true, report.dryRun)
+        assertEquals(0, report.deletions)
+    }
+
+    @Test fun a_restored_deletion_is_counted_as_a_deletion_not_as_a_record() {
+        // The GYM-02 fixture: 10 restored records and 2 deletions were reported as 12 "added".
+        fun row(n: Int, status: String, description: String, reason: String? = null): String {
+            val why = if (reason == null) "" else ""","reason":"$reason""""
+            return """{"row":$n,"status":"$status","description":"$description"$why,"raw":"{}"}"""
+        }
+        val rows = (1..10).map { row(it, "accepted", "gym_set") } + listOf(
+            row(11, "accepted", "gym_session.deleted"),
+            row(12, "accepted", "gym_set.deleted"),
+            row(13, "duplicate", "gym_set.deleted"),
+            row(14, "rejected", "gym_session.deleted", "still recorded on this device"),
+        )
+        val report = HealthJson.importReport(rows.joinToString(",", "[", "]"), dryRun = false)
+        assertEquals(10, report.added)
+        assertEquals(2, report.deletions)
+        assertEquals(1, report.duplicates)
+        assertEquals(1, report.rejected.size)
+        assertEquals("every accepted row is counted once", 12, report.added + report.deletions)
     }
 }

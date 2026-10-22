@@ -4,10 +4,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
@@ -413,8 +416,20 @@ private fun BackupCard(repository: HealthRepository, onShare: ((ByteArray) -> Un
     var pending by remember { mutableStateOf<ByteArray?>(null) }
     var preview by remember { mutableStateOf<HealthImportReport?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var restoring by remember { mutableStateOf(false) }
+    // The card is the last item of a long list and grows downward. Bring what has just appeared into view,
+    // so a preview, its confirm button or a result is never left below the fold (GYM-02.1).
+    val previewInView = remember { BringIntoViewRequester() }
+    val messageInView = remember { BringIntoViewRequester() }
+    LaunchedEffect(preview) { if (preview != null) previewInView.bringIntoView() }
+    LaunchedEffect(message) { if (message != null) messageInView.bringIntoView() }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        // Backing out of the picker changes nothing; choosing a file starts a new restore, so the last
+        // result and any old preview go before the new file is read.
         if (uri == null) return@rememberLauncherForActivityResult
+        message = null
+        preview = null
+        pending = null
         scope.launch {
             val bytes = withContext(Dispatchers.IO) {
                 runCatching { context.contentResolver.openInputStream(uri)?.use { readUpTo(it, MAX_BACKUP_BYTES + 1) } }.getOrNull()
@@ -438,23 +453,36 @@ private fun BackupCard(repository: HealthRepository, onShare: ((ByteArray) -> Un
         }
         TextButton(onClick = { picker.launch(arrayOf("application/json", "*/*")) }, modifier = Modifier.testTag("health_restore")) { Text("Restore from a backup file") }
         preview?.let { report ->
-            Text("This file has ${report.added} new records, ${report.duplicates} already here and ${report.rejected.size} that cannot be restored.", Modifier.testTag("health_restore_preview"))
-            report.rejected.take(5).forEach { CaptionText(it) }
-            Button(onClick = {
-                val bytes = pending ?: return@Button
-                scope.launch {
-                    message = when (val result = repository.importData("json", bytes, dryRun = false)) {
-                        is Outcome.Ok -> "Restored ${result.value.added} records; ${result.value.duplicates} were already here; ${result.value.rejected.size} skipped."
-                        is Outcome.Failed -> result.error.message
+            Column(Modifier.bringIntoViewRequester(previewInView), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("This file has ${countText(report)}, ${report.duplicates} already here and ${report.rejected.size} that cannot be restored.", Modifier.testTag("health_restore_preview"))
+                report.rejected.take(5).forEach { CaptionText(it) }
+                Button(onClick = {
+                    val bytes = pending ?: return@Button
+                    // One restore at a time: a second tap while the Kernel is committing must not start another
+                    // and overwrite the first one's result.
+                    if (restoring) return@Button
+                    restoring = true
+                    scope.launch {
+                        // The result line is written only from what the Kernel returned after it committed.
+                        message = try {
+                            when (val result = repository.importData("json", bytes, dryRun = false)) {
+                                is Outcome.Ok -> "Restored ${countText(result.value, fresh = false)}; ${result.value.duplicates} were already here; ${result.value.rejected.size} skipped."
+                                is Outcome.Failed -> result.error.message
+                            }
+                        } finally {
+                            restoring = false
+                        }
+                        preview = null
+                        pending = null
+                        onRestored()
                     }
-                    preview = null
-                    pending = null
-                    onRestored()
+                }, enabled = !restoring && report.added + report.deletions > 0, modifier = Modifier.testTag("health_restore_confirm")) {
+                    Text(if (restoring) "Restoring…" else "Restore ${countText(report)}")
                 }
-            }, enabled = report.added > 0, modifier = Modifier.testTag("health_restore_confirm")) { Text("Restore ${report.added} records") }
-            TextButton(onClick = { preview = null; pending = null }) { Text("Cancel") }
+                TextButton(onClick = { preview = null; pending = null }, enabled = !restoring) { Text("Cancel") }
+            }
         }
-        message?.let { CaptionText(it, Modifier.testTag("health_backup_result")) }
+        message?.let { CaptionText(it, Modifier.testTag("health_backup_result").bringIntoViewRequester(messageInView)) }
     }
 
     if (confirmExport && onShare != null) {
@@ -476,6 +504,17 @@ private fun BackupCard(repository: HealthRepository, onShare: ((ByteArray) -> Un
             },
             dismissButton = { TextButton(onClick = { confirmExport = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/** "10 new records and 2 deletions": records and deletions are counted apart. */
+internal fun countText(report: HealthImportReport, fresh: Boolean = true): String {
+    val noun = if (fresh) "new record" else "record"
+    val records = if (report.added == 1) "1 $noun" else "${report.added} ${noun}s"
+    return when (report.deletions) {
+        0 -> records
+        1 -> "$records and 1 deletion"
+        else -> "$records and ${report.deletions} deletions"
     }
 }
 
