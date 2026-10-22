@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
                 RevaRoot(
                     repository = container.financeRepository,
                     healthRepository = container.healthRepository,
+                    gymRepository = container.gymRepository,
                     healthConnect = healthConnect,
                     versionName = BuildConfig.VERSION_NAME,
                     onShare = { format, bytes -> ExportShare.share(this, format, bytes) },

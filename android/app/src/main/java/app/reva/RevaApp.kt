@@ -9,7 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import app.reva.data.FinanceRepository
 import app.reva.data.KernelFinanceRepository
+import app.reva.data.GymRepository
 import app.reva.data.HealthRepository
+import app.reva.data.KernelGymRepository
 import app.reva.data.KernelHealthRepository
 import app.reva.data.KeystoreKeyProvider
 import app.reva.sync.KeystoreDeviceSigner
@@ -67,6 +69,17 @@ class AppContainer(private val context: Context) {
 
     val healthRepository: HealthRepository by lazy {
         KernelHealthRepository(openHandle = {
+            val dir = File(domainRoot, "health").also { it.mkdirs() }
+            openDomain("health", KeystoreKeyProvider(keyRoot), dir.absolutePath)
+        })
+    }
+
+    /**
+     * Gym training (GYM-01). The gym tables are migration v3 of the Health domain, so this opens the
+     * same encrypted file under its own handle; one key, one event log, one backup.
+     */
+    val gymRepository: GymRepository by lazy {
+        KernelGymRepository(openHandle = {
             val dir = File(domainRoot, "health").also { it.mkdirs() }
             openDomain("health", KeystoreKeyProvider(keyRoot), dir.absolutePath)
         })

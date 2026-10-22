@@ -17,6 +17,8 @@ use crate::events::{self, Event, EventCtx, EventDraft};
 use crate::import::{self, Options, Report, RowResult};
 use crate::store::Migration;
 
+pub mod gym;
+
 pub const DOMAIN: &str = "health";
 pub const COMMANDS: &[&str] = &[
     "workout.log",
@@ -36,6 +38,16 @@ pub const MIGRATION: Migration = Migration {
     sql: "CREATE TABLE health_records (id TEXT PRIMARY KEY, kind TEXT NOT NULL, date TEXT NOT NULL, data_json TEXT NOT NULL, version INTEGER NOT NULL); \
           CREATE INDEX health_records_date ON health_records (date, kind);",
 };
+
+/// Every migration this domain owns, oldest first.
+pub fn migrations() -> Vec<Migration> {
+    vec![MIGRATION, gym::MIGRATION]
+}
+
+/// Every command this domain accepts, health records and gym training together.
+pub fn command_names() -> Vec<String> {
+    COMMANDS.iter().chain(gym::COMMANDS.iter()).map(|s| s.to_string()).collect()
+}
 
 /// The Health backup file written by `export("json")` and read back by `import_data("json")`.
 pub const EXPORT_FORMAT: &str = "reva-health-v1";
@@ -267,6 +279,9 @@ fn taken_on(conn: &Connection, schedule_id: &str, day: &str) -> DomainResult<i64
 }
 
 pub fn command(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<Vec<EventDraft>> {
+    if kind.starts_with("gym.") {
+        return gym::command(conn, kind, payload);
+    }
     let map = object(payload)?;
     let (record_kind, record_date, data) = match kind {
         "workout.log" => {
@@ -359,6 +374,9 @@ pub fn command(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<V
 }
 
 pub fn apply(conn: &Connection, event: &Event) -> DomainResult<()> {
+    if gym::owns(&event.aggregate_type) {
+        return gym::apply(conn, event);
+    }
     if event.aggregate_type != "health_record" {
         return Err(DomainError::validation("aggregate_type", "not a health record"));
     }
@@ -382,6 +400,7 @@ pub fn apply(conn: &Connection, event: &Event) -> DomainResult<()> {
 
 pub fn rebuild(conn: &Connection) -> DomainResult<u64> {
     conn.execute("DELETE FROM health_records", [])?;
+    gym::clear(conn)?;
     let mut count = 0;
     for event in events::all_ordered(conn)? {
         apply(conn, &event)?;
@@ -467,6 +486,9 @@ fn rows_where(conn: &Connection, sql: &str, args: &[&dyn rusqlite::ToSql]) -> Do
 }
 
 pub fn query(conn: &Connection, name: &str, params: &Value) -> DomainResult<(Value, Vec<String>)> {
+    if gym::QUERIES.contains(&name) {
+        return gym::query(conn, name, params);
+    }
     let params = object(params)?;
     fields(params, &["date"])?;
     let day = date(params, "date")?;
@@ -648,6 +670,13 @@ fn weekly(conn: &Connection, day: &str) -> DomainResult<(Value, Vec<String>)> {
 pub fn digest_rows(conn: &Connection) -> DomainResult<Vec<(String, String)>> {
     let mut stmt = conn.prepare("SELECT id,data_json FROM health_records ORDER BY id")?;
     let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
+/// Every projection row in this domain, for `projection_digest`.
+pub fn digest_all(conn: &Connection) -> DomainResult<Vec<(String, String)>> {
+    let mut rows = digest_rows(conn)?;
+    rows.extend(gym::digest_rows(conn)?);
     Ok(rows)
 }
 

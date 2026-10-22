@@ -97,7 +97,7 @@ pub fn open_domain(
 ) -> Result<Arc<DomainHandle>, DomainError> {
     let migrations = match domain.as_str() {
         finance::DOMAIN => finance::migrations(),
-        health::DOMAIN => vec![health::MIGRATION],
+        health::DOMAIN => health::migrations(),
         other => {
             return Err(DomainError::validation("domain", format!("domain {other:?} is not available in this build")));
         }
@@ -145,8 +145,10 @@ impl DomainHandle {
 
     /// Names of every command this domain accepts (the registry the absence tests inspect).
     pub fn command_names(&self) -> Vec<String> {
-        let names = if self.domain == health::DOMAIN { health::COMMANDS } else { commands::COMMANDS };
-        names.iter().map(|s| s.to_string()).collect()
+        if self.domain == health::DOMAIN {
+            return health::command_names();
+        }
+        commands::COMMANDS.iter().map(|s| s.to_string()).collect()
     }
 
     pub fn command(&self, kind: String, payload_json: String) -> Result<CommitResult, DomainError> {
@@ -382,7 +384,7 @@ impl DomainHandle {
         let guard = self.lock();
         let mut hasher = Sha256::new();
         if self.domain == health::DOMAIN {
-            for (id, data) in health::digest_rows(&guard.store.conn)? {
+            for (id, data) in health::digest_all(&guard.store.conn)? {
                 hasher.update(id.as_bytes());
                 hasher.update(events::canonical(&serde_json::from_str::<Value>(&data)?).as_bytes());
             }
