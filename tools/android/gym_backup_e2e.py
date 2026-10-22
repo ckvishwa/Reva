@@ -535,14 +535,15 @@ def main() -> int:
 
         # 7. After all of that the restored workout is exactly as it was.
         p.tab("Gym")
+        p.tap(p.scroll_to(text_is("Back to Gym"), "Back to Gym"))
         p.tap(p.scroll_to(text_re(r"^\d{4}-\d\d-\d\d · 3 working sets$"), "the workout in Recent workouts"))
         p.wait(text_is("completed"), 20, APP, "Session Details")
         final = p.read_receipt()
         p.check("after repeat, cancel, invalid and tampered files the receipt is unchanged", final == before, final == before)
-        p.tab("Gym")
-        p.tap(p.scroll_to(text_is("Back to Gym"), "Back to Gym")) if p.find(text_is("Back to Gym"), APP) else None
+        p.tap(p.scroll_to(text_is("Back to Gym"), "Back to Gym"))
+        p.scroll_to(text_re(r"^\d{4}-\d\d-\d\d · 3 working sets$"), "the workout in Recent workouts")
         recents = [n for n in p.nodes() if n.pkg == APP and re.fullmatch(r"\d{4}-\d\d-\d\d · \d+ working sets", n.text)]
-        p.check("exactly one workout in Recent workouts", len(recents) <= 1, len(recents))
+        p.check("exactly one workout in Recent workouts", len(recents) == 1, len(recents))
     except Abort as exc:
         summary["aborted"] = str(exc)
     finally:
