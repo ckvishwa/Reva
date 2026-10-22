@@ -1642,18 +1642,12 @@ fn restore_record(
     }
     // One active plan per device. A backup never replaces the plan this device is using, and never
     // sits beside it either: two active plans would make which one the screen shows an accident of
-    // id order. The workouts still restore; each carries the plan day it was run against.
+    // id order. Fail the import so its transaction rolls back every earlier Health or Gym row too.
     if aggregate_type == "gym_program" && raw.get("status").and_then(Value::as_str) == Some("active") {
         if let Some(own) = active_program_row(conn)? {
             if own.get("id").and_then(Value::as_str) != Some(id.as_str()) {
-                return Ok(gym_row(
-                    n,
-                    "rejected",
-                    Some("this device already has a training plan; restoring a backup never replaces it"),
-                    aggregate_type,
-                    &id,
-                    date,
-                    raw,
+                return Err(DomainError::conflict(
+                    "this device already has a training plan; restoring a backup never replaces it",
                 ));
             }
         }

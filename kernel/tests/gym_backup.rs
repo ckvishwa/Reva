@@ -433,34 +433,28 @@ fn restoring_onto_a_device_with_its_own_plan_never_leaves_two_active_plans() {
     let (a_dir, b_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let keys = MemKeys::new();
     let a = open(a_dir.path(), &keys);
-    let session = seed(&a);
+    seed(&a);
     let file = backup(&a);
 
     // B has been used: it created its own default plan before the restore.
     let b = open(b_dir.path(), &keys);
     cmd(&b, "gym.program.create_default", json!({"anchor_date": "2026-11-01"}));
     let own_plan = one(&b, "active_program", json!({}))["id"].as_str().unwrap().to_string();
+    let digest = b.projection_digest().unwrap();
+    let events = b.event_count().unwrap();
 
-    let report = import(&b, &file);
+    for options in ["{}", r#"{"dry_run":true}"#] {
+        let error = b.import_data("json".into(), file.clone(), options.into()).unwrap_err();
+        assert_eq!(code(&error), "conflict");
+        assert!(error.to_string().contains("already has a training plan"), "{error}");
+        assert_eq!(b.projection_digest().unwrap(), digest, "a refused backup changes no records");
+        assert_eq!(b.event_count().unwrap(), events, "a refused backup writes no events");
+    }
     assert_eq!(program_count(&b), 1, "a restore must not add a second active plan");
     assert_eq!(one(&b, "active_program", json!({}))["id"], own_plan, "the device keeps its own plan");
-    let reasons: Vec<String> = report.rejected.iter().map(|r| r.reason.clone()).collect();
-    assert_eq!(reasons.len(), 1, "{reasons:?}");
-    assert!(reasons[0].contains("already has a training plan"), "{reasons:?}");
-
-    // The workout and its sets still restore: the session carries its own plan snapshot, so the
-    // receipt reads the same without the plan it was started from.
-    let detail = one(&b, "session_details", json!({"session_id": session}));
-    assert_eq!(detail["metrics"]["working_sets_completed"], 6);
-    assert_eq!(detail["session"]["plan_version"], 1);
-    assert_eq!(detail["session"]["label"], "Pull A: Lat Width + Biceps");
-
-    // A repeat import changes nothing and reports the same single refusal.
-    let digest = b.projection_digest().unwrap();
-    let again = import(&b, &file);
-    assert_eq!((again.accepted, again.rejected.len()), (0, 1));
-    assert_eq!(b.projection_digest().unwrap(), digest);
-    assert_eq!(program_count(&b), 1);
+    assert!(rows(&b, "list_sessions", json!({})).is_empty(), "no workout from the refused backup is imported");
+    let on_device: Value = serde_json::from_slice(&backup(&b)).unwrap();
+    assert!(on_device["records"].as_array().unwrap().is_empty(), "no Health row is imported");
 }
 
 /// Import report rows counted by what they describe.
