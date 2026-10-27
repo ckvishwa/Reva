@@ -12,6 +12,7 @@ This is a read-only reconciliation of Git refs and visible worktree status. It d
 
 ## Work that is still local
 
+- Follow-up on 2026-10-26: `docs/windows-routing-v2-and-aug-plans` was pushed at `d76d0c4`; docs-only PR #39 is open against `main`. It recovers the Windows command-routing v2 design and three August core plans without implementation or test claims. `feat/pipe-1-voice` has no current `origin` branch; older `CLAUDE.md` entries use it as historical context for the VOICE-1 replay. PR #38 for this inventory has all eight checks passing. The original checkout still has 23 tracked changes and 68 visible status entries.
 - `D:\Projects\Reva` (`fixing-things`, `6ea4236`) has 23 tracked changes and 68 visible `git status` entries. They include PIPE-1 voice, Kokoro, planner, API, Windows, and test work that overlaps other branches. This checkout was not edited, staged, committed, or pushed during this reconciliation.
 - `D:\Projects\Reva-gym1` retains an untracked `scratchpad/` with run logs, screenshots, pulled APKs, and synthetic backup JSON. Selected safe evidence was already committed to the Gym branch; the full scratchpad remains local.
 - `D:\Projects\Reva-int` has one untracked entry. The 11 Lana-derived copies described in `CLAUDE.md` are excluded from normal status output and still require the owner's separate disposition. Do not publish or delete them during a blanket cleanup.
