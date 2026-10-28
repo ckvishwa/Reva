@@ -1,0 +1,596 @@
+{
+  "jobs": [
+    {
+      "name": "android-unit",
+      "job_id": 117800705777,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705777",
+      "conclusion": "success",
+      "seconds": 276.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "conclusion": "success",
+          "seconds": 9.0
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Run actions/setup-java@v4",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Build the Kotlin binding",
+          "conclusion": "success",
+          "seconds": 118.0
+        },
+        {
+          "name": "Android SDK platform",
+          "conclusion": "success",
+          "seconds": 9.0
+        },
+        {
+          "name": "Unit tests",
+          "conclusion": "success",
+          "seconds": 135.0
+        },
+        {
+          "name": "Post Run actions/setup-java@v4",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "python",
+      "job_id": 117800705888,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705888",
+      "conclusion": "success",
+      "seconds": 1599.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 11.0
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Install dependencies",
+          "conclusion": "success",
+          "seconds": 108.0
+        },
+        {
+          "name": "Build Domain Kernel binding",
+          "conclusion": "success",
+          "seconds": 572.0
+        },
+        {
+          "name": "Format check",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Lint",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Type check",
+          "conclusion": "success",
+          "seconds": 53.0
+        },
+        {
+          "name": "Unit tests",
+          "conclusion": "success",
+          "seconds": 89.0
+        },
+        {
+          "name": "Integration tests",
+          "conclusion": "success",
+          "seconds": 120.0
+        },
+        {
+          "name": "Contract tests",
+          "conclusion": "success",
+          "seconds": 5.0
+        },
+        {
+          "name": "Security tests",
+          "conclusion": "success",
+          "seconds": 53.0
+        },
+        {
+          "name": "Native Windows protection (no test double)",
+          "conclusion": "success",
+          "seconds": 3.0
+        },
+        {
+          "name": "E2E tests",
+          "conclusion": "success",
+          "seconds": 9.0
+        },
+        {
+          "name": "Full suite with coverage",
+          "conclusion": "success",
+          "seconds": 562.0
+        },
+        {
+          "name": "Package/import smoke test",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Core startup/shutdown smoke test",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Migration/bootstrap script check",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Upload coverage report",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 3.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "python-linux",
+      "job_id": 117800705897,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705897",
+      "conclusion": "success",
+      "seconds": 393.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "conclusion": "success",
+          "seconds": 9.0
+        },
+        {
+          "name": "Install dependencies",
+          "conclusion": "success",
+          "seconds": 41.0
+        },
+        {
+          "name": "Build Domain Kernel binding",
+          "conclusion": "success",
+          "seconds": 108.0
+        },
+        {
+          "name": "Lint and format check",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Native Linux type check",
+          "conclusion": "success",
+          "seconds": 44.0
+        },
+        {
+          "name": "Full portable suite (including security and contracts)",
+          "conclusion": "success",
+          "seconds": 188.0
+        },
+        {
+          "name": "Validate contracts",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "csharp-desktop",
+      "job_id": 117800705904,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705904",
+      "conclusion": "success",
+      "seconds": 109.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 6.0
+        },
+        {
+          "name": "Run actions/setup-dotnet@v4",
+          "conclusion": "success",
+          "seconds": 25.0
+        },
+        {
+          "name": "Restore",
+          "conclusion": "success",
+          "seconds": 33.0
+        },
+        {
+          "name": "Install the Windows App Runtime",
+          "conclusion": "success",
+          "seconds": 6.0
+        },
+        {
+          "name": "Build",
+          "conclusion": "success",
+          "seconds": 27.0
+        },
+        {
+          "name": "Test",
+          "conclusion": "success",
+          "seconds": 6.0
+        },
+        {
+          "name": "Post Run actions/setup-dotnet@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "kernel",
+      "job_id": 117800705916,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705916",
+      "conclusion": "success",
+      "seconds": 226.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "conclusion": "success",
+          "seconds": 11.0
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Run actions/setup-java@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Install Python test dependencies",
+          "conclusion": "success",
+          "seconds": 42.0
+        },
+        {
+          "name": "Format",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Clippy",
+          "conclusion": "success",
+          "seconds": 113.0
+        },
+        {
+          "name": "Native tests (recovery, sync, import, registry, no-network, conformance)",
+          "conclusion": "success",
+          "seconds": 17.0
+        },
+        {
+          "name": "Build bindings",
+          "conclusion": "success",
+          "seconds": 17.0
+        },
+        {
+          "name": "Conformance through Python",
+          "conclusion": "success",
+          "seconds": 3.0
+        },
+        {
+          "name": "Conformance through Kotlin (JVM)",
+          "conclusion": "success",
+          "seconds": 15.0
+        },
+        {
+          "name": "Post Run actions/setup-java@v4",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "android",
+      "job_id": 117800705957,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705957",
+      "conclusion": "success",
+      "seconds": 262.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "conclusion": "success",
+          "seconds": 13.0
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Install cargo-ndk",
+          "conclusion": "success",
+          "seconds": 29.0
+        },
+        {
+          "name": "Build arm64-v8a and x86_64",
+          "conclusion": "success",
+          "seconds": 215.0
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "avatar",
+      "job_id": 117800705962,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705962",
+      "conclusion": "success",
+      "seconds": 123.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 11.0
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "conclusion": "success",
+          "seconds": 7.0
+        },
+        {
+          "name": "Install",
+          "conclusion": "success",
+          "seconds": 9.0
+        },
+        {
+          "name": "Build",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Unit tests",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Browser tests (Edge)",
+          "conclusion": "success",
+          "seconds": 87.0
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    },
+    {
+      "name": "contracts",
+      "job_id": 117800705982,
+      "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760/job/117800705982",
+      "conclusion": "success",
+      "seconds": 9.0,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Install jsonschema",
+          "conclusion": "success",
+          "seconds": 2.0
+        },
+        {
+          "name": "Validate contracts",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "conclusion": "success",
+          "seconds": 0.0
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success",
+          "seconds": 1.0
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0.0
+        }
+      ]
+    }
+  ],
+  "runner_minutes": 49.95,
+  "wall_minutes": 26.666666666666668,
+  "run_id": 39169940760,
+  "head_sha": "129ef650f99a6da8e6921bd314e28eca65ec8906",
+  "url": "https://github.com/ckvishwa/Reva/actions/runs/39169940760",
+  "coverage": {
+    "statements_covered": 9091,
+    "statements_valid": 9785,
+    "branches_covered": 2000,
+    "branches_valid": 2418
+  },
+  "windows_tests": {
+    "collected": 1725,
+    "passed": 1704,
+    "skipped": 21
+  },
+  "linux_tests": {
+    "passed": 1690,
+    "skipped": 35
+  }
+}
