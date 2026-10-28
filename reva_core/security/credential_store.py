@@ -16,6 +16,8 @@ import sys
 from ctypes import wintypes
 from typing import Protocol
 
+from reva_core.security.windows_api import windows_last_error
+
 TARGET_PREFIX = "reva.provider."
 MAX_SECRET_CHARS = 512
 
@@ -94,6 +96,9 @@ class _Credential(ctypes.Structure):
 
 
 class WindowsSecretStore:
+    _target: str
+    _advapi: ctypes.CDLL
+
     def __init__(self, name: str) -> None:
         if not sys.platform.startswith("win"):
             raise SecretStoreError("Windows Credential Manager is only available on Windows")
@@ -119,7 +124,7 @@ class WindowsSecretStore:
     def read(self) -> str | None:
         pointer = ctypes.POINTER(_Credential)()
         if not self._advapi.CredReadW(self._target, _CRED_TYPE_GENERIC, 0, ctypes.byref(pointer)):
-            error = ctypes.get_last_error()
+            error = windows_last_error()
             if error == _ERROR_NOT_FOUND:
                 return None
             raise SecretStoreError(f"credential read failed (Windows error {error})")
@@ -146,13 +151,13 @@ class WindowsSecretStore:
         credential.UserName = "reva"
         if not self._advapi.CredWriteW(ctypes.byref(credential), 0):
             raise SecretStoreError(
-                f"credential write failed (Windows error {ctypes.get_last_error()})"
+                f"credential write failed (Windows error {windows_last_error()})"
             )
 
     def delete(self) -> bool:
         if self._advapi.CredDeleteW(self._target, _CRED_TYPE_GENERIC, 0):
             return True
-        error = ctypes.get_last_error()
+        error = windows_last_error()
         if error == _ERROR_NOT_FOUND:
             return False
         raise SecretStoreError(f"credential delete failed (Windows error {error})")

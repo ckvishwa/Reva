@@ -20,6 +20,8 @@ from ctypes import wintypes
 from pathlib import Path
 from typing import Protocol
 
+from reva_core.security.windows_api import windows_last_error
+
 ENTRY_PREFIX = "reva.domain."
 _FORBIDDEN_FRAGMENTS = ("com.aura",)
 KEY_LENGTH = 32
@@ -102,6 +104,9 @@ class _Credential(ctypes.Structure):
 class WindowsCredentialKeyProvider:
     """Windows Credential Manager, via advapi32 (no third-party package)."""
 
+    _prefix: str
+    _advapi: ctypes.CDLL
+
     def __init__(self, prefix: str = ENTRY_PREFIX) -> None:
         if not sys.platform.startswith("win"):
             raise KeyStoreError("Windows Credential Manager is only available on Windows")
@@ -130,7 +135,7 @@ class WindowsCredentialKeyProvider:
         target = self.entry(domain)
         pointer = ctypes.POINTER(_Credential)()
         if not self._advapi.CredReadW(target, _CRED_TYPE_GENERIC, 0, ctypes.byref(pointer)):
-            error = ctypes.get_last_error()
+            error = windows_last_error()
             if error == _ERROR_NOT_FOUND:
                 return None
             raise KeyStoreError(f"credential read failed (Windows error {error})")
@@ -159,16 +164,14 @@ class WindowsCredentialKeyProvider:
         credential.Persist = _CRED_PERSIST_LOCAL_MACHINE
         credential.UserName = "reva"
         if not self._advapi.CredWriteW(ctypes.byref(credential), 0):
-            raise KeyStoreError(
-                f"credential write failed (Windows error {ctypes.get_last_error()})"
-            )
+            raise KeyStoreError(f"credential write failed (Windows error {windows_last_error()})")
 
     def delete_key(self, domain: str) -> bool:
         """Remove a key. Only for tests that created their own prefixed entry."""
         target = self.entry(domain)
         if self._advapi.CredDeleteW(target, _CRED_TYPE_GENERIC, 0):
             return True
-        error = ctypes.get_last_error()
+        error = windows_last_error()
         if error == _ERROR_NOT_FOUND:
             return False
         raise KeyStoreError(f"credential delete failed (Windows error {error})")
