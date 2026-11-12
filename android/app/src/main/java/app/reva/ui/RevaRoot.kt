@@ -74,6 +74,8 @@ import app.reva.phone.ApprovedApps
 import app.reva.phone.LaunchableApps
 import app.reva.phone.PhoneActions
 import app.reva.voice.VoiceController
+import app.reva.brain.ModeController
+import app.reva.brain.HostedSecrets
 import app.reva.ui.theme.RevaColors
 import app.reva.ui.today.TodayScreen
 import app.reva.ui.today.TodayViewModel
@@ -117,6 +119,10 @@ fun RevaRoot(
     pcRequests: PcRequestTracker? = null,
     phoneActions: PhoneActions? = null,
     phoneApps: Pair<ApprovedApps, LaunchableApps>? = null,
+    modes: ModeController? = null,
+    hostedSecrets: HostedSecrets? = null,
+    refreshModes: suspend () -> Unit = {},
+    cancelBrainTurn: () -> Unit = {},
     onBeforeMicRequest: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
 ) {
@@ -130,6 +136,18 @@ fun RevaRoot(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val syncStatus = autoSync?.status?.collectAsState()?.value?.text
+
+    LaunchedEffect(modes, autoSync) {
+        if (modes != null) {
+            while (true) {
+                refreshModes()
+                kotlinx.coroutines.delay(15_000)
+            }
+        }
+    }
+    LaunchedEffect(modes) {
+        modes?.state?.collect { cancelBrainTurn() }
+    }
 
     // Sync with the paired PC on its own while the app is in front (the setting is on the Devices screen).
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -219,13 +237,24 @@ fun RevaRoot(
                     Text("Gym unavailable")
                 }
                 Tab.Talk ->
-                    if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests, phoneActions) else TalkUnavailableScreen()
+                    if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests, phoneActions, modes) else TalkUnavailableScreen()
                 Tab.More -> MoreHost(
                     sync,
                     versionName,
                     onSynced = { finance.refresh(); today.refresh(); scope.launch { autoSync?.manualSyncSucceeded() } },
                     autoSync = autoSync,
                     phoneApps = phoneApps,
+                    modes = modes,
+                    saveHostedKey = { key ->
+                        if (hostedSecrets == null) false else withContext(Dispatchers.IO) {
+                            val stored = runCatching { hostedSecrets.save(key) }.isSuccess
+                            refreshModes()
+                            stored
+                        }
+                    },
+                    clearHostedKey = {
+                        withContext(Dispatchers.IO) { hostedSecrets?.clear(); refreshModes() }
+                    },
                 )
             }
         }

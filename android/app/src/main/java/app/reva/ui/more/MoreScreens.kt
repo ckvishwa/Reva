@@ -23,6 +23,7 @@ import app.reva.ui.RevaCard
 import app.reva.ui.SecondaryButton
 import app.reva.ui.SectionTitle
 import app.reva.ui.theme.RevaColors
+import app.reva.brain.ModeController
 
 /** Shown where no voice controller exists (previews and UI tests that build the root without one). */
 @Composable
@@ -52,9 +53,13 @@ fun MoreScreen(
     onOpenDevices: (() -> Unit)? = null,
     appsSummary: String? = null,
     onOpenApps: (() -> Unit)? = null,
+    modes: ModeController? = null,
+    saveHostedKey: suspend (String) -> Boolean = { false },
+    clearHostedKey: suspend () -> Unit = {},
 ) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("More", style = MaterialTheme.typography.headlineMedium, color = RevaColors.Text, modifier = Modifier.semantics { heading() }) }
+        if (modes != null) item { ModeSettingsCard(modes, saveHostedKey, clearHostedKey) }
         if (onOpenDevices != null) {
             item {
                 RevaCard(modifier = Modifier.testTag("more_devices")) {
@@ -104,7 +109,7 @@ fun MoreScreen(
                 MutedText("REVA $versionName")
                 MutedText("Finance and Health data are encrypted on this phone with keys held by the Android Keystore. They are excluded from Android backups.")
                 MutedText("Health Connect is read only: REVA copies the daily totals you allow and never writes back.")
-                MutedText("The only network use is syncing with a PC you paired, over your own Wi-Fi. No server of ours is involved.")
+                MutedText("Network use includes your paired PC and, only when you enable it, the disclosed hosted reasoning provider.")
             }
         }
     }
