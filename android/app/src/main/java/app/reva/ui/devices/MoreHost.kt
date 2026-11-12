@@ -16,6 +16,7 @@ import app.reva.sync.AutoSyncController
 import app.reva.ui.apps.PhoneAppsScreen
 import app.reva.sync.SyncService
 import app.reva.ui.more.MoreScreen
+import app.reva.brain.ModeController
 
 private enum class MorePage { More, Devices, Scan, Apps }
 
@@ -32,9 +33,12 @@ fun MoreHost(
     onSynced: () -> Unit,
     autoSync: AutoSyncController? = null,
     phoneApps: Pair<ApprovedApps, LaunchableApps>? = null,
+    modes: ModeController? = null,
+    saveHostedKey: suspend (String) -> Boolean = { false },
+    clearHostedKey: suspend () -> Unit = {},
 ) {
     if (sync == null) {
-        MoreScreen(versionName)
+        MoreScreen(versionName, modes = modes, saveHostedKey = saveHostedKey, clearHostedKey = clearHostedKey)
         return
     }
     val vm: DevicesViewModel = viewModel(factory = DevicesViewModelFactory(sync, onSynced))
@@ -57,6 +61,9 @@ fun MoreHost(
             onOpenDevices = { page = MorePage.Devices },
             appsSummary = phoneApps?.first?.all()?.size?.let { "$it approved" },
             onOpenApps = phoneApps?.let { { page = MorePage.Apps } },
+            modes = modes,
+            saveHostedKey = saveHostedKey,
+            clearHostedKey = clearHostedKey,
         )
     }
 }

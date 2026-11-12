@@ -3,9 +3,17 @@ package app.reva.brain
 import app.reva.data.ErrorKind
 import app.reva.data.FinanceError
 import app.reva.data.FinanceRepository
+import app.reva.data.HealthDaily
+import app.reva.data.HealthRecord
+import app.reva.data.HealthRepository
+import app.reva.data.HealthWeekly
+import app.reva.data.MedicationSchedule
 import app.reva.data.Outcome
 import app.reva.data.TodayBudgetLeft
 import app.reva.data.TodaySummary
+import app.reva.data.FinancePeriodAnalysis
+import app.reva.data.DailyCashflow
+import app.reva.data.DailySpendCategory
 import app.reva.language.PolicyReplies
 import app.reva.policy.loadRegistry
 import app.reva.testing.FakeFinanceRepository
@@ -14,12 +22,66 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalBrainTest {
+    @Test fun weekly_health_answer_uses_local_records_and_never_calls_provider() = runBlocking {
+        val health = object : HealthRepository {
+            override suspend fun daily(date: String) = Outcome.Ok(HealthDaily(date, 0, 0, 0, null, 0, 0, 0))
+            override suspend fun weekly(endDate: String) = Outcome.Ok(HealthWeekly("2026-10-12", endDate, 30, 1, 900, 2, 3, 7, 5, 4))
+            override suspend fun records(date: String) = Outcome.Ok(emptyList<HealthRecord>())
+            override suspend fun schedules(date: String) = Outcome.Ok(emptyList<MedicationSchedule>())
+            override suspend fun command(kind: String, payload: JSONObject) = Outcome.Ok(Unit)
+        }
+        var providerCalls = 0
+        val provider = LocalBrain(PlannerRegistry(mapOf("hosted" to PlannerClient {
+            providerCalls++
+            BrainResult.Answer("invented", "hosted")
+        })))
+        val replies = PolicyReplies(loadRegistry(), local = KernelQueries(FakeFinanceRepository(), health,
+            today = { java.time.LocalDate.parse("2026-10-18") }), fallback = provider)
+
+        val result = replies.reply("how did I sleep this week")
+
+        assertTrue(result.text.contains("900 minutes across 2 recorded sleep sessions"))
+        assertTrue(result.text.contains("4 source records"))
+        assertEquals(0, providerCalls)
+    }
+
+    @Test fun weekly_health_answer_says_when_health_connect_and_an_entry_disagree() = runBlocking {
+        val health = object : HealthRepository {
+            override suspend fun daily(date: String) = Outcome.Ok(HealthDaily(date, 0, 0, 0, null, 0, 0, 0))
+            override suspend fun weekly(endDate: String) =
+                Outcome.Ok(HealthWeekly("2026-10-12", endDate, 0, 0, 0, 0, 0, 0, 0, 2, 5000, 1, stepsConflictDates = listOf(endDate)))
+            override suspend fun records(date: String) = Outcome.Ok(emptyList<HealthRecord>())
+            override suspend fun schedules(date: String) = Outcome.Ok(emptyList<MedicationSchedule>())
+            override suspend fun command(kind: String, payload: JSONObject) = Outcome.Ok(Unit)
+        }
+        val replies = PolicyReplies(loadRegistry(), local = KernelQueries(FakeFinanceRepository(), health,
+            today = { java.time.LocalDate.parse("2026-10-18") }))
+        val text = replies.reply("show my health this week").text
+        assertTrue(text, text.contains("5000 steps across 1 recorded days. On 1 of those days your entry and Health Connect differ"))
+    }
+    @Test fun spending_question_uses_exact_kernel_period_totals_and_cites_records() = runBlocking {
+        val repo = FakeFinanceRepository().apply {
+            periodAnalysis = FinancePeriodAnalysis("this_month",
+                listOf(DailyCashflow("USD", 10000, 2500, 7500)),
+                listOf(DailySpendCategory("food", "Food", "USD", 2500, 2)),
+                listOf("tx-1", "tx-2"))
+        }
+        val replies = PolicyReplies(loadRegistry(), local = KernelQueries(repo))
+
+        val answer = replies.reply("how much did I spend this month")
+
+        assertTrue(answer.text.contains("$25.00"))
+        assertTrue(answer.text.contains("Food"))
+        assertTrue(answer.text.contains("2 source records"))
+        assertTrue(repo.calls.any { it.startsWith("periodAnalysis:this_month") })
+    }
     @Test fun today_is_read_from_the_local_kernel_repository_without_a_pc_or_provider() = runBlocking {
         val repo = FakeFinanceRepository().apply {
             todaySummary = TodaySummary(

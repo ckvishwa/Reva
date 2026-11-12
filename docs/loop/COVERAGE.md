@@ -2,7 +2,7 @@
 
 Audit date 2026-10-15 (updated after B0, B1a-d, B2a-c; main at 0c39678). Source: `07_TRACEABILITY/v2_requirements.csv` (207 rows) and `tests/evidence/ledger.csv`. DONE = a ledger PASS row exists (open hardware rows noted). Nothing is DONE from code presence alone.
 
-Totals (200 of the 207 rows matched by pattern): DONE 76, PARTIAL 48, NOT STARTED 75, DEFERRED 1
+Totals (200 of the 207 rows matched by pattern): DONE 76, PARTIAL 50, NOT STARTED 73, DEFERRED 1 (AR-AND-013 and NFR-021 moved to PARTIAL on PR #37, 2026-10-19)
 
 Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = nothing left.
 
@@ -50,9 +50,9 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | AR-AND-008 | R2 | S15 | PARTIAL | C2 | C2a/b/c: signed PC gateway, owner-set scopes, Windows pickup and executor, Android sender and native phone actions implemented and merged (`2e64bb8`); 10 security invariants verified against the real Domain Kernel (Python 97 passed) and on an API 36 emulator (Android unit 307, instrumented 34, .NET 833, Rust 95 passed); physical phone/PC acceptance NEEDS_HARDWARE |
 | AR-AND-009 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
 | AR-AND-010 | R2 | S11 | DONE | - | AND-1-*, SYNC-1d-*, build.gradle.kts minSdk 31/target 36 |
-| AR-AND-011 | R3 | S21 | PARTIAL | C3 | C3a local planner registry and typed failure/unknown path; opt-in hosted provider, disclosure and per-domain consent pending C3b/c |
+| AR-AND-011 | R3 | S21 | PARTIAL | C3 | C3a local planner registry and typed failure/unknown path in PR #30; C3b opt-in hosted provider, visible modes, disclosure and strict both-domain egress consent implemented in worktree, pending PR/CI; paired open-question delegation remains open |
 | AR-AND-012 | R3 | S21 | PARTIAL | C3 | C3a read-only Today question uses local Rust Kernel and offline open questions explicitly say advanced reasoning is unavailable; full Finance summary and no-PC physical acceptance pending |
-| AR-AND-013 | R3 | S17 | NOT STARTED | D3 | Health Connect |
+| AR-AND-013 | R3 | S17 | PARTIAL | D3 | PR #37 `77f10e4`: read-only Health Connect steps/heart-rate import, per-type permission, rationale, grant recheck, revocation, idempotent import (FH-kernel-health-import, FH-android-unit); physical acceptance FH-hw-pending NEEDS_HARDWARE |
 | AR-AND-014 | R3 | S21 | NOT STARTED | C3/D6 | delete after reconnect in every domain |
 | AR-AND-015 | R3 | S24 | NOT STARTED | C3/E4 | battery/thermal |
 | AR-AND-016 | R4 | S26 | PARTIAL | F2 | debug APK only; signed APK/AAB in F2 |
@@ -222,6 +222,6 @@ Loop slices: B0-B4 Windows, C1-C3 phone, D1-D6 domains, E1-E4, F0-F3. "-" = noth
 | NFR-018 | R1 | S04 | DONE | - | AR-DOM-002, conformance Rust/Python/Kotlin, AR-DATA-011, AND-1-manifest |
 | NFR-019 | R1 | S08 | PARTIAL | B2 | never blocks UI thread, 60 fps cap, paused when hidden; GPU profile open (hardware) |
 | NFR-020 | R4 | S27 | PARTIAL | F3 | see AR-DOM-011 |
-| NFR-021 | R3 | S17 | NOT STARTED | D3/B3 | Health eval D3; Finance number accuracy B3 |
+| NFR-021 | R3 | S17 | PARTIAL | D3/B3 | PR #37 `77f10e4`: Finance accuracy and fresh-install restore totals (FH-kernel-finance-reports), Health safety/egress tests (FH-kernel-health-import, FH-android-unit); spoken/physical eval pending |
 | NFR-022 | R3 | S14 | DONE | - | AR-DOM-002, conformance Rust/Python/Kotlin, AR-DATA-011, AND-1-manifest |
 | NFR-023 | R1 | S11 | DONE | - | AR-DOM-002, conformance Rust/Python/Kotlin, AR-DATA-011, AND-1-manifest |

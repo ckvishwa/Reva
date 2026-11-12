@@ -10,6 +10,8 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -179,7 +181,9 @@ class AppFlowComposeTest {
         rule.onNodeWithTag("talk_placeholder").assertIsDisplayed()
         rule.onNodeWithTag("tab_more").performClick()
         rule.onNodeWithTag("more_sections").assertIsDisplayed()
-        rule.onNodeWithText("Health").assertIsDisplayed()
+        // Health is built and has its own tab; More must not call it "coming soon".
+        rule.onNodeWithContentDescription("Health, on its own tab").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithContentDescription("Health, coming soon").fetchSemanticsNodes().size)
     }
 
     @Test fun add_transaction_is_disabled_until_there_is_an_account() {

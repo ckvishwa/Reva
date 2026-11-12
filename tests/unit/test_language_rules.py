@@ -99,6 +99,8 @@ def test_fuzzy_reports_a_margin_and_a_vector_shadow_never_changes_the_answer() -
         ("what's on today", "today.get", {}),
         ("how much did I spend this week", "finance.summary", {"period": "week"}),
         ("how much did I spend", "finance.summary", {"period": "month"}),
+        ("how did I sleep this week", "health.weekly", {}),
+        ("show my health this week", "health.weekly", {}),
         ("show my spending for the year", "finance.summary", {"period": "year"}),
         ("remember that the wifi code is on the fridge", "memory.remember",
          {"content": "the wifi code is on the fridge"}),

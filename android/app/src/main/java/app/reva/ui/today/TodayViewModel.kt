@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.reva.core.Display
 import app.reva.core.Money
 import app.reva.data.FinanceRepository
+import app.reva.data.FinanceDailyAnalysis
 import app.reva.data.Outcome
 import java.time.LocalDate
 import kotlinx.coroutines.FlowPreview
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+data class DailyFinanceRow(val currency: String, val incomeText: String, val expenseText: String, val netText: String)
+
 data class TodayUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -26,11 +29,17 @@ data class TodayUiState(
     val budgetNearLimit: Boolean = false,
     val otherCurrenciesText: String = "",
     val billsText: String = "",
+    val dailyRows: List<DailyFinanceRow> = emptyList(),
+    val topSpendingText: String = "",
+    val dailySourceCount: Int = 0,
+    val dailyError: String? = null,
 ) {
     val accessibleSummary: String
         get() = error ?: buildString {
             append(if (hasBudget) "Budget left this month: $budgetLeftText $budgetOfText. " else "$budgetLeftText. ")
             append(billsText)
+            if (dailyRows.isNotEmpty()) append(". Daily finance: " + dailyRows.joinToString("; ") { "${it.currency} income ${it.incomeText}, expenses ${it.expenseText}, net ${it.netText}" })
+            if (dailyError != null) append(". Daily finance unavailable: $dailyError")
         }.trim()
 }
 
@@ -69,9 +78,27 @@ class TodayViewModel(
         loadedOnce = true
         when (result) {
             is Outcome.Failed -> _state.value = TodayUiState(error = result.error.message, budgetLeftText = "—")
-            is Outcome.Ok -> apply(result.value)
+            is Outcome.Ok -> {
+                apply(result.value)
+                val daily = repository.dailyAnalysis(today().toString())
+                if (mine != generation) return
+                _state.update { current -> when (daily) {
+                    is Outcome.Failed -> current.copy(dailyError = daily.error.message)
+                    is Outcome.Ok -> current.withDaily(daily.value)
+                } }
+            }
         }
     }
+
+    private fun TodayUiState.withDaily(analysis: FinanceDailyAnalysis): TodayUiState = copy(
+        dailyRows = analysis.cashflow.sortedBy { it.currency }.map {
+            DailyFinanceRow(it.currency, Money.format(it.incomeMinor, it.currency), Money.format(it.expenseMinor, it.currency), Money.format(it.netMinor, it.currency))
+        },
+        topSpendingText = analysis.spending.groupBy { it.currency }.toSortedMap().values.mapNotNull { group ->
+            group.maxByOrNull { it.spentMinor }?.let { "${it.category} ${Money.format(it.spentMinor, it.currency)}" }
+        }.joinToString(" · "),
+        dailySourceCount = analysis.sourceIds.distinct().size,
+    )
 
     private fun apply(summary: app.reva.data.TodaySummary) {
         val now = today()

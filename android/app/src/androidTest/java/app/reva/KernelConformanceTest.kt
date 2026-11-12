@@ -257,7 +257,7 @@ class KernelConformanceTest {
         }
     }
 
-    @Test fun the_app_holds_only_the_pairing_and_voice_permissions_at_runtime() {
+    @Test fun the_app_holds_only_the_reviewed_permissions_at_runtime() {
         val info = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
         val requested = info.requestedPermissions?.toList() ?: emptyList()
         assertEquals(
@@ -267,6 +267,8 @@ class KernelConformanceTest {
                 "android.permission.RECORD_AUDIO",
                 "android.permission.FOREGROUND_SERVICE",
                 "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+                "android.permission.health.READ_STEPS",
+                "android.permission.health.READ_HEART_RATE",
             ),
             requested.filter { it.startsWith("android.permission.") }.toSet(),
         )

@@ -61,6 +61,7 @@ fun FinanceScreen(
     onExport: (format: String) -> Unit,
     modifier: Modifier = Modifier,
     syncStatus: String? = null,
+    onManage: () -> Unit = {},
 ) {
     val state by vm.state.collectAsState()
     LazyColumn(
@@ -93,6 +94,7 @@ fun FinanceScreen(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton("Add transaction", onAddTransaction, Modifier.testTag("add_transaction"), enabled = state.hasAccounts)
                 SecondaryButton("Add account", onAddAccount, Modifier.testTag("add_account"), enabled = !state.isLocked)
+                SecondaryButton("Budgets & bills", onManage, Modifier.testTag("finance_manage_open"), enabled = !state.isLocked)
                 SecondaryButton("Import", onImport, Modifier.testTag("import"), enabled = state.hasAccounts)
                 ExportMenu(enabled = !state.isLocked && !state.isBusy, onExport = onExport)
             }
@@ -167,17 +169,36 @@ fun FinanceScreen(
                         color = RevaColors.Text,
                     )
                     CaptionText(state.netWorth.caption)
+                    state.netWorthTrend?.let { trend ->
+                        MutedText("Now, from current balances: ${trend.nowText}", Modifier.testTag("networth_now"))
+                        trend.changes.forEach { CaptionText(it) }
+                    }
                 }
             }
             item { SecondaryButton("Take net worth snapshot", vm::takeSnapshot, enabled = !state.isBusy) }
         }
         item { BudgetsCard(state, vm::setBudgetPeriod) }
         item { BillsCard(state) }
+        if (state.recurring.isNotEmpty()) {
+            item {
+                RevaCard(radius = 14.dp, modifier = Modifier.testTag("recurring_summary")) {
+                    MutedText("Recurring bills, subscriptions and income")
+                    state.recurring.forEach { row ->
+                        Column(Modifier.semantics(mergeDescendants = true) { contentDescription = row.a11y }) {
+                            Text(row.currency, color = RevaColors.Text)
+                            CaptionText(row.yearlyText)
+                            CaptionText(row.dueSoonText)
+                        }
+                    }
+                    CaptionText("Exact yearly totals of active repeating items. One-off bills are listed under Bills.")
+                }
+            }
+        }
         item { TransactionsCard(state, vm::onSearchChange) }
         item {
             Column {
                 Text(
-                    "Finance stays on this phone. There is no internet permission in this build, so nothing can leave it.",
+                    "Finance stays on this phone. It is shared only with a PC you paired, over your own Wi-Fi, and never with a hosted AI model.",
                     style = MaterialTheme.typography.bodySmall,
                     color = RevaColors.Muted,
                 )

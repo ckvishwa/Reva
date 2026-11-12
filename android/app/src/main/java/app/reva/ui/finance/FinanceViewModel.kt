@@ -11,7 +11,9 @@ import app.reva.data.Category
 import app.reva.data.Conflict
 import app.reva.data.ErrorKind
 import app.reva.data.FinanceRepository
+import app.reva.data.NetWorthReport
 import app.reva.data.NetWorthSnapshot
+import app.reva.data.RecurringSummary
 import app.reva.data.Outcome
 import app.reva.data.Transaction
 import java.time.LocalDate
@@ -31,6 +33,12 @@ import kotlinx.coroutines.launch
 data class AccountCard(val accountId: String, val title: String, val balanceText: String, val caption: String, val a11y: String)
 
 data class NetWorthCard(val hasSnapshot: Boolean, val valueText: String, val caption: String, val a11y: String)
+
+/** Live net worth and snapshot changes, from the Kernel's networth_report. */
+data class NetWorthTrend(val nowText: String, val changes: List<String>)
+
+/** Yearly recurring totals for one currency, from the Kernel's recurring_summary. */
+data class RecurringRow(val currency: String, val yearlyText: String, val dueSoonText: String, val a11y: String)
 
 data class BudgetRow(
     val name: String,
@@ -70,6 +78,8 @@ data class FinanceUiState(
     val budgets: List<BudgetRow> = emptyList(),
     val budgetPeriod: String = FinanceViewModel.THIS_MONTH,
     val bills: List<BillRow> = emptyList(),
+    val recurring: List<RecurringRow> = emptyList(),
+    val netWorthTrend: NetWorthTrend? = null,
     val transactions: List<TransactionRow> = emptyList(),
     val search: String = "",
     val isBusy: Boolean = false,
@@ -133,6 +143,10 @@ class FinanceViewModel(
         val billsResult = repository.bills()
         val snapshotsResult = repository.netWorthSnapshots()
         val conflictsResult = repository.conflicts()
+        val asOf = today().toString()
+        // Reports are extra detail: if one is unavailable the rest of the page still loads, without that card.
+        val recurringResult = repository.recurringSummary(asOf)
+        val netWorthResult = repository.netWorthReport(asOf)
         if (generation != refreshGeneration) return // a newer refresh is already running
 
         val failure = listOf(balancesResult, categoriesResult, transactionsResult, budgetsResult, billsResult, snapshotsResult, conflictsResult)
@@ -164,6 +178,8 @@ class FinanceViewModel(
                 bills = (billsResult as Outcome.Ok).value.map { b -> billRow(b, now) },
                 transactions = (transactionsResult as Outcome.Ok).value.map { t -> transactionRow(t, now) },
                 conflicts = (conflictsResult as Outcome.Ok).value.map(::conflictRow),
+                recurring = (recurringResult as? Outcome.Ok)?.value?.map(::recurringRow) ?: emptyList(),
+                netWorthTrend = (netWorthResult as? Outcome.Ok)?.value?.let(::netWorthTrend),
             )
         }
     }
@@ -280,6 +296,24 @@ class FinanceViewModel(
             t.id, date, t.description, category, account, amount, t.amountMinor > 0, source, t.sourceKind == "voice",
             "$date, ${t.description}, $category, $account, $amount, source $source",
         )
+    }
+
+    private fun recurringRow(r: RecurringSummary): RecurringRow {
+        val yearly = "Out ${Money.format(r.yearlyOutgoingMinor, r.currency)} · in ${Money.format(r.yearlyIncomeMinor, r.currency)} · " +
+            "net ${Money.format(r.yearlyNetMinor, r.currency, showPlus = true)} a year"
+        val due = "Due by ${r.dueUntil}: out ${Money.format(r.dueSoonOutgoingMinor, r.currency)} · in ${Money.format(r.dueSoonIncomeMinor, r.currency)}"
+        return RecurringRow(r.currency, yearly, due, "Recurring ${r.currency}, ${r.itemCount} items, $yearly, $due")
+    }
+
+    private fun netWorthTrend(report: NetWorthReport): NetWorthTrend? {
+        if (report.current.isEmpty()) return null
+        val now = report.current.toSortedMap().entries.joinToString(" · ") { (code, e) -> Money.format(e.netMinor, code) }
+        val changes = report.history.takeLast(3).reversed().map { point ->
+            point.asOf + ": " + point.byCurrency.toSortedMap().entries.joinToString(" · ") { (code, value) ->
+                Money.format(value.first, code) + (value.second?.let { " (${Money.format(it, code, showPlus = true)})" } ?: "")
+            }
+        }
+        return NetWorthTrend(now, changes)
     }
 
     private fun netWorthCard(snapshot: NetWorthSnapshot?, now: LocalDate): NetWorthCard {

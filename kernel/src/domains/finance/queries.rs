@@ -101,6 +101,8 @@ pub fn run(conn: &Connection, name: &str, params: &Value) -> DomainResult<QueryO
         "list_budgets" => list_all(conn, "budget", "ORDER BY category_id, id"),
         "list_bills" => list_all(conn, "bill", "ORDER BY due_date, name COLLATE NOCASE, id"),
         "list_networth_snapshots" => list_all(conn, "networth_snapshot", "ORDER BY as_of, id"),
+        "recurring_summary" => recurring_summary(conn, params),
+        "networth_report" => networth_report(conn, params),
         "get" => get(conn, params),
         "resolve_category" => resolve_category_query(conn, params),
         "conflicts" => conflicts(conn, params),
@@ -510,6 +512,110 @@ fn account_balances(conn: &Connection, params: &Value) -> DomainResult<QueryOut>
         })
         .collect();
     Ok(QueryOut { rows: Value::Array(rows), source_ids: ids })
+}
+
+/// How many times a recurrence repeats in a year. Exact integers: no monthly averaging, no rounding.
+fn per_year(recurrence: &str) -> Option<i64> {
+    match recurrence {
+        "weekly" => Some(52),
+        "biweekly" => Some(26),
+        "monthly" => Some(12),
+        "quarterly" => Some(4),
+        "yearly" => Some(1),
+        _ => None, // "once" is not recurring
+    }
+}
+
+/// Active recurring bills, subscriptions and income per currency, as yearly totals in minor units, plus
+/// what falls due in the next `days` (default 30). One-off bills are listed in `upcoming_bills`, not here.
+fn recurring_summary(conn: &Connection, params: &Value) -> DomainResult<QueryOut> {
+    let today = as_of(params)?;
+    let days = opt_i64(params, "days")?.unwrap_or(30);
+    if !(0..=366).contains(&days) {
+        return Err(DomainError::validation("days", "must be between 0 and 366"));
+    }
+    let horizon = today.add_days(days).to_iso();
+    let bills =
+        schema::select(conn, "bill", "WHERE active = 1 ORDER BY currency, kind, name COLLATE NOCASE, id", vec![])?;
+    let mut by: BTreeMap<String, Map<String, Value>> = BTreeMap::new();
+    let mut ids = Vec::new();
+    for bill in bills {
+        let recurrence = bill["recurrence"].as_str().unwrap_or("");
+        let Some(times) = per_year(recurrence) else { continue };
+        let amount = bill["amount_minor"].as_i64().ok_or_else(|| DomainError::internal("bill amount"))?;
+        let yearly = amount.checked_mul(times).ok_or_else(|| DomainError::validation("amount_minor", "too large"))?;
+        let currency = bill["currency"].as_str().unwrap_or("").to_string();
+        let entry = by.entry(currency.clone()).or_insert_with(|| {
+            let mut m = Map::new();
+            for key in
+                ["yearly_outgoing_minor", "yearly_income_minor", "due_soon_outgoing_minor", "due_soon_income_minor"]
+            {
+                m.insert(key.into(), json!(0));
+            }
+            m.insert("currency".into(), json!(currency));
+            m.insert("items".into(), json!([]));
+            m
+        });
+        let income = bill["kind"].as_str() == Some("income");
+        let add = |m: &mut Map<String, Value>, key: &str, by: i64| -> DomainResult<()> {
+            let total = m[key]
+                .as_i64()
+                .unwrap_or(0)
+                .checked_add(by)
+                .ok_or_else(|| DomainError::validation(key, "too large"))?;
+            m.insert(key.into(), json!(total));
+            Ok(())
+        };
+        add(entry, if income { "yearly_income_minor" } else { "yearly_outgoing_minor" }, yearly)?;
+        let due = bill["due_date"].as_str().unwrap_or("");
+        if due <= horizon.as_str() {
+            add(entry, if income { "due_soon_income_minor" } else { "due_soon_outgoing_minor" }, amount)?;
+        }
+        if let Some(items) = entry.get_mut("items").and_then(Value::as_array_mut) {
+            items.push(json!({"id": bill["id"], "name": bill["name"], "kind": bill["kind"], "recurrence": recurrence,
+                "amount_minor": amount, "yearly_minor": yearly, "due_date": due}));
+        }
+        ids.push(bill["id"].as_str().unwrap_or("").to_string());
+    }
+    let rows = by
+        .into_values()
+        .map(|mut m| {
+            let net = m["yearly_income_minor"].as_i64().unwrap_or(0) - m["yearly_outgoing_minor"].as_i64().unwrap_or(0);
+            m.insert("yearly_net_minor".into(), json!(net));
+            m.insert("as_of".into(), json!(today.to_iso()));
+            m.insert("due_until".into(), json!(horizon));
+            Value::Object(m)
+        })
+        .collect();
+    Ok(QueryOut { rows: Value::Array(rows), source_ids: ids })
+}
+
+/// Net worth now (from live balances) and every saved snapshot with its change from the previous
+/// snapshot in the same currency.
+fn networth_report(conn: &Connection, params: &Value) -> DomainResult<QueryOut> {
+    let today = as_of(params)?;
+    let current = networth_by_currency(conn, today)?;
+    let snapshots = schema::select(conn, "networth_snapshot", "ORDER BY as_of, id", vec![])?;
+    let mut previous: BTreeMap<String, i64> = BTreeMap::new();
+    let mut history = Vec::new();
+    let mut ids: Vec<String> = balances(conn, Some(today), false)?
+        .iter()
+        .filter_map(|b| b.account["id"].as_str().map(str::to_string))
+        .collect();
+    for snap in snapshots {
+        let mut changes = Map::new();
+        if let Some(by) = snap["by_currency"].as_object() {
+            for (cur, entry) in by {
+                let net = entry["net_minor"].as_i64().unwrap_or(0);
+                let change = previous.get(cur).map(|old| net - old);
+                changes.insert(cur.clone(), json!({"net_minor": net, "change_minor": change}));
+                previous.insert(cur.clone(), net);
+            }
+        }
+        ids.push(snap["id"].as_str().unwrap_or("").to_string());
+        history.push(json!({"id": snap["id"], "as_of": snap["as_of"], "by_currency": changes}));
+    }
+    Ok(QueryOut { rows: json!([{"as_of": today.to_iso(), "current": current, "history": history}]), source_ids: ids })
 }
 
 /// Net worth per currency from current balances of non-archived accounts.
