@@ -37,6 +37,11 @@ _SPEND = re.compile(
     re.IGNORECASE,
 )
 _PERIOD = re.compile(r"\b(?:this |last |the )?(week|month|year)\b", re.IGNORECASE)
+_HEALTH_WEEK = re.compile(
+    r"^(?:how did i sleep this week|how was my sleep this week"
+    r"|show my health this week|health summary this week)$",
+    re.IGNORECASE,
+)
 _REMEMBER = re.compile(
     r"^(?:please\s+)?(?:remember|note|make a note)(?: that)?\s+(?P<what>.{2,})$", re.IGNORECASE
 )
@@ -141,6 +146,8 @@ def parse(text: str, resolver: AppResolver) -> RuleHit | None:
         return RuleHit(
             "finance.summary", {"period": period.group(1).lower() if period else "month"}
         )
+    if _HEALTH_WEEK.match(cleaned):
+        return RuleHit("health.weekly", {})
     remember = _REMEMBER.match(cleaned)
     if remember:
         what = remember.group("what").strip()[:MAX_TEXT]

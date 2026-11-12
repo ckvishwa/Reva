@@ -15,6 +15,10 @@ import org.junit.Test
  * must fall through to the assistant, upper case, and over-long input.
  */
 class RulesTest {
+    @Test fun weekly_health_question_uses_read_only_kernel_capability() {
+        assertEquals("health.weekly", Rules.parse("how did I sleep this week")?.capability)
+        assertEquals("health.weekly", Rules.parse("show my health this week")?.capability)
+    }
     private val cases = JSONObject(File(System.getProperty("reva.fixtures"), "rules-cases.json").readText()).getJSONArray("cases")
 
     @Test fun every_sentence_matches_the_python_rules() {

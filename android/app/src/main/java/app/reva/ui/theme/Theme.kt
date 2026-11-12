@@ -33,6 +33,19 @@ object RevaColors {
     val Listening = Color(0xFF6CC4D9)
     val Success = Color(0xFF8FD3A6)
     val Error = Color(0xFFF0A0A0)
+
+    // Gym (GYM-01) keeps the shared surfaces, type and spacing and adds the approved purple
+    // accent for its primary actions. Green means a verified completed set, amber a pending one,
+    // red only a destructive action or an error.
+    val GymCanvas = Color(0xFF101114)
+    val GymSurface = Color(0xFF191A20)
+    val GymElevated = Color(0xFF24252E)
+    val GymAccent = Color(0xFFB49AFF)
+    val GymText = Color(0xFFF5F5F7)
+    val GymSecondary = Color(0xFFB8BAC7)
+    val GymSuccess = Color(0xFF7EE0AE)
+    val GymWarning = Color(0xFFF3C77A)
+    val GymError = Color(0xFFE86A73)
 }
 
 object RevaFonts {
@@ -54,6 +67,10 @@ object RevaShapes {
     val Button = RoundedCornerShape(10.dp)
     val Input = RoundedCornerShape(8.dp)
     val MinTarget = 48.dp // 44 dp by the design, 48 dp where Android's own minimum is larger
+
+    /** Gym cards and rows: rectangular with a visible border, 6-8 dp radius. */
+    val GymCard = RoundedCornerShape(8.dp)
+    val GymRow = RoundedCornerShape(6.dp)
 }
 
 private val scheme: ColorScheme = darkColorScheme(
@@ -100,6 +117,11 @@ object RevaText {
     val Number = style(24, mono = true, line = 30)
     val Amount = style(14, mono = true, line = 20)
     val Small = style(12, mono = true, line = 16)
+
+    /** A workout timer: the largest mono style, so it reads at arm's length. */
+    val Timer = style(34, FontWeight.Medium, mono = true, line = 40)
+    /** A logged load or rep count in a set row. */
+    val Metric = style(18, FontWeight.Medium, mono = true, line = 24)
 }
 
 @Composable

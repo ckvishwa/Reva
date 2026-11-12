@@ -13,8 +13,9 @@ import org.w3c.dom.NodeList
 /**
  * Manifest checks for this slice, run on every unit-test build against the MERGED manifest (so permissions
  * and services pulled in by libraries count too): INTERNET and CAMERA (for pairing with the user's own PC) and
- * RECORD_AUDIO plus the two foreground-service permissions (for the voice session), no cleartext, no QUERY_ALL_PACKAGES, no AccessibilityService,
- * and backup rules that exclude the domain files.
+ * RECORD_AUDIO plus the two foreground-service permissions (for the voice session), READ-ONLY Health Connect steps and heart
+ * rate (asked for per type from the Health screen), no cleartext, no QUERY_ALL_PACKAGES, no AccessibilityService, and backup
+ * rules that exclude the domain files.
  */
 class ManifestTest {
     private fun parse(path: String): Document {
@@ -33,7 +34,7 @@ class ManifestTest {
 
     private fun Document.permissions() = getElementsByTagName("uses-permission").elements().map { it.getAttributeNS(androidNs, "name") }
 
-    @Test fun the_app_requests_exactly_the_pairing_and_voice_permissions_plus_androidxs_internal_permission() {
+    @Test fun the_app_requests_exactly_the_pairing_voice_and_health_read_permissions_plus_androidxs_internal_permission() {
         val permissions = merged().permissions().sorted()
         assertEquals(
             listOf(
@@ -42,10 +43,33 @@ class ManifestTest {
                 "android.permission.FOREGROUND_SERVICE_MICROPHONE",
                 "android.permission.INTERNET",
                 "android.permission.RECORD_AUDIO",
+                "android.permission.health.READ_HEART_RATE",
+                "android.permission.health.READ_STEPS",
                 "app.reva.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
             ),
             permissions,
         )
+    }
+
+    @Test fun health_connect_access_is_read_only_foreground_and_limited_to_the_last_30_days() {
+        val health = merged().permissions().filter { it.startsWith("android.permission.health.") }
+        assertEquals(listOf("android.permission.health.READ_HEART_RATE", "android.permission.health.READ_STEPS"), health.sorted())
+        assertFalse("REVA never writes to Health Connect", health.any { it.contains("WRITE") })
+        assertFalse("no older history", health.contains("android.permission.health.READ_HEALTH_DATA_HISTORY"))
+        assertFalse("no background reads", health.contains("android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"))
+    }
+
+    @Test fun the_health_connect_rationale_is_shown_by_a_text_only_screen_and_the_system_only_alias() {
+        val doc = parse(System.getProperty("reva.sourceManifest"))
+        val activity = doc.getElementsByTagName("activity").elements()
+            .single { it.getAttributeNS(androidNs, "name") == ".healthconnect.HealthPermissionsRationaleActivity" }
+        val actions = activity.getElementsByTagName("action").elements().map { it.getAttributeNS(androidNs, "name") }
+        assertEquals(listOf("androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"), actions)
+        val alias = doc.getElementsByTagName("activity-alias").elements().single()
+        assertEquals(".healthconnect.HealthPermissionsRationaleActivity", alias.getAttributeNS(androidNs, "targetActivity"))
+        assertEquals("android.permission.START_VIEW_PERMISSION_USAGE", alias.getAttributeNS(androidNs, "permission"))
+        val categories = alias.getElementsByTagName("category").elements().map { it.getAttributeNS(androidNs, "name") }
+        assertEquals(listOf("android.intent.category.HEALTH_PERMISSIONS"), categories)
     }
 
     @Test fun the_voice_service_is_a_private_microphone_service_and_nothing_starts_it_but_the_app() {
@@ -106,9 +130,17 @@ class ManifestTest {
         // AndroidX's profile installer receiver is exported on purpose, but only the system's DUMP permission may call it.
         val unguarded = exported.filter { it.getAttributeNS(androidNs, "permission") != "android.permission.DUMP" }
             .map { it.getAttributeNS(androidNs, "name") }
+        // Health Connect needs two exported pieces: the text-only rationale screen it opens on Android 12/13, and the
+        // client library's SDK service, whose binder refuses any caller that is not the Health Connect provider app
+        // (HealthDataSdkServiceStubImpl.verifyPackageName, "Not allowed!") and carries no health data.
         // Builds made for Compose tests (-Preva.uiTests=true) add androidx's empty test activity; the build you sideload does not.
-        val expected = if (System.getProperty("reva.uiTestsBuild") == "true") listOf("app.reva.MainActivity", "androidx.activity.ComponentActivity") else listOf("app.reva.MainActivity")
-        assertEquals(expected, unguarded)
+        val base = listOf(
+            "app.reva.MainActivity",
+            "app.reva.healthconnect.HealthPermissionsRationaleActivity",
+            "androidx.health.platform.client.impl.sdkservice.HealthDataSdkService",
+        )
+        val expected = if (System.getProperty("reva.uiTestsBuild") == "true") base + "androidx.activity.ComponentActivity" else base
+        assertEquals(expected.sorted(), unguarded.sorted())
         val provider = doc.getElementsByTagName("provider").elements().single { it.getAttributeNS(androidNs, "name").endsWith("FileProvider") }
         assertEquals("false", provider.getAttributeNS(androidNs, "exported"))
     }

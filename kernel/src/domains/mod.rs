@@ -2,3 +2,4 @@
 //! follow the same shape (schema, commands, projections, queries) in later slices.
 
 pub mod finance;
+pub mod health;

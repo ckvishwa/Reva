@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Test APK only (GYM-02.1). Never part of the app you sideload.
+
+  A share target that behaves like a Files app: it reads the content:// stream the sender granted it and
+  saves a copy to Downloads. That lets the end-to-end test drive the real system share sheet and then the
+  real system file picker, with the sender's one-time URI grant in between being the thing under test.
+  The emulator's own share sheet offers only Drive, Gmail and Nearby Share, none of which can save a file
+  without a signed-in account.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="app.reva.testing.SaveToDownloadsActivity"
+            android:exported="true"
+            android:label="Reva test: save to Downloads"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

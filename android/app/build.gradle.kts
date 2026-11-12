@@ -121,6 +121,12 @@ dependencies {
     implementation(libs.zxing.core)
     // WebViewAssetLoader serves the avatar page and model from the APK without file:// access.
     implementation(libs.androidx.webkit)
+    // Health Connect (Apache-2.0): READ-ONLY daily steps and heart-rate aggregates, asked for per data type. No write
+    // permission is declared or requested; see docs/android/health-connect.md.
+    implementation(libs.androidx.health.connect)
+    // Health Connect already brings Guava (Apache-2.0) at runtime; that replaces CameraX's ListenableFuture-only artifact
+    // with an empty stub, so the same Guava version is declared here for compilation too. Nothing new is packaged.
+    implementation(libs.guava)
     // UniFFI's Kotlin binding loads libreva_kernel.so through JNA; the AAR carries JNA's own native stub.
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
 
