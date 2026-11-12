@@ -88,6 +88,34 @@ class HostedPlannerTest {
         assertEquals(0, capture.calls)
     }
 
+    @Test fun revoking_one_domain_during_key_read_stops_all_network_egress() = runBlocking {
+        val capture = Capture()
+        val modes = ModeController(Store(ModeConfig(preferred = RunMode.Standalone, hostedEnabled = true,
+            financeConsent = true, memoryConsent = true)))
+        modes.availability(ModeAvailability(networkAvailable = true, hostedKeyConfigured = true))
+        val planner = HostedPlanner(modes, key = {
+            modes.configure(modes.config().copy(memoryConsent = false))
+            "test-api-key"
+        }, transport = capture)
+
+        assertTrue(planner.answer("What is Jupiter?") is BrainResult.Unknown)
+        assertEquals(0, capture.calls)
+        assertEquals(RunMode.OfflineLite, modes.state.value.mode)
+    }
+
+    @Test fun revoking_one_domain_while_waiting_discards_provider_text() = runBlocking {
+        val modes = ModeController(Store(ModeConfig(preferred = RunMode.Standalone, hostedEnabled = true,
+            financeConsent = true, memoryConsent = true)))
+        modes.availability(ModeAvailability(networkAvailable = true, hostedKeyConfigured = true))
+        val planner = HostedPlanner(modes, key = { "test-api-key" }, transport = HostedTransport { _, _ ->
+            modes.configure(modes.config().copy(financeConsent = false))
+            HostedHttpResponse(200, """{"stop_reason":"end_turn","content":[{"type":"text","text":"Jupiter is a planet."}]}""")
+        })
+
+        assertTrue(planner.answer("What is Jupiter?") is BrainResult.Unknown)
+        assertEquals(RunMode.OfflineLite, modes.state.value.mode)
+    }
+
     @Test fun truncated_or_non_text_response_is_never_reported_as_an_answer() = runBlocking {
         val capture = Capture()
         val (_, planner) = ready(ModeConfig(preferred = RunMode.Standalone, hostedEnabled = true, financeConsent = true, memoryConsent = true), capture)
