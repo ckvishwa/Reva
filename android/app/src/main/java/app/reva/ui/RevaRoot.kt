@@ -6,10 +6,13 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Favorite
@@ -27,7 +30,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,13 +55,14 @@ import app.reva.ui.finance.AddTransactionForm
 import app.reva.ui.finance.AddTransactionViewModel
 import app.reva.ui.finance.FinanceScreen
 import app.reva.ui.finance.FinanceManageForm
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.ui.unit.dp
 import app.reva.ui.gym.GymHost
-import app.reva.ui.gym.PixelGlyph
-import app.reva.ui.gym.PixelIcon
 import app.reva.ui.health.HealthConnectUi
 import app.reva.ui.health.HealthScreen
+import app.reva.ui.life.LifeArea
+import app.reva.ui.life.LifeAreaBar
+import app.reva.ui.life.LifePins
+import app.reva.ui.life.LifeScreen
+import app.reva.ui.life.SharedPrefsLifePinStore
 import app.reva.ui.finance.FinanceViewModel
 import app.reva.ui.finance.FormSheet
 import app.reva.ui.finance.ImportForm
@@ -84,13 +87,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Tab(val label: String, val icon: ImageVector?, val tag: String, val pixel: PixelIcon? = null) {
+/**
+ * The five destinations of ARD-210 section 4. Finance, Health and Gym live inside Life. Plan is declared but
+ * not [built] until the Kernel plan aggregate exists (slice PLAN-1); a tab that is not built is not shown.
+ */
+internal enum class Tab(val label: String, val icon: ImageVector, val tag: String, val built: Boolean = true) {
     Today("Today", Icons.Filled.Home, "tab_today"),
-    Finance("Finance", Icons.AutoMirrored.Filled.List, "tab_finance"),
-    Health("Health", Icons.Filled.Favorite, "tab_health"),
-    Gym("Gym", null, "tab_gym", PixelIcon.Dumbbell),
+    Plan("Plan", Icons.Filled.DateRange, "tab_plan", built = false),
     Talk("Talk", Icons.Filled.Face, "tab_talk"),
-    More("More", Icons.Filled.Menu, "tab_more"),
+    Life("Life", Icons.Filled.Favorite, "tab_life"),
+    More("More", Icons.Filled.Menu, "tab_more");
+
+    companion object {
+        val visible: List<Tab> get() = entries.filter { it.built }
+
+        /** A saved tab name from an older build, or one that is no longer shown, falls back to Today. */
+        fun restore(name: String?): Tab = visible.firstOrNull { it.name == name } ?: Today
+    }
 }
 
 private enum class Sheet { None, AddTransaction, AddAccount, Import, ManageFinance }
@@ -104,7 +117,7 @@ private class RootViewModels(private val repository: FinanceRepository) : ViewMo
     } as T
 }
 
-/** The whole app below the activity: bottom navigation, the four tabs, and the Finance sheets. */
+/** The whole app below the activity: bottom navigation, the tabs, the Life hub and the Finance sheets. */
 @Composable
 fun RevaRoot(
     repository: FinanceRepository,
@@ -129,12 +142,26 @@ fun RevaRoot(
     val factory = remember(repository) { RootViewModels(repository) }
     val today: TodayViewModel = viewModel(factory = factory)
     val finance: FinanceViewModel = viewModel(factory = factory)
-    var tab by rememberSaveable { mutableIntStateOf(Tab.Today.ordinal) }
+    var tabName by rememberSaveable { mutableStateOf(Tab.Today.name) }
+    val tab = Tab.restore(tabName)
+    // Which domain is open inside Life; null is the hub. Kept across tab switches and rotation.
+    var lifeAreaKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val lifeArea = LifeArea.fromKey(lifeAreaKey)
+    val availableAreas = remember(healthRepository, gymRepository) {
+        buildSet {
+            add(LifeArea.Finance)
+            if (healthRepository != null) add(LifeArea.Health)
+            if (gymRepository != null) add(LifeArea.Gym)
+        }
+    }
     var sheet by rememberSaveable { mutableStateOf(Sheet.None) }
     var pendingExport by remember { mutableStateOf<String?>(null) }
     var exportError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val lifePins = remember {
+        LifePins(SharedPrefsLifePinStore(context.getSharedPreferences("reva_life", android.content.Context.MODE_PRIVATE)))
+    }
     val syncStatus = autoSync?.status?.collectAsState()?.value?.text
 
     LaunchedEffect(modes, autoSync) {
@@ -167,15 +194,16 @@ fun RevaRoot(
     }
 
     // Opening a tab reloads it from the Kernel (off the main thread), so it never shows stale numbers.
-    LaunchedEffect(tab) {
-        when (Tab.entries[tab]) {
-            Tab.Today -> today.refresh()
-            Tab.Finance -> finance.refresh()
-            Tab.Health -> Unit
-            Tab.Gym -> Unit
+    LaunchedEffect(tab, lifeArea) {
+        when {
+            tab == Tab.Today -> today.refresh()
+            tab == Tab.Life && lifeArea == LifeArea.Finance -> finance.refresh()
             else -> Unit
         }
     }
+
+    // Back from a domain opened in Life returns to the hub instead of leaving the app.
+    BackHandler(enabled = tab == Tab.Life && lifeArea != null) { lifeAreaKey = null }
 
     fun saved() {
         sheet = Sheet.None
@@ -188,18 +216,15 @@ fun RevaRoot(
         contentColor = RevaColors.Text,
         bottomBar = {
             NavigationBar(containerColor = RevaColors.Nav, contentColor = RevaColors.Secondary) {
-                Tab.entries.forEach { entry ->
+                Tab.visible.forEach { entry ->
                     NavigationBarItem(
-                        selected = tab == entry.ordinal,
-                        onClick = { tab = entry.ordinal },
-                        icon = {
-                            val pixel = entry.pixel
-                            if (pixel != null) {
-                                PixelGlyph(pixel, size = 20.dp, tint = LocalContentColor.current)
-                            } else {
-                                Icon(entry.icon!!, contentDescription = null)
-                            }
+                        selected = tab == entry,
+                        onClick = {
+                            // Tapping Life while already on it returns to the hub; switching tabs keeps your place.
+                            if (entry == Tab.Life && tab == Tab.Life) lifeAreaKey = null
+                            tabName = entry.name
                         },
+                        icon = { Icon(entry.icon, contentDescription = null) },
                         label = { Text(entry.label) },
                         modifier = Modifier.testTag(entry.tag),
                         colors = NavigationBarItemDefaults.colors(
@@ -215,26 +240,28 @@ fun RevaRoot(
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            when (Tab.entries[tab]) {
+            when (tab) {
                 Tab.Today -> TodayScreen(today, syncStatus = syncStatus, healthRepository = healthRepository)
-                Tab.Finance -> FinanceScreen(
-                    vm = finance,
-                    onAddTransaction = { sheet = Sheet.AddTransaction },
-                    onAddAccount = { sheet = Sheet.AddAccount },
-                    onImport = { sheet = Sheet.Import },
-                    onManage = { sheet = Sheet.ManageFinance },
-                    onExport = { pendingExport = it },
-                    syncStatus = syncStatus,
-                )
-                Tab.Health -> if (healthRepository != null) {
-                    HealthScreen(healthRepository, healthConnect = healthConnect, onShareBackup = { bytes -> onShare(ExportShare.HEALTH_JSON, bytes) })
-                } else {
-                    Text("Health unavailable")
-                }
-                Tab.Gym -> if (gymRepository != null) {
-                    GymHost(gymRepository)
-                } else {
-                    Text("Gym unavailable")
+                Tab.Plan -> Unit // not built: never selected, see Tab.restore
+                Tab.Life -> when (lifeArea?.takeIf { it in availableAreas }) {
+                    null -> LifeScreen(lifePins, availableAreas, onOpen = { lifeAreaKey = it.key })
+                    LifeArea.Finance -> LifeAreaHost(LifeArea.Finance, onBack = { lifeAreaKey = null }) {
+                        FinanceScreen(
+                            vm = finance,
+                            onAddTransaction = { sheet = Sheet.AddTransaction },
+                            onAddAccount = { sheet = Sheet.AddAccount },
+                            onImport = { sheet = Sheet.Import },
+                            onManage = { sheet = Sheet.ManageFinance },
+                            onExport = { pendingExport = it },
+                            syncStatus = syncStatus,
+                        )
+                    }
+                    LifeArea.Health -> LifeAreaHost(LifeArea.Health, onBack = { lifeAreaKey = null }) {
+                        HealthScreen(healthRepository!!, healthConnect = healthConnect, onShareBackup = { bytes -> onShare(ExportShare.HEALTH_JSON, bytes) })
+                    }
+                    LifeArea.Gym -> LifeAreaHost(LifeArea.Gym, onBack = { lifeAreaKey = null }) {
+                        GymHost(gymRepository!!)
+                    }
                 }
                 Tab.Talk ->
                     if (voice != null) TalkScreen(voice, onBeforeMicRequest, onOpenAppSettings, pcRequests, phoneActions, modes) else TalkUnavailableScreen()
@@ -314,6 +341,14 @@ fun RevaRoot(
             containerColor = RevaColors.Surface,
             confirmButton = { TextButton(onClick = { exportError = null }) { Text("OK") } },
         )
+    }
+}
+
+@Composable
+private fun LifeAreaHost(area: LifeArea, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        LifeAreaBar(area, onBack)
+        Box(Modifier.weight(1f)) { content() }
     }
 }
 

@@ -243,7 +243,7 @@ class Phone:
         self.sh("am", "start", "-n", f"{APP}/app.reva.MainActivity")
         self.wait(text_is("Today"), 40, APP, "the app to open")
 
-    def tab(self, name: str) -> None:
+    def _bottom_tab(self, name: str) -> bool:
         deadline = time.time() + 20
         while time.time() < deadline:
             hits = [
@@ -253,6 +253,28 @@ class Phone:
             ]
             if hits:
                 self.tap(hits[-1])
+                time.sleep(1.5)
+                return True
+            time.sleep(0.6)
+        return False
+
+    def tab(self, name: str) -> None:
+        # APK-01: Finance, Health and Gym are opened from the Life hub, not from their own tabs.
+        if name not in ("Finance", "Health", "Gym"):
+            self._bottom_tab(name)
+            return
+        # The first tap selects Life (which may still show the last domain); the second returns to the hub.
+        if not (self._bottom_tab("Life") and self._bottom_tab("Life")):
+            return
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            hits = [
+                n
+                for n in self.nodes()
+                if n.pkg == APP and n.text == name and n.top <= self.height - 330
+            ]
+            if hits:
+                self.tap(hits[0])
                 time.sleep(1.5)
                 return
             time.sleep(0.6)

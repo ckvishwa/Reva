@@ -46,7 +46,8 @@ class ChangeRefreshComposeTest {
     }
 
     private fun openFinance() {
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("finance_list").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("finance_list").performScrollToNode(hasText("Lunch"))
     }

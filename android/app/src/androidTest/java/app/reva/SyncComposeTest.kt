@@ -91,7 +91,8 @@ class SyncComposeTest {
             conflicts = mutableListOf(Conflict(7, "Corner Cafe", "amount_minor", "USD", -1_111, -2_222))
         }
         rule.setContent { RevaTheme { RevaRoot(repo, "0.1.0", onShare = { _, _ -> }) } }
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         waitFor("finance_list")
         rule.onNodeWithTag("finance_list").performScrollToNode(androidx.compose.ui.test.hasTestTag("conflict_banner"))
         shot("finance-conflict-banner")

@@ -93,7 +93,11 @@ val stageRevaAssets = tasks.register<Copy>("stageRevaAssets") {
     into(layout.buildDirectory.dir("generated/revaAssets"))
 }
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/revaAssets"))
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(stageRevaAssets) }
+tasks.matching {
+    (it.name.startsWith("merge") && it.name.endsWith("Assets")) ||
+        (it.name.startsWith("generate") && it.name.contains("Lint") && it.name.endsWith("Model")) ||
+        it.name.startsWith("lintAnalyze")
+}.configureEach { dependsOn(stageRevaAssets) }
 
 kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }

@@ -1,3 +1,5 @@
+- **APK-01 navigation (2026-11-12):** API 36 airplane-mode instrumented 54 passed / 2 skipped; Rust 143 passed / 1 ignored, cross-binding 9 passed, Android JVM 413 passed, lint 0 errors; final APK sha256 e503eb0d33417b8f97802402d61b420fc78914fc476b469bdc48db03ebcb323c. Baseline Gym plan survived in-place upgrade and opened via Life; fresh install and cold start checked. PR #32 is merged. UniFFI exceptions, source-scanning boundaries, More coming-soon rows, remain follow-ups; fifth-pin rejection is verified at the logic layer only (three real domains exist). Evidence: `tests/evidence/APK-01.md`.
+
 # CLAUDE.md — REVA 2.0
 
 REVA is a personal AI that you talk to through an animated avatar. It has a WinUI 3 Windows app and a Kotlin/Compose Android app, and each one works on its own. Eight life domains (Memory, Finance, Health, Coach, Career, Learn, Cyber, Personal) live in one shared Rust Domain Kernel. A Python Core on the PC handles voice, planning, policy and sync. Single user, local-first; any cloud use is opt-in.

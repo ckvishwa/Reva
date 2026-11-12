@@ -150,7 +150,8 @@ class AppFlowComposeTest {
 
     @Test fun finance_shows_accounts_budgets_bills_transactions_and_the_fixed_note() {
         app(Samples.populated())
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("finance_list").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("finance_list").performScrollToNode(hasText("Credit card"))
         rule.onNodeWithTag("finance_list").performScrollToNode(hasTestTag("no_money_note"))
@@ -162,7 +163,8 @@ class AppFlowComposeTest {
     @Test fun adding_a_transaction_through_the_sheet_shows_it_in_the_list() {
         val repo = Samples.populated()
         app(repo)
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("add_transaction").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("add_transaction").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("tx_amount").fetchSemanticsNodes().isNotEmpty() }
@@ -181,14 +183,15 @@ class AppFlowComposeTest {
         rule.onNodeWithTag("talk_placeholder").assertIsDisplayed()
         rule.onNodeWithTag("tab_more").performClick()
         rule.onNodeWithTag("more_sections").assertIsDisplayed()
-        // Health is built and has its own tab; More must not call it "coming soon".
-        rule.onNodeWithContentDescription("Health, on its own tab").assertIsDisplayed()
+        // Health is built and opened from Life; More must not call it "coming soon".
+        rule.onNodeWithContentDescription("Health, in Life").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithContentDescription("Health, coming soon").fetchSemanticsNodes().size)
     }
 
     @Test fun add_transaction_is_disabled_until_there_is_an_account() {
         app(FakeFinanceRepository())
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("finance_empty").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("add_transaction").assertIsNotEnabled()
         rule.onNodeWithTag("add_account").assertIsEnabled()
@@ -218,7 +221,8 @@ class RealKernelComposeTest {
         })
         rule.setContent { RevaTheme { RevaRoot(repository, "0.1.0", onShare = { _, _ -> }) } }
 
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("empty_add_account").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("empty_add_account").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("acct_name").fetchSemanticsNodes().isNotEmpty() }
