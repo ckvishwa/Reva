@@ -34,7 +34,11 @@ NUL = bytes([0])
 
 
 def newest_source() -> tuple[float, Path]:
-    candidates = [ROOT / "Cargo.lock", ROOT / "kernel" / "Cargo.toml", *(ROOT / "kernel" / "src").rglob("*.rs")]
+    candidates = [
+        ROOT / "Cargo.lock",
+        ROOT / "kernel" / "Cargo.toml",
+        *(ROOT / "kernel" / "src").rglob("*.rs"),
+    ]
     existing = [p for p in candidates if p.is_file()]
     newest = max(existing, key=lambda p: p.stat().st_mtime)
     return newest.stat().st_mtime, newest
@@ -93,7 +97,9 @@ def main() -> int:
             else:
                 packaged = apk.read(f"lib/{abi}/{LIB}")
                 built_bytes = built.read_bytes()
-                checks["packaged_code_equals_built_code"] = code_fingerprint(packaged) == code_fingerprint(built_bytes)
+                checks["packaged_code_equals_built_code"] = code_fingerprint(
+                    packaged
+                ) == code_fingerprint(built_bytes)
                 checks["built_after_newest_source"] = built.stat().st_mtime >= source_time
                 if args.expect_string is not None:
                     checks["contains_expected_string"] = args.expect_string.encode() in packaged

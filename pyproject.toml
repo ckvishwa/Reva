@@ -82,6 +82,10 @@ ignore = ["S101"]
 # non-loopback bind address is REJECTED — the literal is the input
 # under test, not a real bind call.
 "tests/**" = ["S101", "S105", "S106", "S104"]
+# APK-00: emulator driver scripts from the gym slice, written at a wider line length. They run
+# fixed adb argv and parse the uiautomator dump of our own emulator; lint debt is tracked, not hidden.
+"tools/android/gym_backup_e2e.py" = ["E501", "S603", "S314", "S110", "E741", "SIM300", "B007"]
+"tools/android/verify_apk_kernel.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
