@@ -108,7 +108,8 @@ class ScreenshotTourTest {
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("today_budget_left", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         shot("1-today")
 
-        rule.onNodeWithTag("tab_finance").performClick()
+        rule.onNodeWithTag("tab_life").performClick()
+        rule.onNodeWithTag("life_finance").performClick()
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("finance_list").fetchSemanticsNodes().isNotEmpty() }
         Thread.sleep(1_500)
         shot("2-finance-top")

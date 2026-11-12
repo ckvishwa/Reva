@@ -40,9 +40,9 @@ fun TalkUnavailableScreen(modifier: Modifier = Modifier) {
 }
 
 /** Sections with their own tab today. Shown so the list below never claims a built section is still coming. */
-internal val availableSections = listOf("Finance", "Health")
+internal val availableSections = listOf("Finance", "Health", "Gym")
 
-/** Domains that are not built on the phone yet. Health is live on its own tab, so it is not listed here. */
+/** Domains that are not built on the phone yet. Built domains are opened from the Life tab, so they are not listed here. */
 internal val comingSoon = listOf("Coach", "Career", "Learn", "Cyber", "Personal", "Memory")
 
 @Composable
@@ -83,12 +83,12 @@ fun MoreScreen(
                 SectionTitle("Sections")
                 availableSections.forEach { name ->
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = "$name, on its own tab" },
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = "$name, in Life" },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(name, style = MaterialTheme.typography.bodyLarge, color = RevaColors.Text)
-                        CaptionText("on its own tab")
+                        CaptionText("in Life")
                     }
                 }
                 comingSoon.forEach { name ->

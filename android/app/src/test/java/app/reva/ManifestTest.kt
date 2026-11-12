@@ -162,6 +162,45 @@ class ManifestTest {
         assertTrue(extraction.contains("<cloud-backup>") && extraction.contains("<device-transfer>"))
     }
 
+    /**
+     * APK-01, AR-APK-005 and ARD-210 section 8: the permissions and component kinds the assistant must never
+     * gain by accident. Gmail access (ARD-720) goes through Google's authorization flow and needs none of these.
+     */
+    @Test fun the_manifest_budget_excludes_sms_accounts_contacts_storage_and_notification_listening() {
+        val doc = merged()
+        val permissions = doc.permissions()
+        val never = listOf(
+            "android.permission.READ_SMS",
+            "android.permission.RECEIVE_SMS",
+            "android.permission.SEND_SMS",
+            "android.permission.GET_ACCOUNTS",
+            "android.permission.READ_CONTACTS",
+            "android.permission.MANAGE_EXTERNAL_STORAGE",
+            "android.permission.READ_EXTERNAL_STORAGE",
+            "android.permission.WRITE_EXTERNAL_STORAGE",
+            "android.permission.SCHEDULE_EXACT_ALARM",
+            "android.permission.USE_EXACT_ALARM",
+            "android.permission.SYSTEM_ALERT_WINDOW",
+        )
+        assertEquals(emptyList<String>(), permissions.filter { it in never })
+        val bound = doc.getElementsByTagName("service").elements().map { it.getAttributeNS(androidNs, "permission") }
+        assertFalse("no notification listener", bound.contains("android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"))
+        val actions = doc.getElementsByTagName("action").elements().map { it.getAttributeNS(androidNs, "name") }
+        assertFalse(actions.contains("android.service.notification.NotificationListenerService"))
+        assertFalse("nothing receives SMS", actions.any { it.startsWith("android.provider.Telephony.") })
+    }
+
+    /** The app's own components are pinned by name, so a new activity, service or provider is a deliberate change. */
+    @Test fun the_apps_own_components_are_exactly_the_pinned_set() {
+        val doc = parse(System.getProperty("reva.sourceManifest"))
+        fun names(tag: String) = doc.getElementsByTagName(tag).elements().map { it.getAttributeNS(androidNs, "name") }.sorted()
+        assertEquals(listOf(".MainActivity", ".healthconnect.HealthPermissionsRationaleActivity"), names("activity"))
+        assertEquals(listOf("ViewPermissionUsageActivity"), names("activity-alias"))
+        assertEquals(listOf(".voice.VoiceService"), names("service"))
+        assertEquals(listOf("androidx.core.content.FileProvider"), names("provider"))
+        assertEquals(emptyList<String>(), names("receiver"))
+    }
+
     @Test fun the_app_targets_android_16_and_needs_android_12() {
         val gradle = File(System.getProperty("reva.sourceManifest")).parentFile.parentFile.parentFile.resolve("build.gradle.kts").readText()
         assertTrue(gradle.contains("minSdk = 31"))
