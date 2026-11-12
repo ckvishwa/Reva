@@ -5,11 +5,17 @@ on:
   push:
     branches: [main]
 
+# A newer push to the same PR cancels the older run. Runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   python:
     # REVA is Windows-first; CI runs on Windows so path/pragma/process
     # behavior is validated on the actual target platform.
     runs-on: windows-latest
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +23,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Caches ~/.cargo and target/ keyed on Cargo.lock; the Kernel binding build is the slow part.
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
         run: |
@@ -36,28 +47,14 @@ jobs:
       - name: Type check
         run: mypy reva_core
 
-      - name: Unit tests
-        run: pytest tests/unit -v
-
-      - name: Integration tests
-        run: pytest tests/integration -v
-
-      - name: Contract tests
-        run: pytest tests/contract -v
-
-      - name: Security tests
-        run: pytest tests/security -v
-
       - name: Native Windows protection (no test double)
         run: |
           python -c "import sys; assert sys.platform == 'win32'"
           python -m pytest tests/security/test_platform_protection.py -v -k native_dpapi
 
-      - name: E2E tests
-        run: pytest tests/e2e -v
-
+      # One run covers unit, integration, contract, security and e2e; they were each run twice before.
       - name: Full suite with coverage
-        run: pytest --cov=reva_core --cov-report=term-missing --cov-report=xml
+        run: pytest --cov=reva_core --cov-report=term-missing --cov-report=xml -ra
 
       - name: Package/import smoke test
         run: python -c "import reva_core; print(reva_core.__version__)"
@@ -79,12 +76,16 @@ jobs:
   python-linux:
     # Portable tests inject only the dialogue protector. Windows above keeps real DPAPI.
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
         run: pip install -e ".[dev]"
       - name: Build Domain Kernel binding
@@ -114,6 +115,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: desktop/**/packages.lock.json
 
       - name: Restore
         run: dotnet restore desktop\Reva.Desktop.sln --locked-mode
@@ -141,6 +144,7 @@ jobs:
     # Every schema in contracts/ must be a valid JSON Schema, and contracts/
     # must match docs/spec/REVA_v2.0/08_CONTRACTS.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -159,6 +163,7 @@ jobs:
     # Rust Domain Kernel: format, lint, native tests, then the same conformance suite through the
     # Python and Kotlin (JVM) bindings.
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -167,9 +172,13 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - uses: Swatinem/rust-cache@v2
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - uses: actions/setup-java@v4
         with:
@@ -203,6 +212,7 @@ jobs:
     # Cross-build the Kernel for Android and verify the ELF files. The Kotlin suite runs on a device
     # or emulator from S11 (Android shell).
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -211,12 +221,18 @@ jobs:
         with:
           targets: aarch64-linux-android, x86_64-linux-android
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
+      # Prebuilt binary instead of compiling cargo-ndk from source on every run.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
 
       - name: Build arm64-v8a and x86_64
         env:
@@ -227,11 +243,16 @@ jobs:
     # The phone app's JVM tests (view models, voice session, manifest checks). They need the generated
     # Kotlin binding of the Kernel, which is built here the same way as in the kernel lane.
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-unit
 
       - uses: actions/setup-python@v5
         with:
@@ -241,6 +262,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      # Caches the Gradle wrapper, dependencies and build cache.
+      - uses: gradle/actions/setup-gradle@v4
 
       - name: Build the Kotlin binding
         run: python tools/kernel/build_bindings.py
@@ -254,13 +278,14 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --no-daemon
+          ./gradlew :app:testDebugUnitTest
 
   avatar:
     # three.js + three-vrm page: unit tests (events, mood faces, stale epochs, frame cap, lip-sync offset)
     # and browser tests in Edge (offline load, CSP, no network, drawing stops when off). Needs the
     # placeholder model, which is in Git LFS.
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
