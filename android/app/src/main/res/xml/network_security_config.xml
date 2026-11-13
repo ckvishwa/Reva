@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- No cleartext, anywhere. The only traffic is HTTPS to the user's paired PC, where the PC's own TLS key is
-     pinned in code (PinnedHttpsTransport) because the gateway uses a self-signed certificate. System and user
-     certificate authorities are not used for it. -->
+<!-- No cleartext, anywhere. Traffic is HTTPS to the user's paired PC, where the PC's own TLS key is pinned in code
+     (PinnedHttpsTransport) because the gateway uses a self-signed certificate, and, after the user connects Gmail
+     (CON-1), HTTPS to gmail.googleapis.com with the system's certificate authorities. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

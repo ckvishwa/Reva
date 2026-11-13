@@ -14,11 +14,13 @@ import app.reva.phone.ApprovedApps
 import app.reva.phone.LaunchableApps
 import app.reva.sync.AutoSyncController
 import app.reva.ui.apps.PhoneAppsScreen
+import app.reva.ui.gmail.GmailConnectUi
+import app.reva.ui.gmail.GmailScreen
 import app.reva.sync.SyncService
 import app.reva.ui.more.MoreScreen
 import app.reva.brain.ModeController
 
-private enum class MorePage { More, Devices, Scan, Apps }
+private enum class MorePage { More, Devices, Scan, Apps, Gmail }
 
 private class DevicesViewModelFactory(private val service: SyncService, private val onSynced: () -> Unit) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -36,14 +38,20 @@ fun MoreHost(
     modes: ModeController? = null,
     saveHostedKey: suspend (String) -> Boolean = { false },
     clearHostedKey: suspend () -> Unit = {},
+    gmail: GmailConnectUi? = null,
 ) {
+    var page by rememberSaveable { mutableStateOf(MorePage.More) }
+    if (page == MorePage.Gmail && gmail != null) {
+        GmailScreen(gmail, onBack = { page = MorePage.More })
+        return
+    }
+    val openGmail: (() -> Unit)? = gmail?.let { { page = MorePage.Gmail } }
     if (sync == null) {
-        MoreScreen(versionName, modes = modes, saveHostedKey = saveHostedKey, clearHostedKey = clearHostedKey)
+        MoreScreen(versionName, modes = modes, saveHostedKey = saveHostedKey, clearHostedKey = clearHostedKey, onOpenGmail = openGmail)
         return
     }
     val vm: DevicesViewModel = viewModel(factory = DevicesViewModelFactory(sync, onSynced))
     val state by vm.state.collectAsState()
-    var page by rememberSaveable { mutableStateOf(MorePage.More) }
     LaunchedEffect(Unit) { vm.load() }
     when (page) {
         MorePage.Scan -> QrScanner(
@@ -64,6 +72,8 @@ fun MoreHost(
             modes = modes,
             saveHostedKey = saveHostedKey,
             clearHostedKey = clearHostedKey,
+            onOpenGmail = openGmail,
         )
+        MorePage.Gmail -> Unit
     }
 }
