@@ -1,5 +1,9 @@
 package app.reva
 
+import app.reva.connectors.gmail.GmailConnector
+import app.reva.connectors.gmail.HttpsGmailProbe
+import app.reva.connectors.gmail.PlayServicesGmailAuthorizer
+import app.reva.connectors.gmail.PrefsGmailConnectionStore
 import android.app.Application
 import android.content.Context
 import app.reva.sync.AutoSyncController
@@ -134,6 +138,15 @@ class AppContainer(private val context: Context) {
 
     /** The paired PC (public data only), read by sync and by requests for the PC to act. */
     val pairedPcStore: PairedPcStore by lazy { PairedPcStore(File(syncRoot, "paired_pc.json")) }
+
+    /** CON-1: read-only Gmail connection check. Tokens stay in Play services and in memory; only a flag is stored. */
+    val gmail: GmailConnector by lazy {
+        GmailConnector(
+            authorizer = PlayServicesGmailAuthorizer(context),
+            probe = HttpsGmailProbe(),
+            store = PrefsGmailConnectionStore(context.getSharedPreferences("gmail", Context.MODE_PRIVATE)),
+        )
+    }
 
     val approvedApps: ApprovedApps by lazy { ApprovedApps(File(noBackupRoot, "phone/approved_apps.json")) }
 

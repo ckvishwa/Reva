@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
 import app.reva.healthconnect.AndroidHealthConnectGateway
 import app.reva.ui.ExportShare
 import app.reva.ui.health.HealthConnectUi
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
             requestContract = AndroidHealthConnectGateway.requestContract(),
             openSettings = { runCatching { startActivity(AndroidHealthConnectGateway.settingsIntent()) } },
         )
+        val gmail = gmailUi(container.gmail, lifecycleScope)
         setContent {
             RevaTheme {
                 RevaRoot(
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
                     refreshModes = { container.refreshModes() },
                     cancelBrainTurn = { container.cancelBrainTurn() },
                     onBeforeMicRequest = { container.micPermission.markAsked() },
+                    gmail = gmail,
                     onOpenAppSettings = {
                         startActivity(
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),

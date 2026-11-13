@@ -88,7 +88,7 @@ class ManifestTest {
         assertEquals("false", mic.getAttributeNS(androidNs, "required"))
     }
 
-    @Test fun internet_is_used_for_the_paired_pc_only_so_cleartext_is_refused_everywhere() {
+    @Test fun internet_is_used_for_the_paired_pc_and_gmail_only_so_cleartext_is_refused_everywhere() {
         val doc = merged()
         val app = doc.getElementsByTagName("application").elements().single()
         assertEquals("false", app.getAttributeNS(androidNs, "usesCleartextTraffic"))
@@ -128,8 +128,18 @@ class ManifestTest {
             doc.getElementsByTagName("receiver").elements() + doc.getElementsByTagName("provider").elements())
             .filter { it.getAttributeNS(androidNs, "exported") == "true" }
         // AndroidX's profile installer receiver is exported on purpose, but only the system's DUMP permission may call it.
-        val unguarded = exported.filter { it.getAttributeNS(androidNs, "permission") != "android.permission.DUMP" }
-            .map { it.getAttributeNS(androidNs, "name") }
+        // CON-1: play-services-auth's RevocationBoundService is exported so Google Play services can tell the app a
+        // Google grant was revoked; its permission is held only by Play services. It carries no data.
+        val guards = mapOf(
+            "com.google.android.gms.auth.api.signin.RevocationBoundService" to
+                "com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION",
+        )
+        val unguarded = exported.filter {
+            val permission = it.getAttributeNS(androidNs, "permission")
+            permission != "android.permission.DUMP" && guards[it.getAttributeNS(androidNs, "name")] != permission
+        }.map { it.getAttributeNS(androidNs, "name") }
+        val guarded = exported.map { it.getAttributeNS(androidNs, "name") }.filter { it in guards }
+        assertEquals(guards.keys.toList(), guarded)
         // Health Connect needs two exported pieces: the text-only rationale screen it opens on Android 12/13, and the
         // client library's SDK service, whose binder refuses any caller that is not the Health Connect provider app
         // (HealthDataSdkServiceStubImpl.verifyPackageName, "Not allowed!") and carries no health data.
