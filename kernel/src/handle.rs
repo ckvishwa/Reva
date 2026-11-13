@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::civil;
-use crate::domains::finance::{self, accounting, commands, project, queries};
+use crate::domains::finance::{self, accounting, commands, position, project, queries};
 use crate::domains::health;
 use crate::error::{DomainError, DomainResult};
 use crate::events::{self, Event, EventCtx, InsertOutcome};
@@ -162,7 +162,11 @@ impl DomainHandle {
         if self.domain != health::DOMAIN {
             // FIN-3: repeating an already-recorded move, installment or ingested transaction with the same
             // facts writes nothing and reports the existing record; different facts are refused.
-            if let Some((aggregate_type, aggregate_id)) = accounting::replay_of(&tx, &kind, &payload)? {
+            let replay = match accounting::replay_of(&tx, &kind, &payload)? {
+                Some(found) => Some(found),
+                None => position::replay_of(&tx, &kind, &payload)?,
+            };
+            if let Some((aggregate_type, aggregate_id)) = replay {
                 let (event_id, version) = events::head(&tx, &aggregate_type, &aggregate_id)?;
                 return Ok(CommitResult { event_id, aggregate_id, version });
             }

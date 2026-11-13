@@ -107,6 +107,7 @@ pub fn run(conn: &Connection, name: &str, params: &Value) -> DomainResult<QueryO
         "resolve_category" => resolve_category_query(conn, params),
         "conflicts" => conflicts(conn, params),
         other => super::accounting::query(conn, other, params)
+            .or_else(|| super::position::query(conn, other, params))
             .unwrap_or_else(|| Err(DomainError::validation("query", format!("unknown finance query {other:?}")))),
     }
 }

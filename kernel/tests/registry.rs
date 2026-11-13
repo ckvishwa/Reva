@@ -37,6 +37,11 @@ const EXPECTED: &[&str] = &[
     "loan_installment.record",
     "transaction.ingest",
     "reconciliation.record",
+    // FIN-4: records money lent to or borrowed from a person and its settlement. Nothing is sent or paid.
+    "personal_debt.record",
+    "personal_debt.update",
+    "personal_debt.settle",
+    "personal_debt.delete",
 ];
 
 const FORBIDDEN_TOKENS: &[&str] = &[

@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 
-use super::{accounting, money, queries, schema};
+use super::{accounting, money, position, queries, schema};
 use crate::civil::{self, Date};
 use crate::error::{DomainError, DomainResult};
 use crate::events::{self, EventDraft};
@@ -43,6 +43,11 @@ pub const COMMANDS: &[&str] = &[
     "loan_installment.record",
     "transaction.ingest",
     "reconciliation.record",
+    // FIN-4 personal debts (see position.rs): money lent to or borrowed from people, recorded only.
+    "personal_debt.record",
+    "personal_debt.update",
+    "personal_debt.settle",
+    "personal_debt.delete",
 ];
 
 const ACCOUNT_KINDS: &[&str] = &["checking", "savings", "credit", "cash", "investment", "loan", "other"];
@@ -205,6 +210,9 @@ pub(super) fn set(state: &mut Obj, key: &str, value: impl Into<Value>) {
 pub fn handle(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<Vec<EventDraft>> {
     let now = civil::now_iso();
     if let Some(result) = accounting::handle(conn, kind, payload, &now) {
+        return result;
+    }
+    if let Some(result) = position::handle(conn, kind, payload, &now) {
         return result;
     }
     match kind {
@@ -627,7 +635,8 @@ fn transaction_delete(conn: &Connection, payload: &Value) -> DomainResult<Vec<Ev
     let map = object(payload)?;
     reject_unknown(map, &["id"])?;
     let id = id_of(map, "id")?;
-    require_live(conn, "transaction", &id)?;
+    let leg = require_live(conn, "transaction", &id)?;
+    position::guard_leg_delete(&leg)?;
     Ok(accounting::linked_legs(conn, &id)?
         .into_iter()
         .map(|leg| draft("transaction", &leg, "deleted", Map::new()))
