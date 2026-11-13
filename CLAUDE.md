@@ -81,7 +81,16 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 
 - A model may **propose**. Only the deterministic policy broker **authorizes**. Only executors **act**. REVA reports success only from executor/Kernel evidence. "Done" always comes from a template, never from model text.
 - `authorize()` is pure: no model calls, no I/O, no writes, and stable reason codes.
-- These capabilities do not exist and must never be added: payments, transfers, purchases, bank logins, medical diagnosis or dosing, a generic shell, file deletion, sending email.
+- These capabilities do not exist and must never be added: payments, transfers, purchases, bank logins, medical diagnosis or dosing, file deletion, sending email.
+- **Owner-gated capabilities (owner decision 2026-11-13).** These may be built, but only behind every rule below: shell/exec on the PC, browser and computer control, file transfer between the owner's devices, password-vault access, scheduled jobs (cron), plugin/skill installs, node pairing, and chat bridges (WhatsApp, Telegram, Slack).
+  - Default **off**; each is enabled separately by the owner in Settings, and can be disabled at any time.
+  - Every single action is **T2**: a click or tap approval on the target device. A spoken "yes", a model's text, a schedule or a previous approval never counts.
+  - Each is limited to an **owner-maintained allowlist**: exact commands or programs for shell, sites/apps for browser/computer control, folders for file transfer, vault entries for vaults, plugin/skill sources for installs, contacts/chats for bridges. Anything off the list is refused by the broker.
+  - **Never triggered by untrusted content.** Email, web pages, chat messages, OpenClaw output, files and model text may not start, approve or widen one of these actions; they can at most appear as a proposal the owner taps.
+  - Vault secrets never reach a model, a log, the PC Core's prompt path, OpenClaw or sync; the executor uses them and discards them. Bridges never send Finance, Health, Memory or Personal data without per-message approval.
+  - Every run is logged with executor evidence (what ran, on which allowlist entry, approved by which tap) and REVA reports the outcome only from that evidence.
+  - None of these may delete files, send email or move money; the hard bans above still win.
+  - Until a capability's own slice lands, the shared contract still refuses it: `contracts/capability-registry.v2.json` lists `shell.` and `system.install` in `forbidden_capability_prefixes` (ADR-033), enforced by `reva_core/policy/registry.py` and Android `policy/Registry.kt`. That slice must change the contract, its spec copy, `SHA256SUMS.txt` and ADR-033 deliberately, in its own commit, with security-review.
 - T2 actions need a click or tap approval on the target device. A spoken "yes" is not enough.
 - The Core binds to `127.0.0.1` only. Remote devices come in only through the pairing gateway.
 - Hosted (cloud) models are opt-in, disclosed, and pass the per-domain consent filter. Finance, Health, Memory and Personal default to no cloud.
@@ -89,6 +98,8 @@ REVA is a personal AI that you talk to through an animated avatar. It has a WinU
 - Mood or persona never changes tiers, permissions, or what REVA claims happened.
 
 ## Decisions already made (don't re-ask)
+
+- **OpenClaw (2026-11-13):** adapt OpenClaw's *designs* into REVA's own code; do not vendor its TypeScript runtime. Adopted: memory architecture (write-time provenance, rule-gated promotion against poisoning), memory provenance and forget, two-lane recall, decision models, IMAP-style email reader rules (for CON-2), standing intents, model failover, the Personal Agent Benchmark Pack (into `evals/`), and the user-model/soul split (into `docs/persona/`). OpenClaw's shell, browser, file-transfer, vault, cron, plugin, node and chat-bridge features are allowed only as owner-gated capabilities (see Safety invariants). MIT licence: add a notice if substantial code is ever copied.
 
 - **Audio capture/playback on Windows:** NAudio (MIT) with WASAPI. Pin the version and record the license. No raw interop.
 - **Corx source:** use the copy inside the git-tracked Lakewood/Corx repo with the newest commit and passing tests. Report which path and commit you picked. `Ai-clean-verify` copies are not canonical. Never import menu, pricing, POS, telephony, Twilio or keys.
