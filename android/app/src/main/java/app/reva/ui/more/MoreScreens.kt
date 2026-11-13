@@ -56,6 +56,8 @@ fun MoreScreen(
     modes: ModeController? = null,
     saveHostedKey: suspend (String) -> Boolean = { false },
     clearHostedKey: suspend () -> Unit = {},
+    gmailSummary: String? = null,
+    onOpenGmail: (() -> Unit)? = null,
 ) {
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("More", style = MaterialTheme.typography.headlineMedium, color = RevaColors.Text, modifier = Modifier.semantics { heading() }) }
@@ -75,6 +77,15 @@ fun MoreScreen(
                     SectionTitle("Apps REVA may open")
                     MutedText("Choose which apps on this phone REVA may open when you say \"open <name>\". ${appsSummary ?: ""}".trim())
                     SecondaryButton("Choose apps", onOpenApps, Modifier.testTag("open_apps"))
+                }
+            }
+        }
+        if (onOpenGmail != null) {
+            item {
+                RevaCard(modifier = Modifier.testTag("more_gmail")) {
+                    SectionTitle("Gmail")
+                    MutedText(gmailSummary ?: "Connect Gmail with read-only access. Nothing from your mailbox leaves this phone.")
+                    SecondaryButton("Open Gmail", onOpenGmail, Modifier.testTag("open_gmail"))
                 }
             }
         }
@@ -109,7 +120,7 @@ fun MoreScreen(
                 MutedText("REVA $versionName")
                 MutedText("Finance and Health data are encrypted on this phone with keys held by the Android Keystore. They are excluded from Android backups.")
                 MutedText("Health Connect is read only: REVA copies the daily totals you allow and never writes back.")
-                MutedText("Network use includes your paired PC and, only when you enable it, the disclosed hosted reasoning provider.")
+                MutedText("Network use includes your paired PC, Google when you connect Gmail, and, only when you enable it, the disclosed hosted reasoning provider.")
             }
         }
     }

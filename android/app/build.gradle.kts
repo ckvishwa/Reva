@@ -133,6 +133,9 @@ dependencies {
     implementation(libs.guava)
     // UniFFI's Kotlin binding loads libreva_kernel.so through JNA; the AAR carries JNA's own native stub.
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
+    // CON-1: Google Identity AuthorizationClient (Google Play services) asks for gmail.readonly on the phone. Tokens stay
+    // in Play services and in memory; no client secret, no Web client, no server of ours. See docs/android/gmail-auth.md.
+    implementation(libs.play.services.auth)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -144,6 +147,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.rules)
+    // Drives Google's account picker and consent screen in the opt-in live Gmail test only.
+    androidTestImplementation(libs.androidx.test.uiautomator)
     // Compose tests need this empty exported activity in the debug manifest. It is added only for test runs
     // (-Preva.uiTests=true) so the APK you sideload does not carry it.
     if (providers.gradleProperty("reva.uiTests").isPresent) {

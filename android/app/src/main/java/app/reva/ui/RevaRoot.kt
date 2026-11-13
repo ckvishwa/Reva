@@ -70,6 +70,7 @@ import app.reva.ui.finance.ImportViewModel
 import app.reva.sync.AutoSyncController
 import app.reva.sync.SyncService
 import app.reva.ui.devices.MoreHost
+import app.reva.ui.gmail.GmailConnectUi
 import app.reva.ui.more.TalkUnavailableScreen
 import app.reva.ui.talk.TalkScreen
 import app.reva.pcrequests.PcRequestTracker
@@ -138,6 +139,7 @@ fun RevaRoot(
     cancelBrainTurn: () -> Unit = {},
     onBeforeMicRequest: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
+    gmail: GmailConnectUi? = null,
 ) {
     val factory = remember(repository) { RootViewModels(repository) }
     val today: TodayViewModel = viewModel(factory = factory)
@@ -282,6 +284,7 @@ fun RevaRoot(
                     clearHostedKey = {
                         withContext(Dispatchers.IO) { hostedSecrets?.clear(); refreshModes() }
                     },
+                    gmail = gmail,
                 )
             }
         }

@@ -3,8 +3,9 @@
 
     <!--
         Seven permissions. Two are for pairing and syncing with the user's OWN PC (SYNC-1d), three are for voice (C1):
-        - INTERNET: HTTPS to the PC's pairing gateway on the local network. The gateway's TLS key is pinned
-          from the QR code, cleartext is refused (network_security_config), and no server of ours is involved.
+        - INTERNET: HTTPS to the PC's pairing gateway on the local network (TLS key pinned from the QR code) and, once
+          the user connects Gmail, HTTPS to gmail.googleapis.com for a read-only check (CON-1). Cleartext is refused
+          (network_security_config), and no server of ours is involved.
         - CAMERA: only to read the pairing QR code on the PC; asked for when the user taps "Scan the code".
           The camera is optional hardware, so phones without one can still paste the code.
         - RECORD_AUDIO: asked for only after a tap on the mic button; typing works without it. Audio is
