@@ -1713,6 +1713,182 @@
   },
   {
    "op": "no_money_movement"
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.record",
+   "payload": {
+    "id": "debt-fin4-lent",
+    "counterparty": "Ravi",
+    "direction": "lent",
+    "amount_minor": 10000,
+    "date": "2027-03-02",
+    "due_date": "2027-03-20",
+    "account_id": "acct-checking"
+   },
+   "expect": {
+    "aggregate_id": "debt-fin4-lent",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.record",
+   "payload": {
+    "id": "debt-fin4-lent",
+    "counterparty": "Ravi",
+    "direction": "lent",
+    "amount_minor": 10000,
+    "date": "2027-03-02",
+    "due_date": "2027-03-20",
+    "account_id": "acct-checking"
+   },
+   "expect": {
+    "aggregate_id": "debt-fin4-lent",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.record",
+   "payload": {
+    "id": "debt-fin4-lent",
+    "counterparty": "Ravi",
+    "direction": "lent",
+    "amount_minor": 99,
+    "date": "2027-03-02",
+    "due_date": "2027-03-20",
+    "account_id": "acct-checking"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.record",
+   "payload": {
+    "id": "debt-fin4-fx01",
+    "counterparty": "Sam",
+    "direction": "lent",
+    "amount_minor": 100,
+    "currency": "USD",
+    "date": "2027-03-02",
+    "account_id": "acct-euro"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.settle",
+   "payload": {
+    "id": "debt-fin4-lent",
+    "amount_minor": 4000,
+    "date": "2027-03-10",
+    "account_id": "acct-checking",
+    "external_ref": "sms:conf:fin4-s1"
+   },
+   "expect": {
+    "aggregate_id": "debt-fin4-lent",
+    "version": 2
+   }
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.settle",
+   "payload": {
+    "id": "debt-fin4-lent",
+    "amount_minor": 4000,
+    "date": "2027-03-10",
+    "account_id": "acct-checking",
+    "external_ref": "sms:conf:fin4-s1"
+   },
+   "expect": {
+    "aggregate_id": "debt-fin4-lent",
+    "version": 2
+   }
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.settle",
+   "payload": {
+    "id": "debt-fin4-lent",
+    "amount_minor": 7000,
+    "date": "2027-03-11"
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.delete",
+   "payload": {
+    "id": "debt-fin4-lent-open"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "personal_debt.record",
+   "payload": {
+    "id": "debt-fin4-borr",
+    "counterparty": "Asha",
+    "direction": "borrowed",
+    "amount_minor": 2500,
+    "currency": "USD",
+    "date": "2027-03-05"
+   },
+   "expect": {
+    "aggregate_id": "debt-fin4-borr",
+    "version": 1
+   }
+  },
+  {
+   "op": "query",
+   "name": "list_personal_debts",
+   "params": {
+    "direction": "lent",
+    "as_of": "2027-03-25"
+   },
+   "expect_rows": [
+    {
+     "id": "debt-fin4-lent",
+     "principal_minor": 10000,
+     "settled_minor": 4000,
+     "outstanding_minor": 6000,
+     "status": "open",
+     "overdue": true
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "period_summary",
+   "params": {
+    "from": "2027-03-01",
+    "to": "2027-03-31"
+   },
+   "expect_rows": [
+    {
+     "currency": "USD",
+     "net_spending_minor": 0,
+     "income_minor": 0,
+     "excluded_moves": 2
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "earnings_summary",
+   "params": {
+    "from": "2027-03-01",
+    "to": "2027-03-31",
+    "as_of": "2027-03-31"
+   },
+   "expect_rows": []
+  },
+  {
+   "op": "rebuild_equals_live"
+  },
+  {
+   "op": "no_money_movement"
   }
  ]
 }
