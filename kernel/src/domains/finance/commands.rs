@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 
-use super::{money, queries, schema};
+use super::{accounting, money, queries, schema};
 use crate::civil::{self, Date};
 use crate::error::{DomainError, DomainResult};
 use crate::events::{self, EventDraft};
@@ -38,6 +38,11 @@ pub const COMMANDS: &[&str] = &[
     "networth_snapshot.create",
     "networth_snapshot.delete",
     "conflict.resolve",
+    // FIN-3 accounting records (see accounting.rs). They record; none of them moves money.
+    "internal_move.record",
+    "loan_installment.record",
+    "transaction.ingest",
+    "reconciliation.record",
 ];
 
 const ACCOUNT_KINDS: &[&str] = &["checking", "savings", "credit", "cash", "investment", "loan", "other"];
@@ -48,11 +53,11 @@ const BILL_KINDS: &[&str] = &["bill", "subscription", "income"];
 // ---------------------------------------------------------------------------------------------
 // Input helpers
 
-fn object(payload: &Value) -> DomainResult<&Obj> {
+pub(super) fn object(payload: &Value) -> DomainResult<&Obj> {
     payload.as_object().ok_or_else(|| DomainError::validation("payload", "must be a JSON object"))
 }
 
-fn reject_unknown(map: &Obj, allowed: &[&str]) -> DomainResult<()> {
+pub(super) fn reject_unknown(map: &Obj, allowed: &[&str]) -> DomainResult<()> {
     for key in map.keys() {
         if !allowed.contains(&key.as_str()) {
             return Err(DomainError::validation(key.clone(), "unknown field"));
@@ -61,7 +66,7 @@ fn reject_unknown(map: &Obj, allowed: &[&str]) -> DomainResult<()> {
     Ok(())
 }
 
-fn text_field(map: &Obj, key: &str, max: usize, required: bool) -> DomainResult<Option<String>> {
+pub(super) fn text_field(map: &Obj, key: &str, max: usize, required: bool) -> DomainResult<Option<String>> {
     match map.get(key) {
         None | Some(Value::Null) => {
             if required {
@@ -87,7 +92,7 @@ fn text_field(map: &Obj, key: &str, max: usize, required: bool) -> DomainResult<
     }
 }
 
-fn int_field(map: &Obj, key: &str, required: bool) -> DomainResult<Option<i64>> {
+pub(super) fn int_field(map: &Obj, key: &str, required: bool) -> DomainResult<Option<i64>> {
     match map.get(key) {
         None | Some(Value::Null) => {
             if required {
@@ -100,7 +105,7 @@ fn int_field(map: &Obj, key: &str, required: bool) -> DomainResult<Option<i64>> 
     }
 }
 
-fn date_field(map: &Obj, key: &str, required: bool) -> DomainResult<Option<Date>> {
+pub(super) fn date_field(map: &Obj, key: &str, required: bool) -> DomainResult<Option<Date>> {
     match text_field(map, key, 10, required)? {
         None => Ok(None),
         Some(s) => {
@@ -109,7 +114,7 @@ fn date_field(map: &Obj, key: &str, required: bool) -> DomainResult<Option<Date>
     }
 }
 
-fn enum_field(map: &Obj, key: &str, allowed: &[&str]) -> DomainResult<Option<String>> {
+pub(super) fn enum_field(map: &Obj, key: &str, allowed: &[&str]) -> DomainResult<Option<String>> {
     match text_field(map, key, 32, false)? {
         None => Ok(None),
         Some(s) => {
@@ -122,7 +127,7 @@ fn enum_field(map: &Obj, key: &str, allowed: &[&str]) -> DomainResult<Option<Str
     }
 }
 
-fn currency_field(map: &Obj, key: &str) -> DomainResult<Option<String>> {
+pub(super) fn currency_field(map: &Obj, key: &str) -> DomainResult<Option<String>> {
     match text_field(map, key, 3, false)? {
         None => Ok(None),
         Some(c) => {
@@ -135,7 +140,7 @@ fn currency_field(map: &Obj, key: &str) -> DomainResult<Option<String>> {
     }
 }
 
-fn amount_ok(key: &str, amount: i64, allow_zero: bool) -> DomainResult<()> {
+pub(super) fn amount_ok(key: &str, amount: i64, allow_zero: bool) -> DomainResult<()> {
     if amount == 0 && !allow_zero {
         return Err(DomainError::validation(key, "must not be zero"));
     }
@@ -157,7 +162,7 @@ fn id_for_new(map: &Obj) -> DomainResult<String> {
     }
 }
 
-fn id_of(map: &Obj, key: &str) -> DomainResult<String> {
+pub(super) fn id_of(map: &Obj, key: &str) -> DomainResult<String> {
     text_field(map, key, 64, true)?.ok_or_else(|| DomainError::validation(key, "required"))
 }
 
@@ -166,21 +171,21 @@ fn norm(text: &str) -> String {
 }
 
 /// A live aggregate, or the precise typed error for a missing or deleted one.
-fn require_live(conn: &Connection, aggregate_type: &str, id: &str) -> DomainResult<Obj> {
+pub(super) fn require_live(conn: &Connection, aggregate_type: &str, id: &str) -> DomainResult<Obj> {
     if events::is_tombstoned(conn, aggregate_type, id)? {
         return Err(DomainError::Deleted { detail: format!("{aggregate_type} {id}") });
     }
     schema::load(conn, aggregate_type, id)?.ok_or_else(|| DomainError::not_found(format!("{aggregate_type} {id}")))
 }
 
-fn ensure_new(conn: &Connection, aggregate_type: &str, id: &str) -> DomainResult<()> {
+pub(super) fn ensure_new(conn: &Connection, aggregate_type: &str, id: &str) -> DomainResult<()> {
     if events::is_tombstoned(conn, aggregate_type, id)? || schema::load(conn, aggregate_type, id)?.is_some() {
         return Err(DomainError::conflict(format!("{aggregate_type} {id} already exists")));
     }
     Ok(())
 }
 
-fn draft(aggregate_type: &str, id: &str, action: &str, state: Obj) -> EventDraft {
+pub(super) fn draft(aggregate_type: &str, id: &str, action: &str, state: Obj) -> EventDraft {
     EventDraft {
         aggregate_type: aggregate_type.to_string(),
         aggregate_id: id.to_string(),
@@ -190,7 +195,7 @@ fn draft(aggregate_type: &str, id: &str, action: &str, state: Obj) -> EventDraft
     }
 }
 
-fn set(state: &mut Obj, key: &str, value: impl Into<Value>) {
+pub(super) fn set(state: &mut Obj, key: &str, value: impl Into<Value>) {
     state.insert(key.to_string(), value.into());
 }
 
@@ -199,6 +204,9 @@ fn set(state: &mut Obj, key: &str, value: impl Into<Value>) {
 
 pub fn handle(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<Vec<EventDraft>> {
     let now = civil::now_iso();
+    if let Some(result) = accounting::handle(conn, kind, payload, &now) {
+        return result;
+    }
     match kind {
         "account.create" => account_create(conn, payload, &now),
         "account.update" => account_update(conn, payload, &now, None),
@@ -210,7 +218,7 @@ pub fn handle(conn: &Connection, kind: &str, payload: &Value) -> DomainResult<Ve
         "category.delete" => category_delete(conn, payload),
         "transaction.create" => transaction_create(conn, payload, &now),
         "transaction.update" => transaction_update(conn, payload, &now),
-        "transaction.delete" => simple_delete(conn, "transaction", payload),
+        "transaction.delete" => transaction_delete(conn, payload),
         "budget.set" => budget_set(conn, payload, &now),
         "budget.delete" => simple_delete(conn, "budget", payload),
         "bill.create" => bill_create(conn, payload, &now),
@@ -237,7 +245,9 @@ fn simple_delete(conn: &Connection, aggregate_type: &str, payload: &Value) -> Do
 
 fn account_create(conn: &Connection, payload: &Value, now: &str) -> DomainResult<Vec<EventDraft>> {
     let map = object(payload)?;
-    reject_unknown(map, &["id", "name", "kind", "currency", "opening_balance_minor"])?;
+    let mut allowed = vec!["id", "name", "kind", "currency", "opening_balance_minor"];
+    allowed.extend_from_slice(accounting::TERM_FIELDS);
+    reject_unknown(map, &allowed)?;
     let id = id_for_new(map)?;
     ensure_new(conn, "account", &id)?;
     let name = text_field(map, "name", 200, true)?.unwrap_or_default();
@@ -254,6 +264,8 @@ fn account_create(conn: &Connection, payload: &Value, now: &str) -> DomainResult
     set(&mut s, "currency", currency);
     set(&mut s, "opening_balance_minor", opening);
     set(&mut s, "archived", false);
+    accounting::apply_terms(map, &mut s)?;
+    accounting::check_terms(&s)?;
     set(&mut s, "created_at", now);
     set(&mut s, "updated_at", now);
     Ok(vec![draft("account", &id, "created", s)])
@@ -278,7 +290,9 @@ fn account_update(
     if archive.is_some() {
         reject_unknown(map, &["id"])?;
     } else {
-        reject_unknown(map, &["id", "name", "kind", "opening_balance_minor"])?;
+        let mut allowed = vec!["id", "name", "kind", "opening_balance_minor"];
+        allowed.extend_from_slice(accounting::TERM_FIELDS);
+        reject_unknown(map, &allowed)?;
     }
     let id = id_of(map, "id")?;
     let mut s = require_live(conn, "account", &id)?;
@@ -296,6 +310,8 @@ fn account_update(
             amount_ok("opening_balance_minor", opening, true)?;
             set(&mut s, "opening_balance_minor", opening);
         }
+        accounting::apply_terms(map, &mut s)?;
+        accounting::check_terms(&s)?;
     }
     set(&mut s, "updated_at", now);
     Ok(vec![draft("account", &id, "updated", s)])
@@ -566,6 +582,12 @@ fn transaction_update(conn: &Connection, payload: &Value, now: &str) -> DomainRe
     )?;
     let id = id_of(map, "id")?;
     let mut s = require_live(conn, "transaction", &id)?;
+    let linked = s.get("link_id").map(|v| !v.is_null()).unwrap_or(false);
+    if linked && ["account_id", "date", "amount_minor"].iter().any(|k| map.contains_key(*k)) {
+        return Err(DomainError::conflict(
+            "this transaction is one leg of a linked record; delete the record and record it again",
+        ));
+    }
     if let Some(account_id) = text_field(map, "account_id", 64, false)? {
         let account = require_live(conn, "account", &account_id)?;
         if account["currency"] != s["currency"] {
@@ -597,6 +619,19 @@ fn transaction_update(conn: &Connection, payload: &Value, now: &str) -> DomainRe
     }
     set(&mut s, "updated_at", now);
     Ok(vec![draft("transaction", &id, "updated", s)])
+}
+
+/// Deleting one leg of a linked record (internal move, loan installment) deletes every leg, so a move can
+/// never be left half-recorded.
+fn transaction_delete(conn: &Connection, payload: &Value) -> DomainResult<Vec<EventDraft>> {
+    let map = object(payload)?;
+    reject_unknown(map, &["id"])?;
+    let id = id_of(map, "id")?;
+    require_live(conn, "transaction", &id)?;
+    Ok(accounting::linked_legs(conn, &id)?
+        .into_iter()
+        .map(|leg| draft("transaction", &leg, "deleted", Map::new()))
+        .collect())
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -30,6 +30,13 @@ const EXPECTED: &[&str] = &[
     "networth_snapshot.create",
     "networth_snapshot.delete",
     "conflict.resolve",
+    // FIN-3, reviewed against the no-money-movement rule: each records what already happened between the
+    // owner's own accounts or from a confirmed alert. None contacts a bank, initiates a payment or converts
+    // currency, and every name stays clear of the forbidden terms below.
+    "internal_move.record",
+    "loan_installment.record",
+    "transaction.ingest",
+    "reconciliation.record",
 ];
 
 const FORBIDDEN_TOKENS: &[&str] = &[

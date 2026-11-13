@@ -106,7 +106,8 @@ pub fn run(conn: &Connection, name: &str, params: &Value) -> DomainResult<QueryO
         "get" => get(conn, params),
         "resolve_category" => resolve_category_query(conn, params),
         "conflicts" => conflicts(conn, params),
-        other => Err(DomainError::validation("query", format!("unknown finance query {other:?}"))),
+        other => super::accounting::query(conn, other, params)
+            .unwrap_or_else(|| Err(DomainError::validation("query", format!("unknown finance query {other:?}")))),
     }
 }
 
@@ -248,7 +249,8 @@ fn spend_by_category(conn: &Connection, params: &Value) -> DomainResult<QueryOut
         "SELECT t.id, t.category_id, COALESCE(c.name, 'Uncategorized'), t.currency, -t.amount_minor
            FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
           WHERE t.date >= ?1 AND t.date <= ?2 AND t.amount_minor < 0
-            AND (c.id IS NULL OR c.kind = 'expense')",
+            AND (c.id IS NULL OR c.kind = 'expense')
+            AND (t.link_role IS NULL OR t.link_role = 'interest')",
     );
     let mut args = vec![text(&from.to_iso()), text(&to.to_iso())];
     if let Some(code) = currency {
@@ -294,6 +296,7 @@ fn cashflow(conn: &Connection, params: &Value) -> DomainResult<QueryOut> {
         "SELECT t.id, t.currency, t.amount_minor
            FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
           WHERE t.date >= ?1 AND t.date <= ?2 AND (c.id IS NULL OR c.kind != 'transfer')
+            AND (t.link_role IS NULL OR t.link_role = 'interest')
           ORDER BY t.date, t.id",
     )?;
     let mut rows = stmt.query([from.to_iso(), to.to_iso()])?;
@@ -349,6 +352,7 @@ fn budget_status(conn: &Connection, params: &Value) -> DomainResult<QueryOut> {
         let mut stmt = conn.prepare(
             "SELECT t.id, -t.amount_minor FROM transactions t
               WHERE t.date >= ?1 AND t.date <= ?2 AND t.amount_minor < 0 AND t.currency = ?3
+                AND (t.link_role IS NULL OR t.link_role = 'interest')
                 AND (t.category_id = ?4 OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?4))
               ORDER BY t.date, t.id",
         )?;

@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::civil;
-use crate::domains::finance::{self, commands, project, queries};
+use crate::domains::finance::{self, accounting, commands, project, queries};
 use crate::domains::health;
 use crate::error::{DomainError, DomainResult};
 use crate::events::{self, Event, EventCtx, InsertOutcome};
@@ -159,6 +159,14 @@ impl DomainHandle {
         let (device_id, tag_key) = (store.device_id.clone(), store.tag_key().to_vec());
         let ctx = EventCtx { domain: &self.domain, device_id: &device_id, tag_key: &tag_key };
         let tx = store.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if self.domain != health::DOMAIN {
+            // FIN-3: repeating an already-recorded move, installment or ingested transaction with the same
+            // facts writes nothing and reports the existing record; different facts are refused.
+            if let Some((aggregate_type, aggregate_id)) = accounting::replay_of(&tx, &kind, &payload)? {
+                let (event_id, version) = events::head(&tx, &aggregate_type, &aggregate_id)?;
+                return Ok(CommitResult { event_id, aggregate_id, version });
+            }
+        }
         let drafts = if self.domain == health::DOMAIN {
             health::command(&tx, &kind, &payload)?
         } else {
