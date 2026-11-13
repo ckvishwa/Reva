@@ -209,7 +209,7 @@ public class FinanceContractFixtureTests
         var finance = json.GetProperty("domains")[0];
         Assert.Equal("finance", finance.GetProperty("domain").GetString());
         Assert.Equal("ready", finance.GetProperty("state").GetString());
-        Assert.Equal(3, finance.GetProperty("schema_version").GetInt32());
+        Assert.Equal(4, finance.GetProperty("schema_version").GetInt32());
         Assert.True(finance.GetProperty("privacy").GetProperty("sync").GetBoolean());
         await Task.CompletedTask;
     }
