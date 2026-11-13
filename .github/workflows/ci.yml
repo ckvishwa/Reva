@@ -11,9 +11,33 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # Decides whether the build and test lanes need to run. A change that touches only documentation
+    # (Markdown at the repo root, directory READMEs, and docs/ outside the spec pack) skips them; they then
+    # report "skipped", which GitHub treats as passing. Anything else, or any doubt, runs everything.
+    # docs/spec/ is never "docs only": tests and the contracts lane read it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: python3 tools/ci/classify_changes.py
+
   python:
     # REVA is Windows-first; CI runs on Windows so path/pragma/process
     # behavior is validated on the actual target platform.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 40
 
@@ -75,6 +99,8 @@ jobs:
 
   python-linux:
     # Portable tests inject only the dialogue protector. Windows above keeps real DPAPI.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -106,6 +132,8 @@ jobs:
     # MSBuild components preinstalled, so plain `dotnet build`/`dotnet
     # test` work with no VS-path overrides — confirmed locally against
     # the same WindowsAppSDK 2.3.1 baseline this project uses.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 40
 
@@ -162,6 +190,8 @@ jobs:
   kernel:
     # Rust Domain Kernel: format, lint, native tests, then the same conformance suite through the
     # Python and Kotlin (JVM) bindings.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -211,6 +241,8 @@ jobs:
   android:
     # Cross-build the Kernel for Android and verify the ELF files. The Kotlin suite runs on a device
     # or emulator from S11 (Android shell).
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -242,6 +274,8 @@ jobs:
   android-unit:
     # The phone app's JVM tests (view models, voice session, manifest checks). They need the generated
     # Kotlin binding of the Kernel, which is built here the same way as in the kernel lane.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -284,6 +318,8 @@ jobs:
     # three.js + three-vrm page: unit tests (events, mood faces, stale epochs, frame cap, lip-sync offset)
     # and browser tests in Edge (offline load, CSP, no network, drawing stops when off). Needs the
     # placeholder model, which is in Git LFS.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
 
