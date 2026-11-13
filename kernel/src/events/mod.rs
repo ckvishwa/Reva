@@ -109,6 +109,16 @@ pub fn aggregate_version(conn: &Connection, aggregate_type: &str, aggregate_id: 
     )?)
 }
 
+/// Newest event of an aggregate: `(event_id, version)`.
+pub fn head(conn: &Connection, aggregate_type: &str, aggregate_id: &str) -> DomainResult<(String, i64)> {
+    Ok(conn.query_row(
+        "SELECT event_id, version FROM events WHERE aggregate_type = ?1 AND aggregate_id = ?2
+          ORDER BY version DESC LIMIT 1",
+        params![aggregate_type, aggregate_id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?)
+}
+
 /// Append a local event to the log and the outbox.
 pub fn append_local(conn: &Connection, ctx: &EventCtx, draft: EventDraft) -> DomainResult<Event> {
     let version = aggregate_version(conn, &draft.aggregate_type, &draft.aggregate_id)? + 1;

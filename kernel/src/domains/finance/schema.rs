@@ -109,6 +109,42 @@ pub const MIGRATION_V3: Migration = Migration {
     sql: "ALTER TABLE transactions ADD COLUMN source TEXT;",
 };
 
+/// v4 (FIN-3): accounting records. Linked legs (internal moves, loan installments), a provenance key for
+/// duplicate-safe ingestion, credit-card and loan terms on accounts, and statement reconciliations. Every
+/// column is nullable, so rows and events written before v4 replay unchanged.
+pub const MIGRATION_V4: Migration = Migration {
+    version: 4,
+    name: "finance_accounting",
+    sql: r#"
+ALTER TABLE transactions ADD COLUMN link_id TEXT;
+ALTER TABLE transactions ADD COLUMN link_role TEXT;
+ALTER TABLE transactions ADD COLUMN external_ref TEXT;
+CREATE INDEX transactions_link ON transactions (link_id);
+CREATE INDEX transactions_external_ref ON transactions (external_ref);
+ALTER TABLE accounts ADD COLUMN credit_limit_minor INTEGER;
+ALTER TABLE accounts ADD COLUMN statement_day INTEGER;
+ALTER TABLE accounts ADD COLUMN due_day INTEGER;
+ALTER TABLE accounts ADD COLUMN apr_bp INTEGER;
+ALTER TABLE accounts ADD COLUMN loan_principal_minor INTEGER;
+ALTER TABLE accounts ADD COLUMN loan_term_months INTEGER;
+ALTER TABLE accounts ADD COLUMN loan_first_due TEXT;
+CREATE TABLE reconciliations (
+  id                      TEXT PRIMARY KEY,
+  account_id              TEXT NOT NULL,
+  statement_date          TEXT NOT NULL,
+  statement_balance_minor INTEGER NOT NULL,
+  ledger_balance_minor    INTEGER NOT NULL,
+  difference_minor        INTEGER NOT NULL,
+  currency                TEXT NOT NULL,
+  notes                   TEXT,
+  created_at              TEXT NOT NULL,
+  updated_at              TEXT NOT NULL,
+  version                 INTEGER NOT NULL
+);
+CREATE INDEX reconciliations_account ON reconciliations (account_id, statement_date);
+"#,
+};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Col {
     Text,
@@ -134,6 +170,13 @@ pub const TABLES: &[Table] = &[
             ("currency", Col::Text),
             ("opening_balance_minor", Col::Int),
             ("archived", Col::Bool),
+            ("credit_limit_minor", Col::Int),
+            ("statement_day", Col::Int),
+            ("due_day", Col::Int),
+            ("apr_bp", Col::Int),
+            ("loan_principal_minor", Col::Int),
+            ("loan_term_months", Col::Int),
+            ("loan_first_due", Col::Text),
             ("created_at", Col::Text),
             ("updated_at", Col::Text),
             ("version", Col::Int),
@@ -169,6 +212,9 @@ pub const TABLES: &[Table] = &[
             ("import_batch_id", Col::Text),
             ("fingerprint", Col::Text),
             ("source", Col::Text),
+            ("link_id", Col::Text),
+            ("link_role", Col::Text),
+            ("external_ref", Col::Text),
             ("created_at", Col::Text),
             ("updated_at", Col::Text),
             ("version", Col::Int),
@@ -206,6 +252,23 @@ pub const TABLES: &[Table] = &[
             ("notes", Col::Text),
             ("last_paid_date", Col::Text),
             ("active", Col::Bool),
+            ("created_at", Col::Text),
+            ("updated_at", Col::Text),
+            ("version", Col::Int),
+        ],
+    },
+    Table {
+        aggregate_type: "reconciliation",
+        name: "reconciliations",
+        columns: &[
+            ("id", Col::Text),
+            ("account_id", Col::Text),
+            ("statement_date", Col::Text),
+            ("statement_balance_minor", Col::Int),
+            ("ledger_balance_minor", Col::Int),
+            ("difference_minor", Col::Int),
+            ("currency", Col::Text),
+            ("notes", Col::Text),
             ("created_at", Col::Text),
             ("updated_at", Col::Text),
             ("version", Col::Int),
@@ -379,5 +442,44 @@ mod tests {
         let names: Vec<String> =
             std::fs::read_dir(backups).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert!(names.iter().any(|n| n.contains("pre-migrate-v2")), "{names:?}");
+    }
+
+    #[test]
+    fn v3_database_upgrades_to_v4_keeping_accounts_and_transactions_with_empty_new_columns() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Keys::default();
+        {
+            let store = Store::open("finance", dir.path(), &keys, &[MIGRATION_V2, MIGRATION_V3]).unwrap();
+            assert_eq!(store.schema_version().unwrap(), 3);
+            store
+                .conn
+                .execute_batch(
+                    "INSERT INTO accounts (id, name, kind, currency, opening_balance_minor, archived, created_at, updated_at, version)
+                     VALUES ('acct-old-002', 'Old card', 'credit', 'USD', 0, 0, 'x', 'x', 1);
+                     INSERT INTO transactions (id, account_id, date, amount_minor, currency, description, source, created_at, updated_at, version)
+                     VALUES ('tx-old-0002', 'acct-old-002', '2026-07-01', -500, 'USD', 'written under v3', 'manual', 'x', 'x', 1);",
+                )
+                .unwrap();
+        }
+        let store = Store::open("finance", dir.path(), &keys, &[MIGRATION_V2, MIGRATION_V3, MIGRATION_V4]).unwrap();
+        assert_eq!(store.schema_version().unwrap(), 4);
+        let (source, link, ext): (Option<String>, Option<String>, Option<String>) = store
+            .conn
+            .query_row("SELECT source, link_id, external_ref FROM transactions WHERE id = 'tx-old-0002'", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .unwrap();
+        assert_eq!((source.as_deref(), link, ext), (Some("manual"), None, None));
+        let limit: Option<i64> = store
+            .conn
+            .query_row("SELECT credit_limit_minor FROM accounts WHERE id = 'acct-old-002'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(limit, None, "terms written before v4 are unknown, not zero");
+        let account = load(&store.conn, "account", "acct-old-002").unwrap().unwrap();
+        assert_eq!(account["name"], "Old card");
+        let backups = dir.path().join("domains").join("backups");
+        let names: Vec<String> =
+            std::fs::read_dir(backups).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(names.iter().any(|n| n.contains("pre-migrate-v3")), "{names:?}");
     }
 }

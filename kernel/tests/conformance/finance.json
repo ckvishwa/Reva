@@ -1414,6 +1414,305 @@
   },
   {
    "op": "no_money_movement"
+  },
+  {
+   "op": "command",
+   "kind": "account.update",
+   "payload": {
+    "id": "acct-card",
+    "credit_limit_minor": 200000,
+    "statement_day": 5,
+    "due_day": 28,
+    "apr_bp": 2499
+   }
+  },
+  {
+   "op": "command",
+   "kind": "account.update",
+   "payload": {
+    "id": "acct-checking",
+    "credit_limit_minor": 1000
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-fin3-buy01",
+    "account_id": "acct-card",
+    "date": "2026-12-07",
+    "amount_minor": -12499,
+    "description": "FIN-3 card purchase",
+    "category_id": "cat-groceries"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "internal_move.record",
+   "payload": {
+    "id": "mv-fin3-0001",
+    "from_account_id": "acct-checking",
+    "to_account_id": "acct-card",
+    "date": "2026-12-20",
+    "amount_minor": 12499
+   },
+   "expect": {
+    "aggregate_id": "mv-fin3-0001-out"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "internal_move.record",
+   "payload": {
+    "id": "mv-fin3-0001",
+    "from_account_id": "acct-checking",
+    "to_account_id": "acct-card",
+    "date": "2026-12-20",
+    "amount_minor": 12499
+   },
+   "expect": {
+    "aggregate_id": "mv-fin3-0001-out",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "internal_move.record",
+   "payload": {
+    "id": "mv-fin3-0001",
+    "from_account_id": "acct-checking",
+    "to_account_id": "acct-card",
+    "date": "2026-12-20",
+    "amount_minor": 99
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "internal_move.record",
+   "payload": {
+    "id": "mv-fin3-fx01",
+    "from_account_id": "acct-checking",
+    "to_account_id": "acct-euro",
+    "date": "2026-12-20",
+    "amount_minor": 100
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.ingest",
+   "payload": {
+    "id": "tx-fin3-mail1",
+    "account_id": "acct-card",
+    "date": "2026-12-08",
+    "amount_minor": -4680,
+    "description": "FRESH MARKET",
+    "external_ref": "email:HB-TXN-1001"
+   },
+   "expect": {
+    "aggregate_id": "tx-fin3-mail1"
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.ingest",
+   "payload": {
+    "account_id": "acct-card",
+    "date": "2026-12-08",
+    "amount_minor": -4680,
+    "description": "FRESH MARKET",
+    "external_ref": "email:HB-TXN-1001"
+   },
+   "expect": {
+    "aggregate_id": "tx-fin3-mail1",
+    "version": 1
+   }
+  },
+  {
+   "op": "command",
+   "kind": "transaction.ingest",
+   "payload": {
+    "account_id": "acct-card",
+    "date": "2026-12-08",
+    "amount_minor": -9999,
+    "description": "FRESH MARKET",
+    "external_ref": "email:HB-TXN-1001"
+   },
+   "expect_error": "conflict"
+  },
+  {
+   "op": "command",
+   "kind": "transaction.create",
+   "payload": {
+    "id": "tx-fin3-rfnd1",
+    "account_id": "acct-card",
+    "date": "2026-12-09",
+    "amount_minor": 2450,
+    "description": "Refund"
+   }
+  },
+  {
+   "op": "query",
+   "name": "period_summary",
+   "params": {
+    "from": "2026-12-01",
+    "to": "2026-12-31"
+   },
+   "expect_rows": [
+    {
+     "currency": "USD",
+     "purchases_minor": 17179,
+     "refunds_minor": 2450,
+     "interest_minor": 0,
+     "net_spending_minor": 14729,
+     "income_minor": 0,
+     "excluded_moves": 2
+    }
+   ],
+   "expect_source_ids_sorted": [
+    "tx-fin3-buy01",
+    "tx-fin3-mail1",
+    "tx-fin3-rfnd1"
+   ]
+  },
+  {
+   "op": "query",
+   "name": "credit_card_status",
+   "params": {
+    "account_id": "acct-card",
+    "as_of": "2026-12-21"
+   },
+   "expect_rows": [
+    {
+     "owed_minor": 23314,
+     "available_credit_minor": 176686,
+     "last_statement_date": "2026-12-05",
+     "next_due_date": "2026-12-28",
+     "cycle_purchases_minor": 17179,
+     "cycle_repayments_minor": 12499,
+     "complete": true
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "account.create",
+   "payload": {
+    "id": "acct-fin3-loan",
+    "name": "FIN-3 Loan",
+    "kind": "loan",
+    "currency": "USD",
+    "opening_balance_minor": -1000000,
+    "loan_principal_minor": 1000000,
+    "apr_bp": 1200,
+    "loan_term_months": 12,
+    "loan_first_due": "2027-01-01"
+   }
+  },
+  {
+   "op": "query",
+   "name": "loan_status",
+   "params": {
+    "account_id": "acct-fin3-loan",
+    "as_of": "2026-12-21"
+   },
+   "expect_rows": [
+    {
+     "outstanding_principal_minor": 1000000,
+     "installment_minor": 88849,
+     "next_due_date": "2027-01-01",
+     "remaining_installments": 12,
+     "complete": true
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "loan_installment.record",
+   "payload": {
+    "id": "inst-fin3-0001",
+    "loan_account_id": "acct-fin3-loan",
+    "from_account_id": "acct-checking",
+    "date": "2027-01-01",
+    "amount_minor": 88849
+   },
+   "expect": {
+    "aggregate_id": "inst-fin3-0001-out"
+   }
+  },
+  {
+   "op": "query",
+   "name": "period_summary",
+   "params": {
+    "from": "2027-01-01",
+    "to": "2027-01-31"
+   },
+   "expect_rows": [
+    {
+     "currency": "USD",
+     "interest_minor": 10000,
+     "net_spending_minor": 10000,
+     "income_minor": 0,
+     "excluded_moves": 2
+    }
+   ]
+  },
+  {
+   "op": "query",
+   "name": "loan_status",
+   "params": {
+    "account_id": "acct-fin3-loan",
+    "as_of": "2027-01-02"
+   },
+   "expect_rows": [
+    {
+     "outstanding_principal_minor": 921151,
+     "remaining_installments": 11
+    }
+   ]
+  },
+  {
+   "op": "command",
+   "kind": "loan_installment.record",
+   "payload": {
+    "id": "inst-fin3-0002",
+    "loan_account_id": "acct-fin3-loan",
+    "from_account_id": "acct-euro",
+    "date": "2027-02-01",
+    "amount_minor": 100
+   },
+   "expect_error": "validation"
+  },
+  {
+   "op": "command",
+   "kind": "reconciliation.record",
+   "payload": {
+    "id": "rec-fin3-0001",
+    "account_id": "acct-card",
+    "statement_date": "2026-12-31",
+    "statement_balance_minor": -23314
+   }
+  },
+  {
+   "op": "query",
+   "name": "list_reconciliations",
+   "params": {
+    "account_id": "acct-card"
+   },
+   "expect_rows": [
+    {
+     "id": "rec-fin3-0001",
+     "difference_minor": 0
+    }
+   ]
+  },
+  {
+   "op": "rebuild_equals_live"
+  },
+  {
+   "op": "no_money_movement"
   }
  ]
 }
