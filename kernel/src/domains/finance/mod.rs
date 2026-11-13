@@ -5,6 +5,7 @@
 pub mod accounting;
 pub mod commands;
 pub mod money;
+pub mod position;
 pub mod project;
 pub mod queries;
 pub mod schema;
@@ -14,5 +15,5 @@ use crate::store::Migration;
 pub const DOMAIN: &str = "finance";
 
 pub fn migrations() -> Vec<Migration> {
-    vec![schema::MIGRATION_V2, schema::MIGRATION_V3, schema::MIGRATION_V4]
+    vec![schema::MIGRATION_V2, schema::MIGRATION_V3, schema::MIGRATION_V4, schema::MIGRATION_V5]
 }

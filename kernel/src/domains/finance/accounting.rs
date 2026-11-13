@@ -32,7 +32,10 @@ pub const COMMANDS: &[&str] =
 
 /// Link roles of transaction legs that move value between the owner's accounts and are therefore never
 /// spending or income. The `interest` leg of a loan installment is spending and is not listed.
-pub const NEUTRAL_ROLES: &[&str] = &["move_out", "move_in", "principal_out", "principal_in"];
+/// FIN-4 adds the personal-debt legs (`debt_open`, `debt_settle`): lending, borrowing and settling are never
+/// spending or income either.
+pub const NEUTRAL_ROLES: &[&str] =
+    &["move_out", "move_in", "principal_out", "principal_in", "debt_open", "debt_settle"];
 
 /// SQL condition (over alias `t`) that keeps only legs that can count as spending or income.
 pub const COUNTED_LEG: &str = "(t.link_role IS NULL OR t.link_role = 'interest')";

@@ -145,6 +145,30 @@ CREATE INDEX reconciliations_account ON reconciliations (account_id, statement_d
 "#,
 };
 
+/// v5 (FIN-4): money lent to or borrowed from people, with its settlements.
+pub const MIGRATION_V5: Migration = Migration {
+    version: 5,
+    name: "finance_personal_debts",
+    sql: r#"
+CREATE TABLE personal_debts (
+  id              TEXT PRIMARY KEY,
+  counterparty    TEXT NOT NULL,
+  direction       TEXT NOT NULL,
+  principal_minor INTEGER NOT NULL,
+  currency        TEXT NOT NULL,
+  date            TEXT NOT NULL,
+  due_date        TEXT,
+  account_id      TEXT,
+  notes           TEXT,
+  settlements     TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  version         INTEGER NOT NULL
+);
+CREATE INDEX personal_debts_date ON personal_debts (date);
+"#,
+};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Col {
     Text,
@@ -269,6 +293,25 @@ pub const TABLES: &[Table] = &[
             ("difference_minor", Col::Int),
             ("currency", Col::Text),
             ("notes", Col::Text),
+            ("created_at", Col::Text),
+            ("updated_at", Col::Text),
+            ("version", Col::Int),
+        ],
+    },
+    Table {
+        aggregate_type: "personal_debt",
+        name: "personal_debts",
+        columns: &[
+            ("id", Col::Text),
+            ("counterparty", Col::Text),
+            ("direction", Col::Text),
+            ("principal_minor", Col::Int),
+            ("currency", Col::Text),
+            ("date", Col::Text),
+            ("due_date", Col::Text),
+            ("account_id", Col::Text),
+            ("notes", Col::Text),
+            ("settlements", Col::Json),
             ("created_at", Col::Text),
             ("updated_at", Col::Text),
             ("version", Col::Int),
@@ -481,5 +524,39 @@ mod tests {
         let names: Vec<String> =
             std::fs::read_dir(backups).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert!(names.iter().any(|n| n.contains("pre-migrate-v3")), "{names:?}");
+    }
+
+    #[test]
+    fn v4_database_upgrades_to_v5_keeping_its_rows_and_adding_an_empty_personal_debts_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Keys::default();
+        let v4 = [MIGRATION_V2, MIGRATION_V3, MIGRATION_V4];
+        {
+            let store = Store::open("finance", dir.path(), &keys, &v4).unwrap();
+            assert_eq!(store.schema_version().unwrap(), 4);
+            store
+                .conn
+                .execute(
+                    "INSERT INTO transactions (id, account_id, date, amount_minor, currency, description, link_role, created_at, updated_at, version)
+                     VALUES ('tx-old-0003', 'acct-old-003', '2026-07-01', -500, 'USD', 'written under v4', 'move_out', 'x', 'x', 1)",
+                    [],
+                )
+                .unwrap();
+        }
+        let store =
+            Store::open("finance", dir.path(), &keys, &[MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5])
+                .unwrap();
+        assert_eq!(store.schema_version().unwrap(), 5);
+        let role: Option<String> = store
+            .conn
+            .query_row("SELECT link_role FROM transactions WHERE id = 'tx-old-0003'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(role.as_deref(), Some("move_out"));
+        let debts: i64 = store.conn.query_row("SELECT COUNT(*) FROM personal_debts", [], |r| r.get(0)).unwrap();
+        assert_eq!(debts, 0);
+        let backups = dir.path().join("domains").join("backups");
+        let names: Vec<String> =
+            std::fs::read_dir(backups).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(names.iter().any(|n| n.contains("pre-migrate-v4")), "{names:?}");
     }
 }

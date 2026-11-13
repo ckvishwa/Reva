@@ -92,7 +92,7 @@ def test_domains_listing_reports_state_and_privacy(api):
     assert (
         finance["domain"] == "finance"
         and finance["state"] == "ready"
-        and finance["schema_version"] == 4
+        and finance["schema_version"] == 5
     )
     assert finance["privacy"] == {"sync": True, "hosted_model_access": False}
 
